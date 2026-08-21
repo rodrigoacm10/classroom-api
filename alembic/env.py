@@ -5,8 +5,8 @@ from sqlalchemy import create_engine, pool
 from alembic import context
 
 from config.settings import settings
-from infra.db.base import Base
-import infra.db.models  # noqa: F401
+from infra.database.base import Base
+# import infra.database.models  # noqa: F401 — garante que todos os models sejam registrados no metadata
 
 config = context.config
 
@@ -29,6 +29,8 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    # Alembic usa engine síncrono mesmo que a aplicação use AsyncEngine.
+    # Isso é intencional: migrations rodam como scripts CLI, não como handlers HTTP.
     connectable = create_engine(
         settings.database_url,
         poolclass=pool.NullPool,
