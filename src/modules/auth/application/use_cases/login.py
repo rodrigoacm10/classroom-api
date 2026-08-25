@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from modules.user.domain.repositories.user_repository import UserRepository
-from security.jwt import create_access_token
+from security.jwt import create_access_token, create_refresh_token
 from security.password import verify_password
 
 
@@ -14,6 +14,7 @@ class LoginInput:
 @dataclass
 class LoginOutput:
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 
@@ -28,6 +29,11 @@ class LoginUseCase:
         if not user or not verify_password(data.password, user.password_hash):
             raise ValueError("Credenciais inválidas.")
 
-        # Token base: identifica o usuário, mas sem contexto de tenant
-        token = create_access_token(user_id=user.id)
-        return LoginOutput(access_token=token)
+        # Gera o token de acesso base e o refresh token de longa duração
+        access_token = create_access_token(user_id=user.id)
+        refresh_token = create_refresh_token(user_id=user.id)
+
+        return LoginOutput(
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
