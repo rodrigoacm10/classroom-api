@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository
 from modules.user.domain.entities.user import User
+from security.jwt import create_access_token
 
 
 @dataclass
@@ -17,17 +19,24 @@ class SwitchTenantOutput:
 
 
 class SwitchTenantUseCase:
-    """
-    Verifica se o usuário é membro da tenant informada e,
-    se for, retorna um JWT enriquecido com tenant_id + role.
 
-    Depende de TenantMemberRepository (Task 2).
-    Deixe como NotImplementedError até a Task 2 ser concluída.
-    """
+    def __init__(self, member_repo: TenantMemberRepository) -> None:
+        self.member_repo = member_repo
 
     async def execute(self, data: SwitchTenantInput) -> SwitchTenantOutput:
-        # TODO (Task 2): buscar TenantMember(user_id=data.user.id, tenant_id=data.tenant_id)
-        # Se não encontrar → raise ValueError("Usuário não é membro desta tenant.")
-        # role = member.role
+        membership = await self.member_repo.find_by_tenant_and_user(
+            tenant_id=data.tenant_id,
+            user_id=data.user.id,
+        )
 
-        raise NotImplementedError("Aguardando Task 2 — módulo tenant/")
+        if not membership:
+            raise ValueError("Você não é membro desta instituição/tenant.")
+
+        # Gera o JWT enriquecido com o contexto da tenant ativa e a role que o usuário possui nela
+        token = create_access_token(
+            user_id=data.user.id,
+            tenant_id=data.tenant_id,
+            role=membership.role.value,
+        )
+
+        return SwitchTenantOutput(access_token=token)

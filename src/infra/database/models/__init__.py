@@ -1,3 +1,4 @@
+from infra.database.models.tenant import TenantMemberModel, TenantModel
 from infra.database.models.user import UserModel
 
-__all__ = ["UserModel"]
+__all__ = ["UserModel", "TenantModel", "TenantMemberModel"]

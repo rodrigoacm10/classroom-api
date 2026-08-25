@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from infra.database.session import get_db
 from modules.auth.application.use_cases.login import LoginInput, LoginUseCase
 from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, SwitchTenantUseCase
+from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
+    TenantMemberSQLAlchemyRepository,
+)
 from modules.user.domain.entities.user import User
 from modules.user.infra.repositories.user_sqlalchemy_repository import UserSQLAlchemyRepository
 from security.dependencies.current_user import get_current_user
@@ -48,19 +51,19 @@ async def login(
 async def switch_tenant(
     body: SwitchTenantRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     """
     Recebe o JWT base (sem tenant) e devolve um JWT enriquecido com tenant_id + role.
     Requer que o usuário seja membro da tenant informada.
     """
-    use_case = SwitchTenantUseCase()
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = SwitchTenantUseCase(member_repo=member_repo)
 
     try:
         result = await use_case.execute(
             SwitchTenantInput(user=current_user, tenant_id=body.tenant_id)
         )
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
