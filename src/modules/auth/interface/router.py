@@ -1,9 +1,11 @@
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config.settings import settings
 from infra.database.session import get_db
 from modules.auth.application.use_cases.login import LoginInput, LoginUseCase
 from modules.auth.application.use_cases.logout import LogoutUseCase
@@ -22,10 +24,23 @@ from security.rate_limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * settings.refresh_token_expire_days
+
+
+# ─────────────────────────────────────────
+# Schemas
+# ─────────────────────────────────────────
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    client_type: Literal["web", "mobile"] = "mobile"
+    """
+    Define como o Refresh Token será entregue:
+    - "mobile": retornado no body (para React Native/AsyncStorage).
+    - "web"   : enviado como Cookie HttpOnly (para browsers/dashboard).
+    """
 
 
 class SwitchTenantRequest(BaseModel):
@@ -33,12 +48,23 @@ class SwitchTenantRequest(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str | None = None
+    """
+    Clients mobile enviam o token aqui.
+    Clients web omitem este campo — o token é lido do Cookie HttpOnly automaticamente.
+    """
 
 
-class LoginResponse(BaseModel):
+class LoginMobileResponse(BaseModel):
+    """Resposta para clientes mobile: ambos os tokens no body."""
     access_token: str
     refresh_token: str
+    token_type: str = "bearer"
+
+
+class LoginWebResponse(BaseModel):
+    """Resposta para clientes web: apenas o access_token no body; refresh_token vai no Cookie HttpOnly."""
+    access_token: str
     token_type: str = "bearer"
 
 
@@ -51,17 +77,47 @@ class MessageResponse(BaseModel):
     message: str
 
 
-@router.post("/login", response_model=LoginResponse)
+# ─────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    """Define o Cookie HttpOnly com o Refresh Token para clientes web."""
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        httponly=True,                       # ✅ JS não consegue ler este cookie
+        secure=settings.cookie_secure,       # True em produção (HTTPS)
+        samesite=settings.cookie_samesite,   # "lax" dev / "strict" prod (proteção CSRF)
+        max_age=REFRESH_COOKIE_MAX_AGE,      # TTL = 7 dias (em segundos)
+        path="/auth",                        # Cookie visível apenas nas rotas /auth/*
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    """Limpa o Cookie do Refresh Token no logout de clientes web."""
+    response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/auth")
+
+
+# ─────────────────────────────────────────
+# Endpoints
+# ─────────────────────────────────────────
+
+@router.post("/login")
 @limiter.limit("5/minute")
 async def login(
     request: Request,
+    response: Response,
     body: LoginRequest,
     db: AsyncSession = Depends(get_db),
-) -> LoginResponse:
+) -> LoginMobileResponse | LoginWebResponse:
     """
-    Realiza a autenticação global do usuário via e-mail e senha.
-    Retorna o Access Token (base) e o Refresh Token.
-    Limitado a 5 tentativas por minuto por IP.
+    Autentica o usuário via e-mail e senha.
+
+    - **mobile**: Retorna `access_token` + `refresh_token` no body JSON.
+    - **web**: Retorna apenas `access_token` no body; `refresh_token` vai em Cookie HttpOnly (`refresh_token`).
+
+    Limitado a **5 tentativas por minuto** por IP.
     """
     repository = UserSQLAlchemyRepository(session=db)
     use_case = LoginUseCase(repository=repository)
@@ -71,33 +127,57 @@ async def login(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
 
-    return LoginResponse(
+    if body.client_type == "web":
+        _set_refresh_cookie(response, result.refresh_token)
+        return LoginWebResponse(access_token=result.access_token)
+
+    # client_type == "mobile": ambos os tokens no body
+    return LoginMobileResponse(
         access_token=result.access_token,
         refresh_token=result.refresh_token,
-        token_type=result.token_type,
     )
 
 
-@router.post("/refresh", response_model=LoginResponse)
+@router.post("/refresh")
 async def refresh_token(
-    body: RefreshTokenRequest,
+    response: Response,
+    body: RefreshTokenRequest = RefreshTokenRequest(),
+    # Cookie lido automaticamente pelo FastAPI para clientes web
+    cookie_refresh_token: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
     db: AsyncSession = Depends(get_db),
-) -> LoginResponse:
+) -> LoginMobileResponse | LoginWebResponse:
     """
-    Renova o Access Token e Refresh Token utilizando um Refresh Token válido.
+    Renova os tokens utilizando o Refresh Token.
+
+    - **mobile**: envia `{ "refresh_token": "..." }` no body.
+    - **web**: não precisa enviar nada; o browser envia o Cookie HttpOnly automaticamente.
     """
+    # Prioriza o token do body (mobile); fallback para o cookie (web)
+    token_to_use = body.refresh_token or cookie_refresh_token
+
+    if not token_to_use:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token não encontrado no body nem no cookie.",
+        )
+
     user_repo = UserSQLAlchemyRepository(session=db)
     use_case = RefreshTokenUseCase(user_repo=user_repo)
 
     try:
-        result = await use_case.execute(RefreshTokenInput(refresh_token=body.refresh_token))
+        result = await use_case.execute(RefreshTokenInput(refresh_token=token_to_use))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
 
-    return LoginResponse(
+    # Se o refresh chegou via Cookie, renova o cookie e retorna só o access token (web)
+    if cookie_refresh_token and not body.refresh_token:
+        _set_refresh_cookie(response, result.refresh_token)
+        return LoginWebResponse(access_token=result.access_token)
+
+    # Se chegou via body, retorna ambos no body (mobile)
+    return LoginMobileResponse(
         access_token=result.access_token,
         refresh_token=result.refresh_token,
-        token_type=result.token_type,
     )
 
 
@@ -108,7 +188,7 @@ async def switch_tenant(
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     """
-    Recebe o JWT base (sem tenant) e devolve um JWT enriquecido com tenant_id + role.
+    Recebe o JWT base (sem tenant) e devolve um JWT enriquecido com `tenant_id` + `role`.
     Requer que o usuário seja membro da tenant informada.
     """
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
@@ -121,16 +201,25 @@ async def switch_tenant(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
-    return TokenResponse(access_token=result.access_token, token_type=result.token_type)
+    return TokenResponse(access_token=result.access_token)
 
 
 @router.post("/logout", response_model=MessageResponse)
 async def logout(
+    response: Response,
     auth_context: AuthContext = Depends(get_auth_context),
+    # Cookie lido automaticamente (clientes web)
+    cookie_refresh_token: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
 ) -> MessageResponse:
     """
-    Efetua o logout revogando o token ativo e adicionando o JTI à blacklist no Redis.
+    Efetua o logout:
+    - Revoga o Access Token adicionando o JTI à blacklist no Redis.
+    - Se cliente web: limpa o Cookie HttpOnly do Refresh Token.
     """
     use_case = LogoutUseCase()
     await use_case.execute(auth_context)
+
+    if cookie_refresh_token:
+        _clear_refresh_cookie(response)
+
     return MessageResponse(message="Logout realizado com sucesso. Token revogado.")

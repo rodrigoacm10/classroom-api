@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "change-me"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8000"]
-    access_token_expire_minutes: int = 30  # 30 minutos para o Access Token
-    refresh_token_expire_days: int = 7    # 7 dias para o Refresh Token
+    access_token_expire_minutes: int = 30       # 30 minutos para o Access Token
+    refresh_token_expire_days: int = 7          # 7 dias para o Refresh Token
+    cookie_secure: bool = False                 # True em produção (HTTPS apenas)
+    cookie_samesite: str = "lax"                # "strict" em produção, "lax" em desenvolvimento
 
 
 settings = Settings()
