@@ -13,6 +13,9 @@ class FakeTenantInviteRepository:
     def __init__(self) -> None:
         self._store: dict[UUID, TenantInvite] = {}
 
+    async def find_by_id(self, invite_id: UUID) -> TenantInvite | None:
+        return self._store.get(invite_id)
+
     async def find_by_token(self, token: str) -> TenantInvite | None:
         return next(
             (i for i in self._store.values() if i.token == token),
@@ -29,6 +32,7 @@ class FakeTenantInviteRepository:
                 if i.email.lower() == email.lower()
                 and i.tenant_id == tenant_id
                 and not i.is_accepted
+                and not i.is_revoked
             ),
             None,
         )

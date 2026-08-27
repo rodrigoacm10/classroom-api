@@ -279,3 +279,62 @@ class TestAcceptInviteUseCase:
         use_case = AcceptInviteUseCase(invite_repo=invite_repo, member_repo=member_repo)
         with pytest.raises(ForbiddenException, match="outro endereço de e-mail"):
             await use_case.execute(token=invite.token, user=user_wrong_email)
+
+
+@pytest.mark.asyncio
+class TestRevokeInviteUseCase:
+
+    async def test_revoke_invite_success(self):
+        """Deve revogar um convite pendente com sucesso."""
+        from modules.tenant.application.use_cases.revoke_invite import (
+            RevokeInviteInput,
+            RevokeInviteUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        invite_repo = FakeTenantInviteRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        invite = TenantInvite(
+            tenant_id=tenant.id,
+            email="revogar@escola.com",
+            role=UserRole.PROFESSOR,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
+        invite_repo.seed(invite)
+
+        use_case = RevokeInviteUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
+        revoked_invite = await use_case.execute(
+            RevokeInviteInput(tenant_id=tenant.id, invite_id=invite.id)
+        )
+
+        assert revoked_invite.is_revoked is True
+        assert revoked_invite.is_pending is False
+
+    async def test_revoke_already_accepted_raises(self):
+        """Deve lançar BusinessRuleException ao tentar revogar um convite que já foi aceito."""
+        from modules.tenant.application.use_cases.revoke_invite import (
+            RevokeInviteInput,
+            RevokeInviteUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        invite_repo = FakeTenantInviteRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        invite = TenantInvite(
+            tenant_id=tenant.id,
+            email="aceito@escola.com",
+            role=UserRole.PROFESSOR,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            accepted_at=datetime.now(timezone.utc),
+        )
+        invite_repo.seed(invite)
+
+        use_case = RevokeInviteUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
+        with pytest.raises(BusinessRuleException, match="já foi aceito"):
+            await use_case.execute(RevokeInviteInput(tenant_id=tenant.id, invite_id=invite.id))
