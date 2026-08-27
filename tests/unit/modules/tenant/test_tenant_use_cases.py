@@ -20,6 +20,7 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 @pytest.mark.asyncio
 class TestCreateTenantUseCase:
     async def test_create_tenant_success(self):
+        """Deve criar a tenant com sucesso e associar o criador como ADMIN."""
         tenant_repo = FakeTenantRepository()
         member_repo = FakeTenantMemberRepository()
         use_case = CreateTenantUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
@@ -43,6 +44,7 @@ class TestCreateTenantUseCase:
 @pytest.mark.asyncio
 class TestDeleteTenantUseCase:
     async def test_soft_delete_tenant_success(self):
+        """Deve realizar o soft delete da tenant alterando a flag deleted para True."""
         tenant_repo = FakeTenantRepository()
         tenant = TenantFactory.make(active=True, deleted=False)
         tenant_repo.seed(tenant)
@@ -56,6 +58,7 @@ class TestDeleteTenantUseCase:
         assert found is None
 
     async def test_soft_delete_non_existent_tenant_raises_not_found(self):
+        """Deve lançar ResourceNotFoundException ao tentar deletar tenant inexistente."""
         tenant_repo = FakeTenantRepository()
         use_case = DeleteTenantUseCase(tenant_repo=tenant_repo)
 
@@ -67,6 +70,7 @@ class TestDeleteTenantUseCase:
 @pytest.mark.asyncio
 class TestActivateTenantUseCase:
     async def test_activate_tenant_success(self):
+        """Deve ativar a tenant alterando a flag active para True."""
         tenant_repo = FakeTenantRepository()
         tenant = TenantFactory.make(active=False, deleted=False)
         tenant_repo.seed(tenant)
@@ -77,6 +81,7 @@ class TestActivateTenantUseCase:
         assert updated_tenant.active is True
 
     async def test_activate_deleted_tenant_raises_not_found(self):
+        """Deve lançar ResourceNotFoundException ao tentar ativar tenant deletada."""
         tenant_repo = FakeTenantRepository()
         tenant = TenantFactory.make(active=False, deleted=True)
         tenant_repo.seed(tenant)
@@ -89,6 +94,7 @@ class TestActivateTenantUseCase:
 @pytest.mark.asyncio
 class TestDeactivateTenantUseCase:
     async def test_deactivate_tenant_success(self):
+        """Deve desativar a tenant alterando a flag active para False."""
         tenant_repo = FakeTenantRepository()
         tenant = TenantFactory.make(active=True, deleted=False)
         tenant_repo.seed(tenant)
@@ -102,6 +108,7 @@ class TestDeactivateTenantUseCase:
 @pytest.mark.asyncio
 class TestListMyTenantsUseCase:
     async def test_list_my_tenants_excludes_deleted_tenants(self):
+        """Deve listar apenas as tenants do usuário que não foram deletadas."""
         tenant_repo = FakeTenantRepository()
         member_repo = FakeTenantMemberRepository()
         user = UserFactory.make()
@@ -125,3 +132,4 @@ class TestListMyTenantsUseCase:
         assert len(items) == 1
         assert items[0].tenant.id == active_tenant.id
         assert items[0].tenant.name == "Active School"
+

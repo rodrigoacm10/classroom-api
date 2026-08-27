@@ -11,6 +11,7 @@ class TestTenantRouterEndpoints:
     """Testes E2E para as rotas do módulo Tenant."""
 
     async def test_create_tenant_success(self, client, session):
+        """POST /tenants/ -> Deve criar a tenant e definir o usuário autenticado como ADMIN."""
         user = await UserFactory.create(session)
         token = create_access_token(user_id=user.id)
         headers = {"Authorization": f"Bearer {token}"}
@@ -37,6 +38,7 @@ class TestTenantRouterEndpoints:
         assert my_tenants[0]["role"] == UserRole.ADMIN.value
 
     async def test_list_my_tenants_success(self, client, session):
+        """GET /tenants/me -> Deve listar as tenants ativas e não deletadas do usuário."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, name="Minha Escola")
         await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
@@ -53,6 +55,7 @@ class TestTenantRouterEndpoints:
         assert data[0]["deleted"] is False
 
     async def test_deactivate_tenant_success(self, client, session):
+        """PATCH /tenants/{id}/deactivate -> Deve desativar a tenant quando o usuário for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=True)
         await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
@@ -67,6 +70,7 @@ class TestTenantRouterEndpoints:
         assert data["active"] is False
 
     async def test_activate_tenant_success(self, client, session):
+        """PATCH /tenants/{id}/activate -> Deve ativar a tenant quando o usuário for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=False)
         await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
@@ -81,6 +85,7 @@ class TestTenantRouterEndpoints:
         assert data["active"] is True
 
     async def test_soft_delete_tenant_success(self, client, session):
+        """DELETE /tenants/{id} -> Deve realizar o soft delete da tenant quando o usuário for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=True, deleted=False)
         await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
@@ -100,6 +105,7 @@ class TestTenantRouterEndpoints:
         assert len(me_response.json()) == 0
 
     async def test_deactivate_tenant_requires_admin_role(self, client, session):
+        """PATCH /tenants/{id}/deactivate -> Deve retornar status 403 se o usuário não for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
         await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
@@ -111,6 +117,7 @@ class TestTenantRouterEndpoints:
         assert response.status_code == 403
 
     async def test_cannot_switch_to_deactivated_tenant(self, client, session):
+        """POST /auth/switch-tenant -> Deve retornar status 403 ao tentar alternar para tenant desativada."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=False, deleted=False)
         await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
@@ -123,6 +130,7 @@ class TestTenantRouterEndpoints:
         assert "desativada" in response.json()["detail"]
 
     async def test_cannot_switch_to_deleted_tenant(self, client, session):
+        """POST /auth/switch-tenant -> Deve retornar status 403 ao tentar alternar para tenant deletada."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=True, deleted=True)
         await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
