@@ -15,6 +15,8 @@ class TenantFactory:
             "id": uuid.uuid4(),
             "name": "Escola Exemplo",
             "slug": f"escola-{uuid.uuid4().hex[:6]}",
+            "active": True,
+            "deleted": False,
         }
         merged = {**defaults, **overrides}
         if isinstance(merged["id"], str):
@@ -36,6 +38,8 @@ class TenantFactory:
             "id": uuid.uuid4(),
             "name": "Escola Exemplo",
             "slug": f"escola-{uuid.uuid4().hex[:6]}",
+            "active": True,
+            "deleted": False,
         }
         data = {**defaults, **overrides}
         if isinstance(data["id"], str):
