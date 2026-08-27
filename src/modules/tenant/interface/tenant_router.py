@@ -16,6 +16,10 @@ from modules.tenant.application.use_cases.create_tenant import (
 from modules.tenant.application.use_cases.deactivate_tenant import DeactivateTenantUseCase
 from modules.tenant.application.use_cases.delete_tenant import DeleteTenantUseCase
 from modules.tenant.application.use_cases.list_my_tenants import ListMyTenantsUseCase
+from modules.tenant.application.use_cases.remove_tenant_member import (
+    RemoveTenantMemberInput,
+    RemoveTenantMemberUseCase,
+)
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
 )
@@ -122,6 +126,41 @@ async def add_tenant_member(
             tenant_id=tenant_id,
             user_id=body.user_id,
             role=body.role,
+        )
+    )
+
+    return TenantMemberResponse(
+        id=member.id,
+        tenant_id=member.tenant_id,
+        user_id=member.user_id,
+        role=member.role,
+        created_at=member.created_at,
+    )
+
+
+@router.delete(
+    "/{tenant_id}/members/{user_id}",
+    response_model=TenantMemberResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+async def remove_tenant_member(
+    tenant_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> TenantMemberResponse:
+    """
+    Remove um membro de uma Tenant/Instituição (Soft Delete).
+    Requer papel de ADMIN na tenant ativa.
+    Não permite remover o único administrador da instituição.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = RemoveTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    member = await use_case.execute(
+        RemoveTenantMemberInput(
+            tenant_id=tenant_id,
+            user_id_to_remove=user_id,
         )
     )
 

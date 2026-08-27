@@ -11,4 +11,5 @@ class TenantMember:
     user_id: UUID
     role: UserRole
     id: UUID = field(default_factory=uuid4)
+    deleted: bool = False
     created_at: datetime = field(default_factory=datetime.utcnow)
