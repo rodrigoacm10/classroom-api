@@ -1,0 +1,135 @@
+import pytest
+
+from security.jwt import create_access_token
+from shared.enums.user_role import UserRole
+from tests.factories.tenant_factory import TenantFactory
+from tests.factories.user_factory import UserFactory
+
+
+@pytest.mark.asyncio
+class TestTenantRouterEndpoints:
+    """Testes E2E para as rotas do módulo Tenant."""
+
+    async def test_create_tenant_success(self, client, session):
+        user = await UserFactory.create(session)
+        token = create_access_token(user_id=user.id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        payload = {
+            "name": "Nova Escola E2E",
+            "slug": "nova-escola-e2e",
+        }
+
+        response = await client.post("/tenants/", json=payload, headers=headers)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "Nova Escola E2E"
+        assert data["slug"] == "nova-escola-e2e"
+        assert data["active"] is True
+        assert data["deleted"] is False
+
+        # Verifica se o criador se tornou automaticamente ADMIN da tenant criada
+        me_response = await client.get("/tenants/me", headers=headers)
+        assert me_response.status_code == 200
+        my_tenants = me_response.json()
+        assert len(my_tenants) == 1
+        assert my_tenants[0]["id"] == data["id"]
+        assert my_tenants[0]["role"] == UserRole.ADMIN.value
+
+    async def test_list_my_tenants_success(self, client, session):
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, name="Minha Escola")
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get("/tenants/me", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == str(tenant.id)
+        assert data[0]["active"] is True
+        assert data[0]["deleted"] is False
+
+    async def test_deactivate_tenant_success(self, client, session):
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=True)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.patch(f"/tenants/{tenant.id}/deactivate", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(tenant.id)
+        assert data["active"] is False
+
+    async def test_activate_tenant_success(self, client, session):
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=False)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.patch(f"/tenants/{tenant.id}/activate", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(tenant.id)
+        assert data["active"] is True
+
+    async def test_soft_delete_tenant_success(self, client, session):
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=True, deleted=False)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(tenant.id)
+        assert data["deleted"] is True
+
+        # Após o soft delete, GET /tenants/me não deve listar a tenant deletada
+        me_response = await client.get("/tenants/me", headers=headers)
+        assert me_response.status_code == 200
+        assert len(me_response.json()) == 0
+
+    async def test_deactivate_tenant_requires_admin_role(self, client, session):
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.patch(f"/tenants/{tenant.id}/deactivate", headers=headers)
+        assert response.status_code == 403
+
+    async def test_cannot_switch_to_deactivated_tenant(self, client, session):
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=False, deleted=False)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        base_token = create_access_token(user_id=user.id)
+        headers = {"Authorization": f"Bearer {base_token}"}
+
+        response = await client.post("/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers)
+        assert response.status_code == 403
+        assert "desativada" in response.json()["detail"]
+
+    async def test_cannot_switch_to_deleted_tenant(self, client, session):
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=True, deleted=True)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        base_token = create_access_token(user_id=user.id)
+        headers = {"Authorization": f"Bearer {base_token}"}
+
+        response = await client.post("/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers)
+        assert response.status_code == 403
+        assert "não encontrada" in response.json()["detail"]

@@ -15,6 +15,8 @@ class TenantResponse(BaseModel):
     id: UUID
     name: str
     slug: str
+    active: bool
+    deleted: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -24,6 +26,8 @@ class MyTenantResponse(BaseModel):
     id: UUID
     name: str
     slug: str
+    active: bool
+    deleted: bool
     role: UserRole
     created_at: datetime
 

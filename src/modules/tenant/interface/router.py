@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
+from modules.tenant.application.use_cases.activate_tenant import ActivateTenantUseCase
 from modules.tenant.application.use_cases.add_tenant_member import (
     AddTenantMemberInput,
     AddTenantMemberUseCase,
@@ -12,6 +13,8 @@ from modules.tenant.application.use_cases.create_tenant import (
     CreateTenantInput,
     CreateTenantUseCase,
 )
+from modules.tenant.application.use_cases.deactivate_tenant import DeactivateTenantUseCase
+from modules.tenant.application.use_cases.delete_tenant import DeleteTenantUseCase
 from modules.tenant.application.use_cases.list_my_tenants import ListMyTenantsUseCase
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
@@ -60,6 +63,8 @@ async def create_tenant(
         id=result.tenant.id,
         name=result.tenant.name,
         slug=result.tenant.slug,
+        active=result.tenant.active,
+        deleted=result.tenant.deleted,
         created_at=result.tenant.created_at,
     )
 
@@ -84,6 +89,8 @@ async def list_my_tenants(
             id=item.tenant.id,
             name=item.tenant.name,
             slug=item.tenant.slug,
+            active=item.tenant.active,
+            deleted=item.tenant.deleted,
             role=item.role,
             created_at=item.tenant.created_at,
         )
@@ -124,4 +131,82 @@ async def add_tenant_member(
         user_id=member.user_id,
         role=member.role,
         created_at=member.created_at,
+    )
+
+
+@router.patch(
+    "/{tenant_id}/activate",
+    response_model=TenantResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+async def activate_tenant(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> TenantResponse:
+    """
+    Ativa uma Tenant/Instituição.
+    Requer papel de ADMIN na tenant ativa.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    use_case = ActivateTenantUseCase(tenant_repo=tenant_repo)
+    tenant = await use_case.execute(tenant_id)
+    return TenantResponse(
+        id=tenant.id,
+        name=tenant.name,
+        slug=tenant.slug,
+        active=tenant.active,
+        deleted=tenant.deleted,
+        created_at=tenant.created_at,
+    )
+
+
+@router.patch(
+    "/{tenant_id}/deactivate",
+    response_model=TenantResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+async def deactivate_tenant(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> TenantResponse:
+    """
+    Desativa uma Tenant/Instituição.
+    Requer papel de ADMIN na tenant ativa.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    use_case = DeactivateTenantUseCase(tenant_repo=tenant_repo)
+    tenant = await use_case.execute(tenant_id)
+    return TenantResponse(
+        id=tenant.id,
+        name=tenant.name,
+        slug=tenant.slug,
+        active=tenant.active,
+        deleted=tenant.deleted,
+        created_at=tenant.created_at,
+    )
+
+
+@router.delete(
+    "/{tenant_id}",
+    response_model=TenantResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+async def delete_tenant(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> TenantResponse:
+    """
+    Realiza o soft delete de uma Tenant/Instituição.
+    Requer papel de ADMIN na tenant ativa.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    use_case = DeleteTenantUseCase(tenant_repo=tenant_repo)
+    tenant = await use_case.execute(tenant_id)
+    return TenantResponse(
+        id=tenant.id,
+        name=tenant.name,
+        slug=tenant.slug,
+        active=tenant.active,
+        deleted=tenant.deleted,
+        created_at=tenant.created_at,
     )

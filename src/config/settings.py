@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,7 +15,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30       # 30 minutos para o Access Token
     refresh_token_expire_days: int = 7          # 7 dias para o Refresh Token
     cookie_secure: bool = False                 # True em produção (HTTPS apenas)
-    cookie_samesite: str = "lax"                # "strict" em produção, "lax" em desenvolvimento
+    cookie_samesite: Literal["lax", "none", "strict"] = "lax"                # "strict" em produção, "lax" em desenvolvimento
 
 
 settings = Settings()

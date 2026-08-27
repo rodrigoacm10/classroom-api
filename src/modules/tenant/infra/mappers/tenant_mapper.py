@@ -10,6 +10,8 @@ class TenantMapper:
             id=model.id,
             name=model.name,
             slug=model.slug,
+            active=model.active,
+            deleted=model.deleted,
             created_at=model.created_at,
         )
 
@@ -19,4 +21,6 @@ class TenantMapper:
             id=entity.id,
             name=entity.name,
             slug=entity.slug,
+            active=entity.active,
+            deleted=entity.deleted,
         )
