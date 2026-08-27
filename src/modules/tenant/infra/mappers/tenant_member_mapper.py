@@ -11,6 +11,7 @@ class TenantMemberMapper:
             tenant_id=model.tenant_id,
             user_id=model.user_id,
             role=model.role,
+            deleted=model.deleted,
             created_at=model.created_at,
         )
 
@@ -21,4 +22,5 @@ class TenantMemberMapper:
             tenant_id=entity.tenant_id,
             user_id=entity.user_id,
             role=entity.role,
+            deleted=entity.deleted,
         )

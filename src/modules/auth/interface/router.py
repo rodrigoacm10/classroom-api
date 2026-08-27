@@ -17,6 +17,9 @@ from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, 
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
 )
+from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
+    TenantSQLAlchemyRepository,
+)
 from modules.user.domain.entities.user import User
 from modules.user.infra.repositories.user_sqlalchemy_repository import UserSQLAlchemyRepository
 from security.dependencies.current_user import AuthContext, get_auth_context, get_current_user
@@ -192,7 +195,8 @@ async def switch_tenant(
     Requer que o usuário seja membro da tenant informada.
     """
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
-    use_case = SwitchTenantUseCase(member_repo=member_repo)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    use_case = SwitchTenantUseCase(member_repo=member_repo, tenant_repo=tenant_repo)
 
     try:
         result = await use_case.execute(

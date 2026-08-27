@@ -13,21 +13,25 @@ class TenantSQLAlchemyRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def find_by_id(self, tenant_id: UUID) -> Tenant | None:
+    async def find_by_id(self, tenant_id: UUID, include_deleted: bool = False) -> Tenant | None:
         stmt = select(TenantModel).where(TenantModel.id == tenant_id)
+        if not include_deleted:
+            stmt = stmt.where(TenantModel.deleted == False)  # noqa: E712
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         return TenantMapper.to_domain(model) if model else None
 
-    async def find_by_slug(self, slug: str) -> Tenant | None:
+    async def find_by_slug(self, slug: str, include_deleted: bool = False) -> Tenant | None:
         stmt = select(TenantModel).where(TenantModel.slug == slug)
+        if not include_deleted:
+            stmt = stmt.where(TenantModel.deleted == False)  # noqa: E712
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         return TenantMapper.to_domain(model) if model else None
 
     async def save(self, tenant: Tenant) -> Tenant:
         model = TenantMapper.to_model(tenant)
-        self.session.add(model)
+        merged_model = await self.session.merge(model)
         await self.session.commit()
-        await self.session.refresh(model)
-        return TenantMapper.to_domain(model)
+        await self.session.refresh(merged_model)
+        return TenantMapper.to_domain(merged_model)
