@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from modules.tenant.domain.entities.tenant_member import TenantMember
+from shared.enums.user_role import UserRole
 
 
 class FakeTenantMemberRepository:
@@ -17,21 +18,47 @@ class FakeTenantMemberRepository:
         self,
         tenant_id: UUID,
         user_id: UUID,
+        include_deleted: bool = False,
     ) -> TenantMember | None:
         return next(
             (
                 m
                 for m in self._store.values()
-                if m.tenant_id == tenant_id and m.user_id == user_id
+                if m.tenant_id == tenant_id
+                and m.user_id == user_id
+                and (include_deleted or not m.deleted)
             ),
             None,
         )
 
-    async def find_by_user_id(self, user_id: UUID) -> list[TenantMember]:
-        return [m for m in self._store.values() if m.user_id == user_id]
+    async def find_by_user_id(
+        self, user_id: UUID, include_deleted: bool = False
+    ) -> list[TenantMember]:
+        return [
+            m
+            for m in self._store.values()
+            if m.user_id == user_id and (include_deleted or not m.deleted)
+        ]
 
-    async def find_by_tenant_id(self, tenant_id: UUID) -> list[TenantMember]:
-        return [m for m in self._store.values() if m.tenant_id == tenant_id]
+    async def find_by_tenant_id(
+        self, tenant_id: UUID, include_deleted: bool = False
+    ) -> list[TenantMember]:
+        return [
+            m
+            for m in self._store.values()
+            if m.tenant_id == tenant_id and (include_deleted or not m.deleted)
+        ]
+
+    async def count_active_admins(self, tenant_id: UUID) -> int:
+        return len(
+            [
+                m
+                for m in self._store.values()
+                if m.tenant_id == tenant_id
+                and m.role == UserRole.ADMIN
+                and not m.deleted
+            ]
+        )
 
     async def save(self, member: TenantMember) -> TenantMember:
         self._store[member.id] = member

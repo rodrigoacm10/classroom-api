@@ -133,3 +133,72 @@ class TestListMyTenantsUseCase:
         assert items[0].tenant.id == active_tenant.id
         assert items[0].tenant.name == "Active School"
 
+
+@pytest.mark.asyncio
+class TestRemoveTenantMemberUseCase:
+    async def test_remove_tenant_member_success(self):
+        """Deve marcar o membro como deleted=True com sucesso."""
+        from modules.tenant.application.use_cases.remove_tenant_member import (
+            RemoveTenantMemberInput,
+            RemoveTenantMemberUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        admin = UserFactory.make()
+        member_user = UserFactory.make()
+
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        )
+        member_to_remove = TenantMember(
+            tenant_id=tenant.id, user_id=member_user.id, role=UserRole.PROFESSOR
+        )
+        member_repo.seed(member_to_remove)
+
+        use_case = RemoveTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+        removed = await use_case.execute(
+            RemoveTenantMemberInput(
+                tenant_id=tenant.id,
+                user_id_to_remove=member_user.id,
+            )
+        )
+
+        assert removed.deleted is True
+        # Consulta normal de membro ativo deve retornar None agora
+        found = await member_repo.find_by_tenant_and_user(tenant.id, member_user.id)
+        assert found is None
+
+    async def test_remove_single_admin_raises_business_rule_exception(self):
+        """Deve proibir a remoção do único administrador da instituição."""
+        from modules.tenant.application.use_cases.remove_tenant_member import (
+            RemoveTenantMemberInput,
+            RemoveTenantMemberUseCase,
+        )
+        from shared.exceptions import BusinessRuleException
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        admin = UserFactory.make()
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        )
+
+        use_case = RemoveTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        with pytest.raises(BusinessRuleException, match="único administrador"):
+            await use_case.execute(
+                RemoveTenantMemberInput(
+                    tenant_id=tenant.id,
+                    user_id_to_remove=admin.id,
+                )
+            )
+

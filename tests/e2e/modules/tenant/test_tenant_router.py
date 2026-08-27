@@ -141,3 +141,52 @@ class TestTenantRouterEndpoints:
         response = await client.post("/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers)
         assert response.status_code == 403
         assert "não encontrada" in response.json()["detail"]
+
+    async def test_remove_tenant_member_success(self, client, session):
+        """DELETE /tenants/{id}/members/{user_id} -> Deve realizar o soft delete do membro com sucesso quando for ADMIN."""
+        admin = await UserFactory.create(session)
+        member_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.PROFESSOR)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user_id"] == str(member_user.id)
+        assert data["tenant_id"] == str(tenant.id)
+
+    async def test_remove_single_admin_bad_request(self, client, session):
+        """DELETE /tenants/{id}/members/{user_id} -> Deve retornar 400 Bad Request ao tentar remover o único ADMIN."""
+        admin = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/members/{admin.id}", headers=headers)
+        assert response.status_code == 400
+        assert "único administrador" in response.json()["detail"]
+
+    async def test_remove_tenant_member_requires_admin_role(self, client, session):
+        """DELETE /tenants/{id}/members/{user_id} -> Deve retornar 403 Forbidden se o usuário não for ADMIN."""
+        professor = await UserFactory.create(session)
+        member_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=professor.id, role=UserRole.PROFESSOR)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+
+        # Token do PROFESSOR (não-ADMIN)
+        token = create_access_token(user_id=professor.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        assert response.status_code == 403
+        assert "não autorizado" in response.json()["detail"]
