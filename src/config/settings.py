@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7          # 7 dias para o Refresh Token
     cookie_secure: bool = False                 # True em produção (HTTPS apenas)
     cookie_samesite: Literal["lax", "none", "strict"] = "lax"                # "strict" em produção, "lax" em desenvolvimento
+    resend_api_key: str = ""                    # Chave de API do Resend (ex: re_123456789)
+    email_from: str = "onboarding@resend.dev"   # Remetente oficial de testes do Resend (ou seu domínio verificado)
+    frontend_url: str = "http://localhost:3000" # URL base do frontend para montar links de aceite
+    invite_expire_hours: int = 72               # Tempo de expiração do convite em horas
 
 
 settings = Settings()

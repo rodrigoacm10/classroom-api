@@ -21,6 +21,7 @@ dependencies = [
     "sqlalchemy>=2.0.52",
     "uvicorn[standard]>=0.52.4",
     "slowapi>=0.1.10",
+    "resend>=2.42.0",
 ]
 
 [dependency-groups]
