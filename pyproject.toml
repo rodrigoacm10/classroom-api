@@ -13,13 +13,14 @@ dependencies = [
     "fastapi>=0.141.1",
     "geoalchemy2>=0.20.0",
     "psycopg[binary]>=3.3.4",
-    "pwdlib>=0.3.1",
-    "pydantic>=2.13.4",
+    "pwdlib[argon2]>=0.3.1",
+    "pydantic[email]>=2.13.4",
     "pydantic-settings>=2.15.0",
     "pyjwt>=2.13.0",
     "redis>=8.1.0",
     "sqlalchemy>=2.0.52",
     "uvicorn[standard]>=0.52.4",
+    "slowapi>=0.1.10",
 ]
 
 [dependency-groups]
@@ -33,6 +34,12 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.pyrefly]
+# Pyrefly precisa conhecer os dois roots:
+# - "src"  → módulos de produção (modules/, security/, infra/, etc.)
+# - "."    → pacotes de teste (tests/factories, tests/unit/fakes, etc.)
+search_path = ["src", "."]

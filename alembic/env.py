@@ -6,7 +6,7 @@ from alembic import context
 
 from config.settings import settings
 from infra.database.base import Base
-# import infra.database.models  # noqa: F401 — garante que todos os models sejam registrados no metadata
+import infra.database.models  # noqa: F401 — garante que todos os models sejam registrados no Base.metadata
 
 config = context.config
 
@@ -16,12 +16,23 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """
+    Filtro do Alembic para ignorar tabelas do sistema/PostGIS (ex: spatial_ref_sys, topology, tiger)
+    e impedir que o autogenerate tente apagar tabelas do banco que não estão no Base.metadata.
+    """
+    if type_ == "table" and reflected and name not in target_metadata.tables:
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=settings.database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -29,8 +40,6 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    # Alembic usa engine síncrono mesmo que a aplicação use AsyncEngine.
-    # Isso é intencional: migrations rodam como scripts CLI, não como handlers HTTP.
     connectable = create_engine(
         settings.database_url,
         poolclass=pool.NullPool,
@@ -40,6 +49,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
