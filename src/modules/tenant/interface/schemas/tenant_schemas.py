@@ -40,6 +40,10 @@ class AddTenantMemberRequest(BaseModel):
     role: UserRole
 
 
+class UpdateTenantMemberRoleRequest(BaseModel):
+    role: UserRole
+
+
 class TenantMemberResponse(BaseModel):
     id: UUID
     tenant_id: UUID

@@ -213,3 +213,37 @@ class TestTenantRouterEndpoints:
         assert data["user_id"] == str(new_user.id)
         assert data["tenant_id"] == str(tenant.id)
         assert data["role"] == "professor"
+
+    async def test_update_tenant_member_role_success(self, client, session):
+        """PATCH /tenants/{id}/members/{user_id}/role -> Deve alterar a role do membro com sucesso quando for ADMIN."""
+        admin = await UserFactory.create(session)
+        member_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        payload = {"role": "professor"}
+        response = await client.patch(f"/tenants/{tenant.id}/members/{member_user.id}/role", json=payload, headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user_id"] == str(member_user.id)
+        assert data["role"] == "professor"
+
+    async def test_update_tenant_member_role_demote_single_admin_bad_request(self, client, session):
+        """PATCH /tenants/{id}/members/{user_id}/role -> Deve retornar 400 Bad Request ao tentar rebaixar o único ADMIN."""
+        admin = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        payload = {"role": "aluno"}
+        response = await client.patch(f"/tenants/{tenant.id}/members/{admin.id}/role", json=payload, headers=headers)
+        assert response.status_code == 400
+        assert "único administrador" in response.json()["detail"]

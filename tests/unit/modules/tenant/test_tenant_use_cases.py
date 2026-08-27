@@ -264,3 +264,91 @@ class TestAddTenantMemberUseCase:
                 )
             )
 
+
+@pytest.mark.asyncio
+class TestUpdateTenantMemberRoleUseCase:
+    async def test_update_role_success(self):
+        """Deve alterar a role de um membro ativo com sucesso."""
+        from modules.tenant.application.use_cases.update_tenant_member_role import (
+            UpdateTenantMemberRoleInput,
+            UpdateTenantMemberRoleUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        user = UserFactory.make()
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        )
+
+        use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+        updated = await use_case.execute(
+            UpdateTenantMemberRoleInput(
+                tenant_id=tenant.id,
+                user_id_to_update=user.id,
+                new_role=UserRole.PROFESSOR,
+            )
+        )
+
+        assert updated.role == UserRole.PROFESSOR
+
+    async def test_demote_single_admin_raises_business_rule_exception(self):
+        """Deve proibir rebaixar o único administrador ativo da instituição."""
+        from modules.tenant.application.use_cases.update_tenant_member_role import (
+            UpdateTenantMemberRoleInput,
+            UpdateTenantMemberRoleUseCase,
+        )
+        from shared.exceptions import BusinessRuleException
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        admin_user = UserFactory.make()
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN)
+        )
+
+        use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        with pytest.raises(BusinessRuleException, match="único administrador"):
+            await use_case.execute(
+                UpdateTenantMemberRoleInput(
+                    tenant_id=tenant.id,
+                    user_id_to_update=admin_user.id,
+                    new_role=UserRole.PROFESSOR,
+                )
+            )
+
+    async def test_update_role_non_existent_member_raises_not_found(self):
+        """Deve lançar ResourceNotFoundException ao tentar alterar role de membro inexistente."""
+        from modules.tenant.application.use_cases.update_tenant_member_role import (
+            UpdateTenantMemberRoleInput,
+            UpdateTenantMemberRoleUseCase,
+        )
+        from shared.exceptions import ResourceNotFoundException
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        dummy_user = UserFactory.make()
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(
+                UpdateTenantMemberRoleInput(
+                    tenant_id=tenant.id,
+                    user_id_to_update=dummy_user.id,
+                    new_role=UserRole.PROFESSOR,
+                )
+            )
+
