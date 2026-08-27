@@ -38,3 +38,31 @@ class UserFactory:
             password_hash=hash_password(plain_password),
             **overrides,
         )
+
+    @staticmethod
+    async def create(session, **overrides):
+        """
+        Cria e persiste um UserModel no banco de dados de teste.
+        Use apenas em testes de integração e E2E.
+
+        O email é único por padrão (via sufixo UUID) para evitar colisões de
+        constraint UNIQUE quando vários testes rodam na mesma sessão de DB.
+        """
+        from infra.database.models.user import UserModel
+
+        defaults: dict = {
+            "id": uuid.uuid4(),
+            "name": "John Doe",
+            "email": f"john_{uuid.uuid4().hex[:8]}@example.com",
+            "password_hash": "hashed_placeholder",
+            "fcm_token": None,
+        }
+        data = {**defaults, **overrides}
+        if isinstance(data["id"], str):
+            data["id"] = UUID(data["id"])
+
+        model = UserModel(**data)
+        session.add(model)
+        await session.flush()   # INSERT imediato, mas dentro da transação (sem commit)
+        await session.refresh(model)
+        return model
