@@ -190,3 +190,26 @@ class TestTenantRouterEndpoints:
         response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
         assert response.status_code == 403
         assert "não autorizado" in response.json()["detail"]
+
+    async def test_add_tenant_member_direct_success(self, client, session):
+        """POST /tenants/{id}/members -> Deve adicionar membro diretamente com sucesso quando for ADMIN."""
+        admin = await UserFactory.create(session)
+        new_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        payload = {
+            "user_id": str(new_user.id),
+            "role": "professor",
+        }
+
+        response = await client.post(f"/tenants/{tenant.id}/members", json=payload, headers=headers)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["user_id"] == str(new_user.id)
+        assert data["tenant_id"] == str(tenant.id)
+        assert data["role"] == "professor"

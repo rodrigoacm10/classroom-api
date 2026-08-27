@@ -202,3 +202,65 @@ class TestRemoveTenantMemberUseCase:
                 )
             )
 
+
+@pytest.mark.asyncio
+class TestAddTenantMemberUseCase:
+    async def test_add_tenant_member_success(self):
+        """Deve adicionar um novo membro à tenant com sucesso."""
+        from modules.tenant.application.use_cases.add_tenant_member import (
+            AddTenantMemberInput,
+            AddTenantMemberUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        new_user = UserFactory.make()
+
+        use_case = AddTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+        member = await use_case.execute(
+            AddTenantMemberInput(
+                tenant_id=tenant.id,
+                user_id=new_user.id,
+                role=UserRole.PROFESSOR,
+            )
+        )
+
+        assert member.tenant_id == tenant.id
+        assert member.user_id == new_user.id
+        assert member.role == UserRole.PROFESSOR
+        assert member.deleted is False
+
+    async def test_add_tenant_member_already_exists_raises(self):
+        """Deve lançar BusinessRuleException caso o usuário já seja membro ativo."""
+        from modules.tenant.application.use_cases.add_tenant_member import (
+            AddTenantMemberInput,
+            AddTenantMemberUseCase,
+        )
+        from shared.exceptions import BusinessRuleException
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        existing_user = UserFactory.make()
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=existing_user.id, role=UserRole.ALUNO)
+        )
+
+        use_case = AddTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        with pytest.raises(BusinessRuleException, match="já é membro"):
+            await use_case.execute(
+                AddTenantMemberInput(
+                    tenant_id=tenant.id,
+                    user_id=existing_user.id,
+                    role=UserRole.PROFESSOR,
+                )
+            )
+
