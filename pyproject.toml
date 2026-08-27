@@ -34,6 +34,12 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.pyrefly]
+# Pyrefly precisa conhecer os dois roots:
+# - "src"  → módulos de produção (modules/, security/, infra/, etc.)
+# - "."    → pacotes de teste (tests/factories, tests/unit/fakes, etc.)
+search_path = ["src", "."]
