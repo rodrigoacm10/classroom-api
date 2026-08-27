@@ -20,6 +20,10 @@ from modules.tenant.application.use_cases.remove_tenant_member import (
     RemoveTenantMemberInput,
     RemoveTenantMemberUseCase,
 )
+from modules.tenant.application.use_cases.update_tenant_member_role import (
+    UpdateTenantMemberRoleInput,
+    UpdateTenantMemberRoleUseCase,
+)
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
 )
@@ -32,6 +36,7 @@ from modules.tenant.interface.schemas.tenant_schemas import (
     MyTenantResponse,
     TenantMemberResponse,
     TenantResponse,
+    UpdateTenantMemberRoleRequest,
 )
 from modules.user.domain.entities.user import User
 from security.dependencies.current_user import get_current_user
@@ -126,6 +131,43 @@ async def add_tenant_member(
             tenant_id=tenant_id,
             user_id=body.user_id,
             role=body.role,
+        )
+    )
+
+    return TenantMemberResponse(
+        id=member.id,
+        tenant_id=member.tenant_id,
+        user_id=member.user_id,
+        role=member.role,
+        created_at=member.created_at,
+    )
+
+
+@router.patch(
+    "/{tenant_id}/members/{user_id}/role",
+    response_model=TenantMemberResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+async def update_tenant_member_role(
+    tenant_id: UUID,
+    user_id: UUID,
+    body: UpdateTenantMemberRoleRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TenantMemberResponse:
+    """
+    Altera o papel (role) de um membro ativo de uma Tenant/Instituição.
+    Requer papel de ADMIN na tenant ativa.
+    Não permite rebaixar o único administrador da instituição.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    member = await use_case.execute(
+        UpdateTenantMemberRoleInput(
+            tenant_id=tenant_id,
+            user_id_to_update=user_id,
+            new_role=body.role,
         )
     )
 
