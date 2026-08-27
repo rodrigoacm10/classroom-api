@@ -15,6 +15,7 @@ class TenantInvite:
     invited_by: UUID | None = None
     token: str = field(default_factory=lambda: secrets.token_urlsafe(32))
     accepted_at: datetime | None = None
+    revoked_at: datetime | None = None
     id: UUID = field(default_factory=uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -30,5 +31,9 @@ class TenantInvite:
         return self.accepted_at is not None
 
     @property
+    def is_revoked(self) -> bool:
+        return self.revoked_at is not None
+
+    @property
     def is_pending(self) -> bool:
-        return not self.is_accepted and not self.is_expired
+        return not self.is_accepted and not self.is_revoked and not self.is_expired

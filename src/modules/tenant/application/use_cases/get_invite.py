@@ -11,7 +11,7 @@ from shared.exceptions import ResourceNotFoundException
 class GetInviteOutput:
     invite: TenantInvite
     tenant_name: str
-    status: Literal["pending", "accepted", "expired"]
+    status: Literal["pending", "accepted", "expired", "revoked"]
 
 
 class GetInviteUseCase:
@@ -32,8 +32,10 @@ class GetInviteUseCase:
         tenant = await self.tenant_repo.find_by_id(invite.tenant_id, include_deleted=True)
         tenant_name = tenant.name if tenant else "Instituição Desconhecida"
 
-        if invite.is_accepted:
-            status_str: Literal["pending", "accepted", "expired"] = "accepted"
+        if invite.is_revoked:
+            status_str: Literal["pending", "accepted", "expired", "revoked"] = "revoked"
+        elif invite.is_accepted:
+            status_str = "accepted"
         elif invite.is_expired:
             status_str = "expired"
         else:

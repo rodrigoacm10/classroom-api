@@ -31,6 +31,9 @@ class AcceptInviteUseCase:
         if invite.is_accepted:
             raise BusinessRuleException("Este convite já foi aceito.")
 
+        if invite.is_revoked:
+            raise BusinessRuleException("Este convite foi revogado pelo administrador.")
+
         if invite.is_expired:
             raise BusinessRuleException("Este convite está expirado.")
 

@@ -6,6 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from infra.database.session import get_db
 from modules.tenant.application.use_cases.accept_invite import AcceptInviteUseCase
 from modules.tenant.application.use_cases.get_invite import GetInviteUseCase
+from modules.tenant.application.use_cases.revoke_invite import (
+    RevokeInviteInput,
+    RevokeInviteUseCase,
+)
 from modules.tenant.application.use_cases.send_invite import (
     SendInviteInput,
     SendInviteUseCase,
@@ -82,6 +86,47 @@ async def send_invite(
         role=invite.role,
         token=invite.token,
         status="pending",
+        expires_at=invite.expires_at,
+        created_at=invite.created_at,
+    )
+
+
+@tenant_invites_router.delete(
+    "/{tenant_id}/invites/{invite_id}",
+    response_model=InviteStatusResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+async def revoke_invite(
+    tenant_id: UUID,
+    invite_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> InviteStatusResponse:
+    """
+    Revoga/cancela um convite pendente da instituição.
+    Requer perfil de ADMIN na tenant ativa.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    invite_repo = TenantInviteSQLAlchemyRepository(session=db)
+
+    use_case = RevokeInviteUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
+    invite = await use_case.execute(
+        RevokeInviteInput(
+            tenant_id=tenant_id,
+            invite_id=invite_id,
+        )
+    )
+
+    tenant = await tenant_repo.find_by_id(tenant_id)
+    tenant_name = tenant.name if tenant else ""
+
+    return InviteStatusResponse(
+        id=invite.id,
+        tenant_id=invite.tenant_id,
+        tenant_name=tenant_name,
+        email=invite.email,
+        role=invite.role,
+        token=invite.token,
+        status="revoked",
         expires_at=invite.expires_at,
         created_at=invite.created_at,
     )

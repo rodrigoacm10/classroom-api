@@ -13,6 +13,12 @@ class TenantInviteSQLAlchemyRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def find_by_id(self, invite_id: UUID) -> TenantInvite | None:
+        stmt = select(TenantInviteModel).where(TenantInviteModel.id == invite_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return TenantInviteMapper.to_domain(model) if model else None
+
     async def find_by_token(self, token: str) -> TenantInvite | None:
         stmt = select(TenantInviteModel).where(TenantInviteModel.token == token)
         result = await self.session.execute(stmt)
@@ -26,6 +32,7 @@ class TenantInviteSQLAlchemyRepository:
             TenantInviteModel.email == email,
             TenantInviteModel.tenant_id == tenant_id,
             TenantInviteModel.accepted_at.is_(None),
+            TenantInviteModel.revoked_at.is_(None),
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()

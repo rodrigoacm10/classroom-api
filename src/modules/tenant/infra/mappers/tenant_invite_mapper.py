@@ -15,6 +15,7 @@ class TenantInviteMapper:
             token=model.token,
             expires_at=model.expires_at,
             accepted_at=model.accepted_at,
+            revoked_at=model.revoked_at,
             created_at=model.created_at,
         )
 
@@ -29,4 +30,5 @@ class TenantInviteMapper:
             token=entity.token,
             expires_at=entity.expires_at,
             accepted_at=entity.accepted_at,
+            revoked_at=entity.revoked_at,
         )

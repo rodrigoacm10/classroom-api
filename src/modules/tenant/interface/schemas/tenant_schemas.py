@@ -62,7 +62,7 @@ class InviteStatusResponse(BaseModel):
     email: str
     role: UserRole
     token: str
-    status: Literal["pending", "accepted", "expired"]
+    status: Literal["pending", "accepted", "expired", "revoked"]
     expires_at: datetime
     created_at: datetime
 

@@ -167,3 +167,51 @@ class TestInviteRouterEndpoints:
         response = await client.post(f"/invites/{invite_model.token}/accept", headers=headers)
         assert response.status_code == 400
         assert "já foi aceito" in response.json()["detail"]
+
+    async def test_revoke_invite_success(self, client, session):
+        """DELETE /tenants/{id}/invites/{invite_id} -> Deve revogar convite pendente com sucesso quando for ADMIN."""
+        admin = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        invite_model = TenantInviteModel(
+            tenant_id=tenant.id,
+            email="para_revogar@escola.com",
+            role=UserRole.PROFESSOR,
+            token="token-para-revogar-123",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
+        session.add(invite_model)
+        await session.flush()
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/invites/{invite_model.id}", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "revoked"
+        assert data["id"] == str(invite_model.id)
+
+    async def test_accept_revoked_invite_bad_request(self, client, session):
+        """POST /invites/{token}/accept -> Deve retornar 400 Bad Request ao tentar aceitar convite revogado."""
+        tenant = await TenantFactory.create(session)
+        invited_user = await UserFactory.create(session, email="usuario_revogado@escola.com")
+
+        invite_model = TenantInviteModel(
+            tenant_id=tenant.id,
+            email="usuario_revogado@escola.com",
+            role=UserRole.ALUNO,
+            token="token-revogado-456",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            revoked_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+        )
+        session.add(invite_model)
+        await session.flush()
+
+        token = create_access_token(user_id=invited_user.id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.post(f"/invites/{invite_model.token}/accept", headers=headers)
+        assert response.status_code == 400
+        assert "revogado" in response.json()["detail"]
