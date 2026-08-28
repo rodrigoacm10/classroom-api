@@ -26,6 +26,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from sqlalchemy import text
+
 TEST_DATABASE_URL = (
     "postgresql+psycopg://classroom:classroom@localhost:5432/classroom_test"
 )
@@ -44,9 +46,11 @@ async def create_tables(engine) -> AsyncGenerator[None, None]:
     from infra.database.base import Base
 
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
         await conn.run_sync(Base.metadata.create_all)
 
     yield
+
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
