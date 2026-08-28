@@ -170,16 +170,17 @@ users
 ├── fcm_token          -- token do dispositivo para push notification
 ├── created_at
 
-classes (turmas)
+subject_classes (turmas de disciplinas)
 ├── id (PK)
 ├── name
 ├── discipline_name
 ├── professor_id (FK -> users.id)
+├── room_id (FK -> rooms.id)
 ├── created_at
 
-class_students (relação N:N entre turma e aluno)
+subject_class_students (relação N:N entre turma e aluno)
 ├── id (PK)
-├── class_id (FK -> classes.id)
+├── subject_class_id (FK -> subject_classes.id)
 ├── student_id (FK -> users.id)
 
 rooms (salas)
@@ -191,7 +192,7 @@ rooms (salas)
 
 attendance_sessions (janela de chamada aberta)
 ├── id (PK)
-├── class_id (FK -> classes.id)
+├── subject_class_id (FK -> subject_classes.id)
 ├── room_id (FK -> rooms.id)
 ├── day_code (código do dia, gerado)
 ├── opened_at
@@ -231,7 +232,7 @@ CREATE INDEX idx_rooms_location ON rooms USING GIST(location);
 
 ### 4.1 Abertura da chamada (professor)
 1. Professor autentica (`POST /auth/login`) → recebe JWT
-2. `POST /classes/{id}/attendance-sessions` → cria registro em `attendance_sessions`, gera `day_code` aleatório, define `expires_at`
+2. `POST /subject-classes/{id}/attendance-sessions` → cria registro em `attendance_sessions`, gera `day_code` aleatório, define `expires_at`
 3. Backend dispara tarefa assíncrona (Celery) para notificar todos os alunos da turma via FCM
 4. Retorna `session_id` para o painel do professor, que passa a fazer polling ou usar WebSocket para acompanhar confirmações em tempo real
 
@@ -368,26 +369,26 @@ app/
     │       └── schemas/
     │           └── create_user.py
     │
-    ├── class_/                        # módulo: turmas
+    ├── subject_class/                 # módulo: turmas de disciplinas
     │   ├── domain/
     │   │   ├── entities/
-    │   │   │   └── class_.py
+    │   │   │   └── subject_class.py
     │   │   └── repositories/
-    │   │       └── class_repository.py
+    │   │       └── subject_class_repository.py
     │   ├── application/
     │   │   └── use_cases/
-    │   │       ├── create_class.py
+    │   │       ├── create_subject_class.py
     │   │       ├── enroll_student.py
-    │   │       └── list_classes.py
+    │   │       └── list_subject_classes.py
     │   ├── infra/
     │   │   ├── repositories/
-    │   │   │   └── class_sqlalchemy_repository.py
+    │   │   │   └── subject_class_sqlalchemy_repository.py
     │   │   └── mappers/
-    │   │       └── class_mapper.py
+    │   │       └── subject_class_mapper.py
     │   └── interface/
     │       ├── router.py
     │       └── schemas/
-    │           └── create_class.py
+    │           └── create_subject_class.py
     │
     ├── room/                          # módulo: salas com geolocalização
     │   ├── domain/
@@ -472,7 +473,7 @@ app/
 alembic/
 ├── versions/
 │   ├── 001_create_users.py
-│   ├── 002_create_classes.py
+│   ├── 002_create_subject_classes.py
 │   ├── 003_create_rooms.py          # habilita PostGIS, cria índice GiST
 │   ├── 004_create_attendance.py
 │   └── 005_create_notifications.py
