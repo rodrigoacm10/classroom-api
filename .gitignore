@@ -11,3 +11,7 @@ wheels/
 
 # Environment
 .env
+
+# Credentials & secrets
+credentials/
+*.json
