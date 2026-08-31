@@ -1,33 +1,26 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
-from datetime import datetime, timezone
 from shared.exceptions import ResourceNotFoundException
 
 
 @dataclass
-class DeleteEnrollmentInput:
+class GetEnrollmentInput:
     enrollment_id: UUID
     subject_class_id: UUID
 
 
-class DeleteEnrollmentUseCase:
-    """Remove uma matrícula por correção de erro administrativo.
-    Realiza soft delete (deleted=True). O registro some de visualizações normais.
-    Exclusivo para ADMIN.
-    """
+class GetEnrollmentUseCase:
 
     def __init__(self, enrollment_repo: EnrollmentRepository) -> None:
         self.enrollment_repo = enrollment_repo
 
-    async def execute(self, data: DeleteEnrollmentInput) -> None:
+    async def execute(self, data: GetEnrollmentInput) -> Enrollment:
         enrollment = await self.enrollment_repo.find_by_id(
             data.enrollment_id, include_deleted=False
         )
         if not enrollment or enrollment.subject_class_id != data.subject_class_id:
             raise ResourceNotFoundException("Matrícula não encontrada.")
-
-        enrollment.deleted = True
-        enrollment.deleted_at = datetime.now(timezone.utc)
-        await self.enrollment_repo.save(enrollment)
+        return enrollment

@@ -13,6 +13,9 @@ class EnrollmentMapper:
             status=model.status,
             deleted=model.deleted,
             enrolled_at=model.enrolled_at,
+            dropped_at=model.dropped_at,
+            deleted_at=model.deleted_at,
+            drop_reason=model.drop_reason,
         )
 
     @staticmethod
@@ -24,4 +27,7 @@ class EnrollmentMapper:
             status=entity.status,
             deleted=entity.deleted,
             enrolled_at=entity.enrolled_at,
+            dropped_at=entity.dropped_at,
+            deleted_at=entity.deleted_at,
+            drop_reason=entity.drop_reason,
         )

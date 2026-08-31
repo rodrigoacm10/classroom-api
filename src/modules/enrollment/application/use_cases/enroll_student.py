@@ -69,6 +69,8 @@ class EnrollStudentUseCase:
                 raise ResourceAlreadyExistsException("O aluno já está matriculado nesta turma.")
             # Se dropped, reativa a matrícula
             existing.status = EnrollmentStatus.ACTIVE
+            existing.dropped_at = None
+            existing.drop_reason = None
             return await self.enrollment_repo.save(existing)
 
         # 6. Cria nova matrícula

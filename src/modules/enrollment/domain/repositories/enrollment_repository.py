@@ -27,6 +27,13 @@ class EnrollmentRepository(Protocol):
         include_deleted: bool = False,
     ) -> list[Enrollment]: ...
 
+    async def list_by_member(
+        self,
+        tenant_member_id: UUID,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> list[Enrollment]: ...
+
     async def drop_all_active_for_member(self, tenant_member_id: UUID) -> int:
         """Altera o status de todas as matrículas ativas (e não deletadas) de um tenant_member para DROPPED.
         Retorna o número de matrículas afetadas.

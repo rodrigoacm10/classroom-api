@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.database.base import Base
+from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
 
 
@@ -49,4 +50,20 @@ class EnrollmentModel(Base):
     )
     enrolled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    dropped_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+    drop_reason: Mapped[DropReason | None] = mapped_column(
+        Enum(
+            DropReason,
+            name="drop_reason",
+            create_type=True,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=True,
+        default=None,
     )

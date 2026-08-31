@@ -914,3 +914,159 @@ async def delete_enrollment(tenant_id, subject_class_id, enrollment_id, ...):
 - [ ] Testes unitários escritos e passando (cenários de `dropped` vs `deleted` distintos)
 - [ ] Testes E2E escritos e passando (incluindo cenário de rematrícula após soft delete)
 - [ ] `uv run pytest` — todos os testes passando sem erros
+
+---
+
+## Melhorias Pós-Plano
+
+Funcionalidades a serem implementadas após a conclusão do plano principal acima.
+
+---
+
+### 🟡 Recomendado — `GET /{enrollment_id}` e `GET /members/{id}/enrollments`
+
+#### `GET /enrollments/{enrollment_id}` — buscar matrícula individual
+
+Padrão REST básico: qualquer recurso que pode ser criado deve poder ser consultado individualmente. Útil para o front validar o estado de uma matrícula específica.
+
+**Use case:** `GetEnrollmentUseCase`
+
+```python
+@router.get("/{enrollment_id}", response_model=EnrollmentResponse)
+async def get_enrollment(tenant_id, subject_class_id, enrollment_id, ...):
+    """Retorna uma matrícula específica pelo ID."""
+```
+
+**Repositório** — adicionar método:
+```python
+async def find_by_id(self, enrollment_id: UUID, include_deleted: bool = False) -> Enrollment | None: ...
+# (já existente no protocolo — apenas garantir que o router expõe via GET)
+```
+
+---
+
+#### `GET /tenants/{tenant_id}/members/{member_id}/enrollments` — turmas do aluno
+
+O inverso da listagem atual: "alunos de uma turma" → "turmas em que um aluno está matriculado". Essencial para exibir o **horário do aluno** e é exposto por todos os LMS de mercado (Canvas, Moodle, Google Classroom).
+
+**Use case:** `ListEnrollmentsByMemberUseCase`
+
+```python
+@router.get(
+    "/tenants/{tenant_id}/members/{member_id}/enrollments",
+    response_model=list[EnrollmentResponse],
+    tags=["enrollments"],
+)
+async def list_enrollments_by_member(tenant_id, member_id, status=None, ...):
+    """Lista todas as turmas em que um aluno está matriculado."""
+```
+
+**Repositório** — adicionar método:
+```python
+async def list_by_member(
+    self,
+    tenant_member_id: UUID,
+    status: EnrollmentStatus | None = None,
+    include_deleted: bool = False,
+) -> list[Enrollment]: ...
+```
+
+**SQL:**
+```sql
+SELECT * FROM subject_class_enrollments
+WHERE tenant_member_id = :id
+  AND deleted = false
+  AND (:status IS NULL OR status = :status);
+```
+
+**Índice adicional necessário** (já existe): `idx_enrollments_tenant_member_id`.
+
+---
+
+### 🟡 Recomendado — Campos de auditoria temporal (`dropped_at`, `deleted_at`)
+
+Registrar **quando** cada evento ocorreu permite relatórios de desistência por período, auditoria administrativa e rastreabilidade.
+
+**Alterações no model:**
+```python
+dropped_at: Mapped[datetime | None] = mapped_column(
+    DateTime(timezone=True), nullable=True, default=None
+)
+deleted_at: Mapped[datetime | None] = mapped_column(
+    DateTime(timezone=True), nullable=True, default=None
+)
+```
+
+**Regras de preenchimento:**
+
+| Campo | Quando é preenchido | Quem preenche |
+|---|---|---|
+| `dropped_at` | Ao executar `DropEnrollmentUseCase` ou `drop_all_active_for_member` | Use case / repositório |
+| `deleted_at` | Ao executar `DeleteEnrollmentUseCase` | Use case |
+
+**Migration adicional:**
+```sql
+ALTER TABLE subject_class_enrollments
+  ADD COLUMN dropped_at TIMESTAMPTZ DEFAULT NULL,
+  ADD COLUMN deleted_at TIMESTAMPTZ DEFAULT NULL;
+```
+
+**Impacto no `drop_all_active_for_member`:**
+```python
+.values(
+    status=EnrollmentStatus.DROPPED,
+    dropped_at=datetime.now(timezone.utc),  # ← adicionar
+)
+```
+
+**Schema de resposta** — expor os campos opcionalmente:
+```python
+class EnrollmentResponse(BaseModel):
+    ...
+    dropped_at: datetime | None = None
+    deleted_at: datetime | None = None
+```
+
+---
+
+### 🟢 Opcional — `drop_reason` (rastreio de causa do cancelamento)
+
+Distinguir cancelamentos manuais (admin) de automáticos (mudança de role) sem precisar analisar logs.
+
+**Enum:**
+```python
+# src/shared/enums/drop_reason.py
+from enum import Enum
+
+class DropReason(str, Enum):
+    ADMIN_CANCELLATION = "admin_cancellation"  # ADMIN cancelou manualmente via PATCH
+    ROLE_CHANGE = "role_change"                # Cancelamento automático por mudança de role
+```
+
+**Alteração no model:**
+```python
+from sqlalchemy import Enum as SAEnum
+from shared.enums.drop_reason import DropReason
+
+drop_reason: Mapped[DropReason | None] = mapped_column(
+    SAEnum(DropReason, name="drop_reason", create_type=True),
+    nullable=True,
+    default=None,
+)
+```
+
+**Preenchimento:**
+
+| Operação | `drop_reason` |
+|---|---|
+| `DropEnrollmentUseCase` (PATCH manual) | `DropReason.ADMIN_CANCELLATION` |
+| `drop_all_active_for_member` (role change) | `DropReason.ROLE_CHANGE` |
+| `DeleteEnrollmentUseCase` (soft delete) | `None` (não aplicável — não é um cancelamento) |
+
+**Migration adicional:**
+```sql
+CREATE TYPE drop_reason AS ENUM ('admin_cancellation', 'role_change');
+
+ALTER TABLE subject_class_enrollments
+  ADD COLUMN drop_reason drop_reason DEFAULT NULL;
+```

@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.models.enrollment import EnrollmentModel
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.enrollment.infra.mappers.enrollment_mapper import EnrollmentMapper
+from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
 
 
@@ -63,6 +64,22 @@ class EnrollmentSQLAlchemyRepository:
         result = await self.session.execute(stmt)
         return [EnrollmentMapper.to_domain(m) for m in result.scalars().all()]
 
+    async def list_by_member(
+        self,
+        tenant_member_id: UUID,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> list[Enrollment]:
+        stmt = select(EnrollmentModel).where(
+            EnrollmentModel.tenant_member_id == tenant_member_id
+        )
+        if not include_deleted:
+            stmt = stmt.where(EnrollmentModel.deleted == False)  # noqa: E712
+        if status is not None:
+            stmt = stmt.where(EnrollmentModel.status == status)
+        result = await self.session.execute(stmt)
+        return [EnrollmentMapper.to_domain(m) for m in result.scalars().all()]
+
     async def drop_all_active_for_member(self, tenant_member_id: UUID) -> int:
         stmt = (
             update(EnrollmentModel)
@@ -71,7 +88,11 @@ class EnrollmentSQLAlchemyRepository:
                 EnrollmentModel.status == EnrollmentStatus.ACTIVE,
                 EnrollmentModel.deleted == False,  # noqa: E712
             )
-            .values(status=EnrollmentStatus.DROPPED)
+            .values(
+                status=EnrollmentStatus.DROPPED,
+                dropped_at=func.now(),
+                drop_reason=DropReason.ROLE_CHANGE,
+            )
             .returning(EnrollmentModel.id)
         )
         result = await self.session.execute(stmt)

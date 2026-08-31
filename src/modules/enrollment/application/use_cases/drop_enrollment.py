@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
+from datetime import datetime, timezone
+from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.exceptions import BusinessRuleException, ResourceNotFoundException
 
@@ -31,4 +33,6 @@ class DropEnrollmentUseCase:
             raise BusinessRuleException("Matrícula já está cancelada.")
 
         enrollment.status = EnrollmentStatus.DROPPED
+        enrollment.dropped_at = datetime.now(timezone.utc)
+        enrollment.drop_reason = DropReason.ADMIN_CANCELLATION
         await self.enrollment_repo.save(enrollment)
