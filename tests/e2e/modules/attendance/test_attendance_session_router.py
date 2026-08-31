@@ -140,3 +140,29 @@ class TestAttendanceSessionRouter:
             headers=prof_headers,
         )
         assert close2_res.status_code == 409
+
+    async def test_cancel_session_endpoint_success_and_conflict(self, client, session):
+        """PATCH /attendance-sessions/{id}/cancel cancela a chamada e retorna 409 se já estiver cancelada."""
+        tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
+
+        open_res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            json={"room_id": room_id, "duration_minutes": 15},
+            headers=prof_headers,
+        )
+        session_id = open_res.json()["id"]
+
+        # Cancel 1
+        cancel1_res = await client.patch(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
+            headers=prof_headers,
+        )
+        assert cancel1_res.status_code == 200
+        assert cancel1_res.json()["status"] == SessionStatus.CANCELLED.value
+
+        # Cancel 2 (Conflict)
+        cancel2_res = await client.patch(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
+            headers=prof_headers,
+        )
+        assert cancel2_res.status_code == 409

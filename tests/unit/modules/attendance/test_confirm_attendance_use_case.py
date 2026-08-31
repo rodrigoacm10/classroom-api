@@ -311,6 +311,33 @@ class TestConfirmAttendanceUseCase:
                 )
             )
 
+    async def test_confirm_attendance_raises_when_session_cancelled(self):
+        """Deve lançar ResourceAlreadyExistsException se a chamada estiver cancelada."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id, _, _, _,
+            session_repo,
+        ) = await self._setup_fixtures()
+
+        session.status = SessionStatus.CANCELLED
+        await session_repo.save(session)
+
+        with pytest.raises(ResourceAlreadyExistsException, match="A chamada foi cancelada"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                )
+            )
+
     async def test_confirm_attendance_raises_when_session_expired(self):
         """Deve lançar ResourceAlreadyExistsException se a chamada estiver expirada."""
         (

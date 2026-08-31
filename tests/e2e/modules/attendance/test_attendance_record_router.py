@@ -177,3 +177,30 @@ class TestAttendanceRecordRouter:
         assert rev_data["review_note"] == "Aluno estava na secretaria"
         assert rev_data["reviewed_by"] is not None
         assert rev_data["reviewed_at"] is not None
+
+    async def test_confirm_attendance_when_session_cancelled_raises_409(self, client, session):
+        """Discente tenta confirmar presença em chamada cancelada e recebe 409 Conflict."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        # Professor cancela a chamada
+        cancel_res = await client.patch(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
+            headers=prof_headers,
+        )
+        assert cancel_res.status_code == 200
+
+        # Aluno tenta confirmar em chamada cancelada
+        res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            headers=student1_headers,
+        )
+        assert res.status_code == 409
+        assert res.json()["detail"] == "A chamada foi cancelada."
