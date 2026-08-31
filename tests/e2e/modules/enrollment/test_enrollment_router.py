@@ -374,3 +374,52 @@ class TestEnrollmentRouterEndpoints:
         )
         assert res_del_aluno.status_code == 403
 
+    async def test_get_enrollment_by_id_endpoint(self, client, session):
+        """GET /enrollments/{id} -> Deve retornar os detalhes de uma matrícula (200)."""
+        tenant, _, _, headers, sc_id = await self._setup_tenant_class(session, client)
+
+        st_user = await UserFactory.create(session)
+        st_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=st_user.id, role=UserRole.ALUNO
+        )
+
+        res_create = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            json={"tenant_member_id": str(st_member.id)},
+            headers=headers,
+        )
+        enrollment_id = res_create.json()["id"]
+
+        res_get = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{enrollment_id}",
+            headers=headers,
+        )
+        assert res_get.status_code == 200
+        assert res_get.json()["id"] == enrollment_id
+        assert res_get.json()["tenant_member_id"] == str(st_member.id)
+
+    async def test_list_enrollments_by_member_endpoint(self, client, session):
+        """GET /tenants/{id}/members/{member_id}/enrollments -> Deve retornar as turmas em que o aluno está matriculado."""
+        tenant, _, _, headers, sc_id = await self._setup_tenant_class(session, client)
+
+        st_user = await UserFactory.create(session)
+        st_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=st_user.id, role=UserRole.ALUNO
+        )
+
+        await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            json={"tenant_member_id": str(st_member.id)},
+            headers=headers,
+        )
+
+        res_member_enrollments = await client.get(
+            f"/tenants/{tenant.id}/members/{st_member.id}/enrollments",
+            headers=headers,
+        )
+        assert res_member_enrollments.status_code == 200
+        data = res_member_enrollments.json()
+        assert len(data) == 1
+        assert data[0]["subject_class_id"] == sc_id
+
+

@@ -14,9 +14,17 @@ from modules.enrollment.application.use_cases.enroll_student import (
     EnrollStudentInput,
     EnrollStudentUseCase,
 )
+from modules.enrollment.application.use_cases.get_enrollment import (
+    GetEnrollmentInput,
+    GetEnrollmentUseCase,
+)
 from modules.enrollment.application.use_cases.list_enrollments import (
     ListEnrollmentsInput,
     ListEnrollmentsUseCase,
+)
+from modules.enrollment.application.use_cases.list_enrollments_by_member import (
+    ListEnrollmentsByMemberInput,
+    ListEnrollmentsByMemberUseCase,
 )
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.subject_class.domain.entities.subject_class import SubjectClass
@@ -26,6 +34,7 @@ from modules.tenant.application.use_cases.update_tenant_member_role import (
 )
 from modules.tenant.domain.entities.tenant import Tenant
 from modules.tenant.domain.entities.tenant_member import TenantMember
+from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.user_role import UserRole
 from shared.exceptions import (
@@ -434,3 +443,91 @@ class TestEnrollmentUseCases:
         assert res_e2 is not None
         assert res_e1.status == EnrollmentStatus.DROPPED
         assert res_e2.status == EnrollmentStatus.DROPPED
+        assert res_e1.dropped_at is not None
+        assert res_e1.drop_reason is not None
+        assert res_e1.drop_reason == DropReason.ROLE_CHANGE
+
+    async def test_get_enrollment_success(self):
+        """GetEnrollmentUseCase deve retornar a matrícula por ID."""
+        enrollment_repo = FakeEnrollmentRepository()
+        sc_id = uuid4()
+        enrollment = Enrollment(subject_class_id=sc_id, tenant_member_id=uuid4())
+        await enrollment_repo.save(enrollment)
+
+        use_case = GetEnrollmentUseCase(enrollment_repo=enrollment_repo)
+        res = await use_case.execute(
+            GetEnrollmentInput(enrollment_id=enrollment.id, subject_class_id=sc_id)
+        )
+        assert res.id == enrollment.id
+
+    async def test_list_enrollments_by_member_success(self):
+        """ListEnrollmentsByMemberUseCase deve retornar as matrículas de um aluno específico."""
+        enrollment_repo = FakeEnrollmentRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant_id = uuid4()
+        member = TenantMember(tenant_id=tenant_id, user_id=uuid4(), role=UserRole.ALUNO)
+        await member_repo.save(member)
+
+        e1 = Enrollment(subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE)
+        e2 = Enrollment(subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.DROPPED)
+        await enrollment_repo.save(e1)
+        await enrollment_repo.save(e2)
+
+        use_case = ListEnrollmentsByMemberUseCase(
+            enrollment_repo=enrollment_repo,
+            member_repo=member_repo,
+        )
+
+        res_all = await use_case.execute(
+            ListEnrollmentsByMemberInput(tenant_id=tenant_id, tenant_member_id=member.id)
+        )
+        assert len(res_all) == 2
+
+        res_active = await use_case.execute(
+            ListEnrollmentsByMemberInput(tenant_id=tenant_id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE)
+        )
+        assert len(res_active) == 1
+        assert res_active[0].id == e1.id
+
+    async def test_get_enrollment_not_found(self):
+        """GetEnrollmentUseCase deve lançar ResourceNotFoundException se a matrícula não existir ou não pertencer à turma."""
+        enrollment_repo = FakeEnrollmentRepository()
+        use_case = GetEnrollmentUseCase(enrollment_repo=enrollment_repo)
+
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(
+                GetEnrollmentInput(enrollment_id=uuid4(), subject_class_id=uuid4())
+            )
+
+    async def test_list_enrollments_by_member_member_not_found(self):
+        """ListEnrollmentsByMemberUseCase deve lançar ResourceNotFoundException se o membro não existir."""
+        enrollment_repo = FakeEnrollmentRepository()
+        member_repo = FakeTenantMemberRepository()
+        use_case = ListEnrollmentsByMemberUseCase(
+            enrollment_repo=enrollment_repo,
+            member_repo=member_repo,
+        )
+
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(
+                ListEnrollmentsByMemberInput(tenant_id=uuid4(), tenant_member_id=uuid4())
+            )
+
+    async def test_list_enrollments_by_member_wrong_tenant(self):
+        """ListEnrollmentsByMemberUseCase deve lançar BusinessRuleException se o membro pertencer a outro tenant."""
+        enrollment_repo = FakeEnrollmentRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        member = TenantMember(tenant_id=uuid4(), user_id=uuid4(), role=UserRole.ALUNO)
+        await member_repo.save(member)
+
+        use_case = ListEnrollmentsByMemberUseCase(
+            enrollment_repo=enrollment_repo,
+            member_repo=member_repo,
+        )
+
+        with pytest.raises(BusinessRuleException):
+            await use_case.execute(
+                ListEnrollmentsByMemberInput(tenant_id=uuid4(), tenant_member_id=member.id)
+            )

@@ -1,6 +1,8 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from modules.enrollment.domain.entities.enrollment import Enrollment
+from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
 
 
@@ -55,6 +57,23 @@ class FakeEnrollmentRepository:
             result.append(e)
         return result
 
+    async def list_by_member(
+        self,
+        tenant_member_id: UUID,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> list[Enrollment]:
+        result = []
+        for e in self._enrollments.values():
+            if e.tenant_member_id != tenant_member_id:
+                continue
+            if not include_deleted and e.deleted:
+                continue
+            if status is not None and e.status != status:
+                continue
+            result.append(e)
+        return result
+
     async def drop_all_active_for_member(self, tenant_member_id: UUID) -> int:
         count = 0
         for e in self._enrollments.values():
@@ -64,5 +83,7 @@ class FakeEnrollmentRepository:
                 and not e.deleted
             ):
                 e.status = EnrollmentStatus.DROPPED
+                e.dropped_at = datetime.now(timezone.utc)
+                e.drop_reason = DropReason.ROLE_CHANGE
                 count += 1
         return count

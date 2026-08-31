@@ -11,6 +11,7 @@ from modules.subject_class.domain.entities.subject_class import SubjectClass
 from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import (
     SubjectClassSQLAlchemyRepository,
 )
+from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.user_role import UserRole
 from tests.factories.tenant_factory import TenantFactory
@@ -119,6 +120,26 @@ class TestEnrollmentSQLAlchemyRepository:
         assert res_e2 is not None
         assert res_e1.status == EnrollmentStatus.DROPPED
         assert res_e2.status == EnrollmentStatus.DROPPED
+        assert res_e1.dropped_at is not None
+        assert res_e1.drop_reason is not None
+        assert res_e1.drop_reason == DropReason.ROLE_CHANGE
+
+    async def test_list_by_member(self, session):
+        """Deve listar todas as matrículas de um aluno específico."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        sc1 = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="T1", discipline_name="D1"))
+        sc2 = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="T2", discipline_name="D2"))
+
+        repo = EnrollmentSQLAlchemyRepository(session)
+        await repo.save(Enrollment(subject_class_id=sc1.id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE))
+        await repo.save(Enrollment(subject_class_id=sc2.id, tenant_member_id=member.id, status=EnrollmentStatus.DROPPED))
+
+        member_list = await repo.list_by_member(member.id)
+        assert len(member_list) == 2
 
     async def test_partial_unique_index_allows_new_enrollment_after_soft_delete(self, session):
         """O partial unique index 'uq_enrollment_active' deve impedir duplicidade de ativos, mas permitir nova matrícula se a anterior tiver deleted=True."""
