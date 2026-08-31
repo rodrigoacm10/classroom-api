@@ -14,6 +14,14 @@ class FakeTenantMemberRepository:
     def __init__(self) -> None:
         self._store: dict[UUID, TenantMember] = {}
 
+    async def find_by_id(
+        self, member_id: UUID, include_deleted: bool = False
+    ) -> TenantMember | None:
+        m = self._store.get(member_id)
+        if m and (include_deleted or not m.deleted):
+            return m
+        return None
+
     async def find_by_tenant_and_user(
         self,
         tenant_id: UUID,

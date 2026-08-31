@@ -14,6 +14,18 @@ class TenantMemberSQLAlchemyRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def find_by_id(
+        self, member_id: UUID, include_deleted: bool = False
+    ) -> TenantMember | None:
+        conditions = [TenantMemberModel.id == member_id]
+        if not include_deleted:
+            conditions.append(TenantMemberModel.deleted.is_(False))
+
+        stmt = select(TenantMemberModel).where(*conditions)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return TenantMemberMapper.to_domain(model) if model else None
+
     async def find_by_tenant_and_user(
         self, tenant_id: UUID, user_id: UUID, include_deleted: bool = False
     ) -> TenantMember | None:

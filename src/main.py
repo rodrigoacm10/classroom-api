@@ -5,7 +5,12 @@ from slowapi.errors import RateLimitExceeded
 
 from config.settings import settings
 from modules.auth.interface.router import router as auth_router
+from modules.enrollment.interface.router import (
+    member_enrollments_router,
+    router as enrollment_router,
+)
 from modules.room.interface.router import router as room_router
+from modules.subject_class.interface.router import router as subject_class_router
 from modules.tenant.interface.invite_router import invites_router, tenant_invites_router
 from modules.tenant.interface.tenant_router import router as tenant_router
 from modules.user.interface.router import router as user_router
@@ -45,6 +50,9 @@ app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(tenant_router)
 app.include_router(room_router)
+app.include_router(subject_class_router)
+app.include_router(enrollment_router)
+app.include_router(member_enrollments_router)
 app.include_router(tenant_invites_router)
 app.include_router(invites_router)
 

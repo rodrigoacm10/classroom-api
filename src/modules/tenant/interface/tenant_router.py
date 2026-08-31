@@ -4,6 +4,9 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
+from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+    EnrollmentSQLAlchemyRepository,
+)
 from modules.tenant.application.use_cases.activate_tenant import ActivateTenantUseCase
 from modules.tenant.application.use_cases.add_tenant_member import (
     AddTenantMemberInput,
@@ -161,7 +164,12 @@ async def update_tenant_member_role(
     """
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
-    use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+    enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
+    use_case = UpdateTenantMemberRoleUseCase(
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
+        enrollment_repo=enrollment_repo,
+    )
 
     member = await use_case.execute(
         UpdateTenantMemberRoleInput(

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
 from modules.tenant.domain.entities.tenant_member import TenantMember
 from modules.tenant.domain.repositories.tenant_repository import (
     TenantMemberRepository,
@@ -23,9 +24,11 @@ class UpdateTenantMemberRoleUseCase:
         self,
         tenant_repo: TenantRepository,
         member_repo: TenantMemberRepository,
+        enrollment_repo: EnrollmentRepository | None = None,
     ) -> None:
         self.tenant_repo = tenant_repo
         self.member_repo = member_repo
+        self.enrollment_repo = enrollment_repo
 
     async def execute(self, data: UpdateTenantMemberRoleInput) -> TenantMember:
         # 1. Verificar se a tenant existe e não está deletada
@@ -55,6 +58,16 @@ class UpdateTenantMemberRoleUseCase:
                     "Não é possível alterar a função do único administrador da instituição."
                 )
 
+        old_role = member.role
+
         # 5. Atualiza a role e persiste
         member.role = data.new_role
-        return await self.member_repo.save(member)
+        updated_member = await self.member_repo.save(member)
+
+        # 6. Se a role anterior era ALUNO e a nova não é ALUNO,
+        # cancela todas as matrículas ativas desse membro
+        if old_role == UserRole.ALUNO and data.new_role != UserRole.ALUNO:
+            if self.enrollment_repo:
+                await self.enrollment_repo.drop_all_active_for_member(tenant_member_id=member.id)
+
+        return updated_member

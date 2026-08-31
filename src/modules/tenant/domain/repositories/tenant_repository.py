@@ -16,6 +16,8 @@ class TenantRepository(Protocol):
 
 class TenantMemberRepository(Protocol):
 
+    async def find_by_id(self, member_id: UUID, include_deleted: bool = False) -> TenantMember | None: ...
+
     async def find_by_tenant_and_user(
         self, tenant_id: UUID, user_id: UUID, include_deleted: bool = False
     ) -> TenantMember | None: ...
