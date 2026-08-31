@@ -8,8 +8,8 @@
 > **Entrega esperada**:
 > - `POST /tenants/{tenant_id}/subject-classes/{subject_class_id}/enrollments` — matricular aluno
 > - `GET /tenants/{tenant_id}/subject-classes/{subject_class_id}/enrollments` — listar matriculados
-> - `PATCH /tenants/{tenant_id}/subject-classes/{subject_class_id}/enrollments/{enrollment_id}` — mudar status
-> - `DELETE /tenants/{tenant_id}/subject-classes/{subject_class_id}/enrollments/{enrollment_id}` — cancelar matrícula (soft delete)
+> - `PATCH /tenants/{tenant_id}/subject-classes/{subject_class_id}/enrollments/{enrollment_id}` — cancelar matrícula (status → dropped)
+> - `DELETE /tenants/{tenant_id}/subject-classes/{subject_class_id}/enrollments/{enrollment_id}` — remover matrícula (soft delete para correção de erro, ADMIN only)
 
 ---
 
@@ -51,15 +51,24 @@ subject_class_enrollments
   ├── subject_class_id  → FK subject_classes.id  ON DELETE CASCADE
   ├── tenant_member_id  → FK tenant_members.id   ON DELETE CASCADE
   ├── status            ENUM (active | dropped)  DEFAULT active
+  ├── deleted           BOOLEAN                  DEFAULT false
   └── enrolled_at       TIMESTAMPTZ DEFAULT now()
 
-UNIQUE(subject_class_id, tenant_member_id)  ← evita matrícula duplicada
+UNIQUE (subject_class_id, tenant_member_id) WHERE deleted = false  ← partial unique index
 ```
 
-> **Atenção**: A constraint `UNIQUE(subject_class_id, tenant_member_id)` garante que um
-> mesmo aluno não pode ser matriculado duas vezes na mesma turma ao mesmo tempo.
-> Para reabilitar um aluno que havia sido `dropped`, o use case deve alterar o `status`
-> de volta para `active` em vez de criar um novo registro.
+> **Atenção**: A unicidade é garantida por um **partial unique index** que considera apenas
+> registros com `deleted=false`. Isso resolve um problema crítico de design:
+> uma `UniqueConstraint` simples em `(subject_class_id, tenant_member_id)` bloquearia
+> a criação de um novo registro mesmo após um soft delete, pois o banco enxerga a linha
+> deletada. Com o índice parcial, registros com `deleted=true` são ignorados pela constraint,
+> permitindo nova matrícula após correção de erro.
+>
+> | Cenário | Comportamento |
+> |---|---|
+> | Aluno `active` na turma → tenta matricular novamente | Bloqueado pelo índice parcial (409) |
+> | Aluno `dropped` → tenta matricular novamente | Permitido pelo banco — use case reativa o registro |
+> | Aluno `deleted=True` → tenta matricular novamente | Permitido pelo banco — use case cria novo registro |
 
 ---
 
@@ -77,11 +86,33 @@ class EnrollmentStatus(str, Enum):
 | Status | Descrição |
 |---|---|
 | `active` | Aluno está regularmente matriculado na turma |
-| `dropped` | Matrícula cancelada (manual pelo ADMIN ou automática por mudança de role) |
+| `dropped` | Matrícula cancelada — evento de negócio legítimo (aluno cancelou, role foi alterada) |
 
-> **Nota**: Não há `deleted` neste modelo — o histórico de matrículas deve ser preservado.
-> Em vez de soft delete, o status `dropped` cumpre esse papel. A API de `DELETE` apenas
-> muda o status para `dropped`.
+---
+
+## Soft Delete vs. Status `dropped` — Distinção Semântica
+
+Este modelo possui **dois mecanismos** de "remover" uma matrícula, com semânticas completamente diferentes:
+
+| Mecanismo | Campo | Quem aciona | Semântica | Aparece no histórico? |
+|---|---|---|---|---|
+| **Soft delete** | `deleted = True` | ADMIN | Correção de erro — o aluno nunca deveria ter sido matriculado | ❌ Some de todas as views |
+| **Cancelamento** | `status = dropped` | ADMIN via PATCH, ou automático por mudança de role | Evento legítimo do ciclo de vida da matrícula | ✅ Preservado no histórico |
+
+### Por que essa distinção importa?
+
+- Um aluno que se matriculou, frequentou aulas e depois cancelou é **diferente** de um aluno adicionado por engano.
+- `dropped` entra em relatórios de frequência, histórico acadêmico e auditoria.
+- `deleted=True` equivale a "este registro não deveria existir" — invisível para qualquer query normal.
+- Sistemas como **Canvas LMS** e **edX** fazem exatamente essa distinção: possuem um estado `deleted` separado dos estados de ciclo de vida (`inactive`, `completed`, `rejected`).
+
+### Regras de visibilidade
+
+| Query | Condição SQL |
+|---|---|
+| Listagem padrão (alunos ativos) | `WHERE deleted=false AND status='active'` |
+| Histórico de matrículas (inclui cancelamentos) | `WHERE deleted=false` |
+| Relatório completo com ADMIN (`include_deleted=true`) | sem filtro de `deleted` |
 
 ---
 
@@ -143,17 +174,17 @@ UpdateTenantMemberRoleUseCase.execute()
 
 ```
 shared/enums/enrollment_status.py                          ← 1. Enum EnrollmentStatus
-infra/database/models/enrollment.py                        ← 2. Model SQLAlchemy EnrollmentModel
+infra/database/models/enrollment.py                        ← 2. Model SQLAlchemy EnrollmentModel (com deleted + status)
 alembic/versions/XXX_create_subject_class_enrollments.py   ← 3. Migration
 modules/enrollment/
   domain/entities/enrollment.py                            ← 4. Entidade de domínio Enrollment
-  domain/repositories/enrollment_repository.py             ← 5. Protocol do repositório
+  domain/repositories/enrollment_repository.py             ← 5. Protocol do repositório (com include_deleted)
   infra/mappers/enrollment_mapper.py                       ← 6. Mapper Model ↔ Entity
   infra/repositories/enrollment_sqlalchemy_repository.py   ← 7. Implementação SQLAlchemy
   application/use_cases/enroll_student.py                  ← 8. EnrollStudentUseCase
   application/use_cases/list_enrollments.py                ← 9. ListEnrollmentsUseCase
-  application/use_cases/update_enrollment_status.py        ← 10. UpdateEnrollmentStatusUseCase
-  application/use_cases/drop_enrollment.py                 ← 11. DropEnrollmentUseCase
+  application/use_cases/drop_enrollment.py                 ← 10. DropEnrollmentUseCase (PATCH → status=dropped)
+  application/use_cases/delete_enrollment.py               ← 11. DeleteEnrollmentUseCase (DELETE → deleted=True)
   interface/schemas/enrollment_schemas.py                  ← 12. Schemas Pydantic
   interface/router.py                                      ← 13. Router HTTP com 4 rotas
 modules/tenant/application/use_cases/update_tenant_member_role.py  ← 14. Modificar para chamar drop_all_active_for_member
@@ -184,7 +215,7 @@ class EnrollmentStatus(str, Enum):
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, false, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -195,10 +226,15 @@ from shared.enums.enrollment_status import EnrollmentStatus
 class EnrollmentModel(Base):
     __tablename__ = "subject_class_enrollments"
     __table_args__ = (
-        UniqueConstraint(
+        # Partial unique index — garante unicidade APENAS em registros não deletados.
+        # Uma UniqueConstraint simples bloquearia nova matrícula mesmo após soft delete,
+        # pois o banco ainda enxerga a linha com deleted=True.
+        Index(
+            "uq_enrollment_active",
             "subject_class_id",
             "tenant_member_id",
-            name="uq_enrollment_class_member",
+            unique=True,
+            postgresql_where=text("deleted = false"),
         ),
     )
 
@@ -220,6 +256,9 @@ class EnrollmentModel(Base):
         default=EnrollmentStatus.ACTIVE,
         nullable=False,
     )
+    deleted: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     enrolled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -228,10 +267,13 @@ class EnrollmentModel(Base):
 > **Notas de design:**
 > - `ON DELETE CASCADE` em ambas as FKs — se a turma ou o membro for removido do banco,
 >   as matrículas relacionadas são removidas automaticamente.
-> - O `status` assume `ACTIVE` por padrão. Não há coluna `deleted` — o `dropped` cumpre
->   esse papel, preservando o histórico.
-> - A `UniqueConstraint` garante no banco que não existam duas matrículas para o mesmo
->   par `(subject_class_id, tenant_member_id)`.
+> - `deleted` serve para **correção de erro** (ADMIN removeu um aluno adicionado indevidamente).
+>   Registros com `deleted=True` são invisíveis em todas as queries normais.
+> - `status=dropped` serve para **eventos legítimos de cancelamento** — o histórico é preservado.
+> - O **partial unique index** `uq_enrollment_active` (com `WHERE deleted=false`) garante
+>   unicidade apenas em registros ativos. Registros com `deleted=True` são transparentes
+>   para a constraint, permitindo nova matrícula após correção de erro — comportamento
+>   **impossível** com uma `UniqueConstraint` simples.
 
 ---
 
@@ -252,13 +294,33 @@ CREATE TABLE subject_class_enrollments (
     subject_class_id  UUID NOT NULL REFERENCES subject_classes(id) ON DELETE CASCADE,
     tenant_member_id  UUID NOT NULL REFERENCES tenant_members(id) ON DELETE CASCADE,
     status            enrollment_status NOT NULL DEFAULT 'active',
-    enrolled_at       TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT uq_enrollment_class_member UNIQUE (subject_class_id, tenant_member_id)
+    deleted           BOOLEAN NOT NULL DEFAULT false,
+    enrolled_at       TIMESTAMPTZ DEFAULT now()
 );
+
+-- Partial unique index: garante unicidade apenas em registros não deletados.
+-- Diferente de UNIQUE CONSTRAINT, não bloqueia nova matrícula após soft delete.
+CREATE UNIQUE INDEX uq_enrollment_active
+    ON subject_class_enrollments(subject_class_id, tenant_member_id)
+    WHERE deleted = false;
 
 CREATE INDEX idx_enrollments_subject_class_id ON subject_class_enrollments(subject_class_id);
 CREATE INDEX idx_enrollments_tenant_member_id ON subject_class_enrollments(tenant_member_id);
 ```
+
+> **⚠️ Atenção com autogenerate**: O Alembic pode não detectar o `Index` com
+> `postgresql_where` automaticamente dependendo da versão. Verifique a migration gerada
+> e adicione manualmente se necessário:
+> ```python
+> # Na migration gerada:
+> op.create_index(
+>     "uq_enrollment_active",
+>     "subject_class_enrollments",
+>     ["subject_class_id", "tenant_member_id"],
+>     unique=True,
+>     postgresql_where=sa.text("deleted = false"),
+> )
+> ```
 
 ---
 
@@ -278,6 +340,7 @@ class Enrollment:
     subject_class_id: UUID
     tenant_member_id: UUID
     status: EnrollmentStatus = EnrollmentStatus.ACTIVE
+    deleted: bool = False
     id: UUID = field(default_factory=uuid4)
     enrolled_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 ```
@@ -299,19 +362,27 @@ class EnrollmentRepository(Protocol):
 
     async def save(self, enrollment: Enrollment) -> Enrollment: ...
 
-    async def find_by_id(self, enrollment_id: UUID) -> Enrollment | None: ...
+    async def find_by_id(
+        self, enrollment_id: UUID, include_deleted: bool = False
+    ) -> Enrollment | None: ...
 
     async def find_by_class_and_member(
-        self, subject_class_id: UUID, tenant_member_id: UUID
+        self,
+        subject_class_id: UUID,
+        tenant_member_id: UUID,
+        include_deleted: bool = False,
     ) -> Enrollment | None: ...
 
     async def list_by_subject_class(
-        self, subject_class_id: UUID, status: EnrollmentStatus | None = None
+        self,
+        subject_class_id: UUID,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
     ) -> list[Enrollment]: ...
 
     async def drop_all_active_for_member(self, tenant_member_id: UUID) -> int:
         """
-        Altera o status de todas as matrículas ativas de um tenant_member para DROPPED.
+        Altera o status de todas as matrículas ativas (e não deletadas) de um tenant_member para DROPPED.
         Retorna o número de matrículas afetadas.
         Chamado pelo UpdateTenantMemberRoleUseCase quando a role muda de ALUNO.
         """
@@ -337,6 +408,7 @@ class EnrollmentMapper:
             subject_class_id=model.subject_class_id,
             tenant_member_id=model.tenant_member_id,
             status=model.status,
+            deleted=model.deleted,
             enrolled_at=model.enrolled_at,
         )
 
@@ -347,6 +419,7 @@ class EnrollmentMapper:
             subject_class_id=entity.subject_class_id,
             tenant_member_id=entity.tenant_member_id,
             status=entity.status,
+            deleted=entity.deleted,
             enrolled_at=entity.enrolled_at,
         )
 ```
@@ -380,29 +453,43 @@ class EnrollmentSQLAlchemyRepository:
         await self.session.refresh(merged)
         return EnrollmentMapper.to_domain(merged)
 
-    async def find_by_id(self, enrollment_id: UUID) -> Enrollment | None:
+    async def find_by_id(
+        self, enrollment_id: UUID, include_deleted: bool = False
+    ) -> Enrollment | None:
         stmt = select(EnrollmentModel).where(EnrollmentModel.id == enrollment_id)
+        if not include_deleted:
+            stmt = stmt.where(EnrollmentModel.deleted.is_(False))
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         return EnrollmentMapper.to_domain(model) if model else None
 
     async def find_by_class_and_member(
-        self, subject_class_id: UUID, tenant_member_id: UUID
+        self,
+        subject_class_id: UUID,
+        tenant_member_id: UUID,
+        include_deleted: bool = False,
     ) -> Enrollment | None:
         stmt = select(EnrollmentModel).where(
             EnrollmentModel.subject_class_id == subject_class_id,
             EnrollmentModel.tenant_member_id == tenant_member_id,
         )
+        if not include_deleted:
+            stmt = stmt.where(EnrollmentModel.deleted.is_(False))
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         return EnrollmentMapper.to_domain(model) if model else None
 
     async def list_by_subject_class(
-        self, subject_class_id: UUID, status: EnrollmentStatus | None = None
+        self,
+        subject_class_id: UUID,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
     ) -> list[Enrollment]:
         stmt = select(EnrollmentModel).where(
             EnrollmentModel.subject_class_id == subject_class_id
         )
+        if not include_deleted:
+            stmt = stmt.where(EnrollmentModel.deleted.is_(False))
         if status is not None:
             stmt = stmt.where(EnrollmentModel.status == status)
         result = await self.session.execute(stmt)
@@ -412,13 +499,14 @@ class EnrollmentSQLAlchemyRepository:
         """
         UPDATE subject_class_enrollments
         SET status = 'dropped'
-        WHERE tenant_member_id = :id AND status = 'active'
+        WHERE tenant_member_id = :id AND status = 'active' AND deleted = false
         """
         stmt = (
             update(EnrollmentModel)
             .where(
                 EnrollmentModel.tenant_member_id == tenant_member_id,
                 EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+                EnrollmentModel.deleted.is_(False),
             )
             .values(status=EnrollmentStatus.DROPPED)
             .returning(EnrollmentModel.id)
@@ -492,15 +580,16 @@ class EnrollStudentUseCase:
                 f"O membro possui papel '{member.role.value}'."
             )
 
-        # 5. Verifica se já existe matrícula (em qualquer status) para evitar duplicata
+        # 5. Verifica se já existe matrícula ATIVA (não deletada) para evitar duplicata
         existing = await self.enrollment_repo.find_by_class_and_member(
             subject_class_id=data.subject_class_id,
             tenant_member_id=data.tenant_member_id,
+            include_deleted=False,  # ignora registros deletados (erros corrigidos)
         )
         if existing:
             if existing.status == EnrollmentStatus.ACTIVE:
                 raise BusinessRuleException("O aluno já está matriculado nesta turma.")
-            # Se dropped, reativa a matrícula
+            # Se dropped, reativa a matrícula (cancelamento anterior, não um erro)
             existing.status = EnrollmentStatus.ACTIVE
             return await self.enrollment_repo.save(existing)
 
@@ -512,11 +601,12 @@ class EnrollStudentUseCase:
         return await self.enrollment_repo.save(enrollment)
 ```
 
-> **Detalhe importante do passo 5**: Se o aluno já tinha uma matrícula `dropped` (foi
-> cancelada anteriormente), ao invés de criar um registro duplicado (violando a UNIQUE
-> constraint), o use case **reativa** a matrícula existente alterando o status para `active`.
+> **Detalhe importante do passo 5**: Se o aluno já tinha uma matrícula `dropped` (cancelamento legítimo),
+> o use case **reativa** a matrícula existente (`status → active`), preservando o histórico.
+> Se a matrícula anterior foi `deleted=True` (erro corrigido), ela é invisível para essa
+> query (`include_deleted=False`) e um novo registro será criado normalmente.
 
-### 8.2 `DropEnrollmentUseCase`
+### 8.2 `DropEnrollmentUseCase` (PATCH — cancelamento legítimo)
 
 ```python
 # src/modules/enrollment/application/use_cases/drop_enrollment.py
@@ -535,12 +625,16 @@ class DropEnrollmentInput:
 
 
 class DropEnrollmentUseCase:
+    """Cancela uma matrícula por evento de negócio legítimo (aluno desistiu, ADMIN cancelou).
+    Altera o status para DROPPED. O registro é PRESERVADO no histórico.
+    Diferente de DeleteEnrollmentUseCase, que realiza soft delete para correção de erros.
+    """
 
     def __init__(self, enrollment_repo: EnrollmentRepository) -> None:
         self.enrollment_repo = enrollment_repo
 
     async def execute(self, data: DropEnrollmentInput) -> None:
-        enrollment = await self.enrollment_repo.find_by_id(data.enrollment_id)
+        enrollment = await self.enrollment_repo.find_by_id(data.enrollment_id, include_deleted=False)
         if not enrollment or enrollment.subject_class_id != data.subject_class_id:
             raise ResourceNotFoundException("Matrícula não encontrada.")
 
@@ -551,7 +645,45 @@ class DropEnrollmentUseCase:
         await self.enrollment_repo.save(enrollment)
 ```
 
-### 8.3 `ListEnrollmentsUseCase`
+### 8.3 `DeleteEnrollmentUseCase` (DELETE — correção de erro, ADMIN only)
+
+```python
+# src/modules/enrollment/application/use_cases/delete_enrollment.py
+from dataclasses import dataclass
+from uuid import UUID
+
+from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
+from shared.exceptions import ResourceNotFoundException
+
+
+@dataclass
+class DeleteEnrollmentInput:
+    enrollment_id: UUID
+    subject_class_id: UUID
+
+
+class DeleteEnrollmentUseCase:
+    """Remove uma matrícula por correção de erro administrativo.
+    Realiza soft delete (deleted=True). O registro some de TODAS as visualizações normais.
+    Diferente de DropEnrollmentUseCase, que preserva o histórico via status=dropped.
+    Exclusivo para ADMIN.
+    """
+
+    def __init__(self, enrollment_repo: EnrollmentRepository) -> None:
+        self.enrollment_repo = enrollment_repo
+
+    async def execute(self, data: DeleteEnrollmentInput) -> None:
+        enrollment = await self.enrollment_repo.find_by_id(
+            data.enrollment_id, include_deleted=False
+        )
+        if not enrollment or enrollment.subject_class_id != data.subject_class_id:
+            raise ResourceNotFoundException("Matrícula não encontrada.")
+
+        enrollment.deleted = True
+        await self.enrollment_repo.save(enrollment)
+```
+
+### 8.4 `ListEnrollmentsUseCase`
 
 ```python
 # src/modules/enrollment/application/use_cases/list_enrollments.py
@@ -569,7 +701,8 @@ from shared.exceptions import ResourceNotFoundException
 class ListEnrollmentsInput:
     subject_class_id: UUID
     tenant_id: UUID
-    status: EnrollmentStatus | None = None  # None = todos os status
+    status: EnrollmentStatus | None = None  # None = todos os status não deletados
+    include_deleted: bool = False           # True = apenas ADMIN, para auditoria
 
 
 class ListEnrollmentsUseCase:
@@ -593,6 +726,7 @@ class ListEnrollmentsUseCase:
         return await self.enrollment_repo.list_by_subject_class(
             subject_class_id=data.subject_class_id,
             status=data.status,
+            include_deleted=data.include_deleted,
         )
 ```
 
@@ -689,13 +823,23 @@ async def enroll_student(tenant_id, subject_class_id, body: EnrollStudentRequest
     """Matricula um aluno (TenantMember com role ALUNO) em uma turma."""
 
 @router.get("", response_model=list[EnrollmentResponse])
-async def list_enrollments(tenant_id, subject_class_id, status: EnrollmentStatus | None = None, ...):
-    """Lista matriculados da turma. ADMIN e PROFESSOR podem filtrar por status."""
+async def list_enrollments(
+    tenant_id, subject_class_id,
+    status: EnrollmentStatus | None = None,
+    include_deleted: bool = False,  # apenas ADMIN deve usar este parâmetro
+    ...
+):
+    """Lista matriculados da turma. Filtrável por status. ADMIN pode incluir deletados."""
+
+@router.patch("/{enrollment_id}", status_code=204,
+              dependencies=[Depends(require_role(UserRole.ADMIN))])
+async def drop_enrollment(tenant_id, subject_class_id, enrollment_id, ...):
+    """Cancela matrícula por evento legítimo (status → dropped). Histórico preservado. Apenas ADMIN."""
 
 @router.delete("/{enrollment_id}", status_code=204,
                dependencies=[Depends(require_role(UserRole.ADMIN))])
-async def drop_enrollment(tenant_id, subject_class_id, enrollment_id, ...):
-    """Cancela matrícula (status → dropped). Apenas ADMIN."""
+async def delete_enrollment(tenant_id, subject_class_id, enrollment_id, ...):
+    """Remove matrícula por erro administrativo (soft delete → deleted=True). Some do histórico. Apenas ADMIN."""
 ```
 
 ---
@@ -706,17 +850,22 @@ async def drop_enrollment(tenant_id, subject_class_id, enrollment_id, ...):
 
 | Caso | Use Case | Resultado esperado |
 |---|---|---|
-| Matricular aluno válido | `EnrollStudentUseCase` | Retorna `Enrollment` com `status=active` |
+| Matricular aluno válido | `EnrollStudentUseCase` | Retorna `Enrollment` com `status=active, deleted=false` |
 | Matricular membro com role `PROFESSOR` | `EnrollStudentUseCase` | Lança `BusinessRuleException` |
 | Matricular membro de outro tenant | `EnrollStudentUseCase` | Lança `BusinessRuleException` |
 | Matricular aluno já ativo na turma | `EnrollStudentUseCase` | Lança `BusinessRuleException` |
 | Matricular aluno que havia sido `dropped` | `EnrollStudentUseCase` | Reativa a matrícula (`status=active`) |
+| Matricular aluno que havia sido deletado (`deleted=True`) | `EnrollStudentUseCase` | Cria novo registro (o deletado é invisível) |
 | Matricular em turma deletada | `EnrollStudentUseCase` | Lança `ResourceNotFoundException` |
-| Cancelar matrícula ativa | `DropEnrollmentUseCase` | `status=dropped` |
-| Cancelar matrícula já `dropped` | `DropEnrollmentUseCase` | Lança `BusinessRuleException` |
-| Listar matrículas ativas | `ListEnrollmentsUseCase` | Retorna apenas `status=active` |
-| Listar todas (sem filtro de status) | `ListEnrollmentsUseCase` | Retorna todos os status |
-| Mudança de role ALUNO→PROFESSOR | `UpdateTenantMemberRoleUseCase` | Todas as matrículas ativas → `dropped` |
+| Cancelar matrícula ativa (PATCH) | `DropEnrollmentUseCase` | `status=dropped` — histórico preservado |
+| Cancelar matrícula já `dropped` (PATCH) | `DropEnrollmentUseCase` | Lança `BusinessRuleException` |
+| Cancelar matrícula deletada (PATCH) | `DropEnrollmentUseCase` | Lança `ResourceNotFoundException` (invisível) |
+| Soft delete de matrícula (DELETE — correção de erro) | `DeleteEnrollmentUseCase` | `deleted=True` — some do histórico |
+| Soft delete de matrícula já deletada | `DeleteEnrollmentUseCase` | Lança `ResourceNotFoundException` |
+| Listar matrículas ativas | `ListEnrollmentsUseCase` | Retorna apenas `status=active AND deleted=false` |
+| Listar todas (sem filtro de status) | `ListEnrollmentsUseCase` | Retorna todos com `deleted=false` |
+| Listar com `include_deleted=True` | `ListEnrollmentsUseCase` | Retorna todos, inclusive deletados |
+| Mudança de role ALUNO→PROFESSOR | `UpdateTenantMemberRoleUseCase` | Matrículas ativas (não deletadas) → `dropped` |
 | Mudança de role PROFESSOR→ALUNO | `UpdateTenantMemberRoleUseCase` | Nenhuma matrícula afetada |
 
 ### 12.2 Cenários de Teste E2E
@@ -730,30 +879,38 @@ async def drop_enrollment(tenant_id, subject_class_id, enrollment_id, ...):
 | Matricular duas vezes o mesmo aluno | `POST .../enrollments` | `409` |
 | Listar matriculados | `GET .../enrollments` | `200` |
 | Filtrar por `status=active` | `GET .../enrollments?status=active` | `200` |
-| Cancelar matrícula (ADMIN) | `DELETE .../enrollments/{id}` | `204` |
-| Cancelar matrícula (PROFESSOR) | `DELETE .../enrollments/{id}` | `403` |
+| Cancelar matrícula por evento legítimo (ADMIN) | `PATCH .../enrollments/{id}` | `204` |
+| Matricular aluno que havia sido cancelado (PATCH) → deve reativar | `POST .../enrollments` | `201` (reativado) |
+| Remover matrícula por erro administrativo (ADMIN) | `DELETE .../enrollments/{id}` | `204` |
+| Matricular aluno após soft delete → deve criar novo registro | `POST .../enrollments` | `201` (novo) |
+| PATCH/DELETE por PROFESSOR deve falhar | `PATCH ou DELETE .../enrollments/{id}` | `403` |
 | Aluno aparece em listagem após matrícula | `GET .../enrollments` | `200` (contém o aluno) |
-| Aluno NÃO aparece com `status=active` após `drop` | `GET .../enrollments?status=active` | `200` (sem o aluno) |
-| Mudança de role → matrículas ficam `dropped` | `PATCH .../members/role` + `GET .../enrollments` | `200` (status=dropped) |
+| Aluno com `status=dropped` NÃO aparece em `?status=active` | `GET .../enrollments?status=active` | `200` (sem o aluno) |
+| Aluno com `status=dropped` APARECE sem filtro de status | `GET .../enrollments` | `200` (presente com dropped) |
+| Aluno deletado NÃO aparece em nenhuma listagem normal | `GET .../enrollments` | `200` (ausente) |
+| Aluno deletado APARECE com `include_deleted=true` (ADMIN) | `GET .../enrollments?include_deleted=true` | `200` (presente) |
+| Mudança de role → matrículas ficam `dropped` (não deletadas) | `PATCH .../members/role` + `GET .../enrollments` | `200` (status=dropped, visível no histórico) |
 
 ---
 
 ## Checklist de implementação
 
 - [ ] Enum `EnrollmentStatus` criado em `src/shared/enums/enrollment_status.py`
-- [ ] Model `EnrollmentModel` criado em `src/infra/database/models/enrollment.py`
+- [ ] Model `EnrollmentModel` criado em `src/infra/database/models/enrollment.py` (com `deleted` + `status`, sem `UniqueConstraint`)
 - [ ] `EnrollmentModel` registrado em `src/infra/database/models/__init__.py`
-- [ ] Migration gerada e aplicada
+- [ ] Migration gerada — **verificar manualmente** se o `CREATE UNIQUE INDEX ... WHERE deleted = false` foi incluído (Alembic pode não detectar `postgresql_where` via autogenerate)
+- [ ] Migration aplicada (`uv run alembic upgrade head`)
 - [ ] Entidade `Enrollment` criada em `src/modules/enrollment/domain/entities/enrollment.py`
-- [ ] Protocol `EnrollmentRepository` criado (com método `drop_all_active_for_member`)
-- [ ] Mapper `EnrollmentMapper` criado
-- [ ] `EnrollmentSQLAlchemyRepository` criado (com `UPDATE ... WHERE` em batch)
-- [ ] `EnrollStudentUseCase` implementado (com lógica de reativação de matrícula dropped)
-- [ ] `ListEnrollmentsUseCase` implementado
-- [ ] `DropEnrollmentUseCase` implementado
+- [ ] Protocol `EnrollmentRepository` criado (com `include_deleted` em todos os métodos de busca e `drop_all_active_for_member`)
+- [ ] Mapper `EnrollmentMapper` criado (mapeando campo `deleted`)
+- [ ] `EnrollmentSQLAlchemyRepository` criado (filtros de `deleted` em todas as queries e `UPDATE ... WHERE` em batch)
+- [ ] `EnrollStudentUseCase` implementado (reativação de `dropped`, respeita `deleted`)
+- [ ] `ListEnrollmentsUseCase` implementado (com `include_deleted` e filtro de `status`)
+- [ ] `DropEnrollmentUseCase` implementado (PATCH — muda `status=dropped`, preserva histórico)
+- [ ] `DeleteEnrollmentUseCase` implementado (DELETE — muda `deleted=True`, correção de erro, ADMIN only)
 - [ ] `UpdateTenantMemberRoleUseCase` modificado para chamar `drop_all_active_for_member`
 - [ ] Schemas Pydantic criados
-- [ ] Router criado e registrado em `main.py`
-- [ ] Testes unitários escritos e passando (incluindo cenário de mudança de role)
-- [ ] Testes E2E escritos e passando
+- [ ] Router criado com 4 rotas e registrado em `main.py`
+- [ ] Testes unitários escritos e passando (cenários de `dropped` vs `deleted` distintos)
+- [ ] Testes E2E escritos e passando (incluindo cenário de rematrícula após soft delete)
 - [ ] `uv run pytest` — todos os testes passando sem erros

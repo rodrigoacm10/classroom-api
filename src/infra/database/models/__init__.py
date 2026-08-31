@@ -1,3 +1,4 @@
+from infra.database.models.enrollment import EnrollmentModel
 from infra.database.models.room import RoomModel
 from infra.database.models.subject_class import SubjectClassModel
 from infra.database.models.tenant import TenantMemberModel, TenantModel
@@ -11,6 +12,7 @@ __all__ = [
     "TenantInviteModel",
     "RoomModel",
     "SubjectClassModel",
+    "EnrollmentModel",
 ]
 
 
