@@ -4,6 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from config.settings import settings
+from modules.attendance.interface.router import router as attendance_router
 from modules.auth.interface.router import router as auth_router
 from modules.enrollment.interface.router import (
     member_enrollments_router,
@@ -55,6 +56,7 @@ app.include_router(enrollment_router)
 app.include_router(member_enrollments_router)
 app.include_router(tenant_invites_router)
 app.include_router(invites_router)
+app.include_router(attendance_router)
 
 
 
