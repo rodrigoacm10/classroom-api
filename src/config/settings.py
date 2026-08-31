@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     email_from: str = "onboarding@resend.dev"   # Remetente oficial de testes do Resend (ou seu domínio verificado)
     frontend_url: str = "http://localhost:3000" # URL base do frontend para montar links de aceite
     invite_expire_hours: int = 72               # Tempo de expiração do convite em horas
+    password_reset_expire_minutes: int = 15     # Tempo de expiração do código de recuperação em minutos
 
 
 settings = Settings()

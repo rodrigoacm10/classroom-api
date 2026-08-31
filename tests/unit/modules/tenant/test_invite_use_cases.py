@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 import pytest
 
@@ -43,14 +44,15 @@ class TestSendInviteUseCase:
             invite_repo=invite_repo,
         )
 
-        invite = await use_case.execute(
-            SendInviteInput(
-                tenant_id=tenant.id,
-                email="professor@escola.com",
-                role=UserRole.PROFESSOR,
-                invited_by=admin_user,
+        with patch("modules.tenant.application.use_cases.send_invite.send_invite_email"):
+            invite = await use_case.execute(
+                SendInviteInput(
+                    tenant_id=tenant.id,
+                    email="professor@escola.com",
+                    role=UserRole.PROFESSOR,
+                    invited_by=admin_user,
+                )
             )
-        )
 
         assert invite.id is not None
         assert invite.tenant_id == tenant.id
