@@ -115,12 +115,15 @@ class ConfirmAttendanceUseCase:
         if existing_record:
             raise ResourceAlreadyExistsException("Presença já confirmada nesta sessão.")
 
-        # 10. Obter dados da sala para raio de tolerância
+        # 10. Obter sala e raio de tolerância (sessão ou turma)
+        room_id_to_use = session.room_id or subject_class.room_id
+        if not room_id_to_use:
+            raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
+
         tolerance_radius = 50.0
-        if session.room_id:
-            room = await self.room_repo.find_by_id(session.room_id)
-            if room:
-                tolerance_radius = float(room.tolerance_radius_meters)
+        room = await self.room_repo.find_by_id(room_id_to_use)
+        if room:
+            tolerance_radius = float(room.tolerance_radius_meters)
 
         # 11. Calcular flags de irregularidade pré-inserção
         flags: list[str] = []
@@ -134,8 +137,8 @@ class ConfirmAttendanceUseCase:
         if remaining_seconds < 30:
             flags.append("confirmed_near_expiry")
 
-        # Cliente não mobile
-        if data.user_agent and not is_mobile_user_agent(data.user_agent):
+        # Cliente não mobile (inclui user_agent nulo ou ausente)
+        if not is_mobile_user_agent(data.user_agent):
             flags.append("non_mobile_client")
 
         # Dispositivo compartilhado
@@ -143,10 +146,6 @@ class ConfirmAttendanceUseCase:
             shared_rec = await self.record_repo.find_by_device_id_in_session(data.session_id, data.device_id)
             if shared_rec and shared_rec.tenant_member_id != member.id:
                 flags.append("shared_device")
-
-        room_id_to_use = session.room_id or subject_class.room_id
-        if not room_id_to_use:
-            raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
 
         return await self.record_repo.create_record(
             session_id=data.session_id,

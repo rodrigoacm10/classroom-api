@@ -448,3 +448,93 @@ class TestConfirmAttendanceUseCase:
                     user_agent="okhttp/4.9.0",
                 )
             )
+
+    async def test_confirm_attendance_missing_user_agent_flag(self):
+        """User agent ausente (None) dispara flag non_mobile_client."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id, _, _, _, _,
+        ) = await self._setup_fixtures()
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent=None,
+            )
+        )
+
+        assert record.record_status == RecordStatus.IRREGULAR
+        assert "non_mobile_client" in record.irregularity_flags
+
+    async def test_confirm_attendance_subject_class_room_fallback(self):
+        """Quando a sessão não possui room_id, utiliza a sala vinculada à turma (subject_class.room_id)."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _,
+            session_repo,
+        ) = await self._setup_fixtures()
+
+        session.room_id = None
+        await session_repo.save(session)
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+            )
+        )
+
+        assert record.within_radius is True
+        assert record.record_status == RecordStatus.REGULAR
+
+    async def test_confirm_attendance_raises_when_no_room_associated(self):
+        """Lança BusinessRuleException quando nem a sessão nem a turma possuem sala vinculada."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _,
+            session_repo,
+        ) = await self._setup_fixtures()
+
+        session.room_id = None
+        await session_repo.save(session)
+        subject_class.room_id = None
+
+        with pytest.raises(BusinessRuleException, match="Nenhuma sala cadastrada para a chamada ou para a turma"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                )
+            )
+
