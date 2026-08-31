@@ -49,3 +49,8 @@ class AttendanceSession:
         self.status = SessionStatus.CLOSED
         self.closed_at = datetime.now(timezone.utc)
         self.updated_at = datetime.now(timezone.utc)
+
+    def cancel(self) -> None:
+        self.status = SessionStatus.CANCELLED
+        self.closed_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)

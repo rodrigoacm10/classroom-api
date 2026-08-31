@@ -81,6 +81,8 @@ class ConfirmAttendanceUseCase:
             raise ResourceNotFoundException("Sessão de chamada não encontrada.")
 
         # 4. Status OPEN
+        if session.status == SessionStatus.CANCELLED:
+            raise ResourceAlreadyExistsException("A chamada foi cancelada.")
         if session.status != SessionStatus.OPEN:
             raise ResourceAlreadyExistsException("A chamada está encerrada.")
 

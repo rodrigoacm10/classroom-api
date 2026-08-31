@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
+from modules.attendance.application.use_cases.cancel_session import CancelAttendanceSessionInput, CancelAttendanceSessionUseCase
 from modules.attendance.application.use_cases.close_session import CloseAttendanceSessionInput, CloseAttendanceSessionUseCase
 from modules.attendance.application.use_cases.confirm_attendance import ConfirmAttendanceInput, ConfirmAttendanceUseCase
 from modules.attendance.application.use_cases.get_record import GetAttendanceRecordInput, GetAttendanceRecordUseCase
@@ -161,6 +162,43 @@ async def close_attendance_session(
 
     session = await use_case.execute(
         CloseAttendanceSessionInput(
+            tenant_id=tenant_id,
+            subject_class_id=subject_class_id,
+            session_id=session_id,
+            user_id=auth.user.id,
+            user_role=auth.role,
+        )
+    )
+    return AttendanceSessionResponse.model_validate(session)
+
+
+@router.patch(
+    "/{session_id}/cancel",
+    response_model=AttendanceSessionResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
+)
+async def cancel_attendance_session(
+    tenant_id: UUID,
+    subject_class_id: UUID,
+    session_id: UUID,
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> AttendanceSessionResponse:
+    """Cancela manualmente uma chamada em aberto."""
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+
+    use_case = CancelAttendanceSessionUseCase(
+        session_repo=session_repo,
+        subject_class_repo=subject_class_repo,
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
+    )
+
+    session = await use_case.execute(
+        CancelAttendanceSessionInput(
             tenant_id=tenant_id,
             subject_class_id=subject_class_id,
             session_id=session_id,
