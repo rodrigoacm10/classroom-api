@@ -108,6 +108,9 @@ def send_invite_email(
             "subject": f"Você foi convidado para participar de {tenant_name}",
             "html": html_content,
         })
+        logger.info(
+            f"E-mail de convite enviado com sucesso para {to_email} (instituição: {tenant_name})"
+        )
     except Exception as exc:
         logger.error(
             f"Erro ao disparar e-mail de convite para {to_email} via Resend: {exc}. "
@@ -147,6 +150,7 @@ def send_password_reset_email(
             "subject": f"Código de recuperação de senha: {code}",
             "html": html_content,
         })
+        logger.info(f"E-mail de recuperação de senha enviado com sucesso para {to_email}")
     except Exception as exc:
         logger.error(
             f"Erro ao disparar e-mail de recuperação de senha para {to_email} via Resend: {exc}. "
