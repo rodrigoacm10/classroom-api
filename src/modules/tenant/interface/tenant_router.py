@@ -7,6 +7,10 @@ from infra.database.session import get_db
 from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
     EnrollmentSQLAlchemyRepository,
 )
+from modules.notification.infra.repositories.fcm_token_sqlalchemy_repository import (
+    FCMTokenSQLAlchemyRepository,
+)
+
 from modules.tenant.application.use_cases.activate_tenant import ActivateTenantUseCase
 from modules.tenant.application.use_cases.add_tenant_member import (
     AddTenantMemberInput,
@@ -205,7 +209,13 @@ async def remove_tenant_member(
     """
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
-    use_case = RemoveTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+    fcm_token_repo = FCMTokenSQLAlchemyRepository(session=db)
+    use_case = RemoveTenantMemberUseCase(
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
+        fcm_token_repo=fcm_token_repo,
+    )
+
 
     member = await use_case.execute(
         RemoveTenantMemberInput(

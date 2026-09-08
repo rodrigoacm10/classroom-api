@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from modules.notification.domain.repositories.fcm_token_repository import FCMTokenRepository
 from modules.tenant.domain.entities.tenant_member import TenantMember
 from modules.tenant.domain.repositories.tenant_repository import (
     TenantMemberRepository,
@@ -22,9 +23,11 @@ class RemoveTenantMemberUseCase:
         self,
         tenant_repo: TenantRepository,
         member_repo: TenantMemberRepository,
+        fcm_token_repo: FCMTokenRepository | None = None,
     ) -> None:
         self.tenant_repo = tenant_repo
         self.member_repo = member_repo
+        self.fcm_token_repo = fcm_token_repo
 
     async def execute(self, data: RemoveTenantMemberInput) -> TenantMember:
         # 1. Verificar se a tenant existe e não está deletada
@@ -49,4 +52,15 @@ class RemoveTenantMemberUseCase:
 
         # 4. Soft Delete
         member.deleted = True
-        return await self.member_repo.save(member)
+        saved_member = await self.member_repo.save(member)
+
+        # 5. Limpeza de tokens FCM se o usuário não pertencer a mais nenhuma instituição ativa
+        if self.fcm_token_repo:
+            active_memberships = await self.member_repo.find_by_user_id(
+                data.user_id_to_remove, include_deleted=False
+            )
+            if not active_memberships:
+                await self.fcm_token_repo.remove_by_user(data.user_id_to_remove)
+
+        return saved_member
+
