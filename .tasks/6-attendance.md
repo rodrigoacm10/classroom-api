@@ -20,7 +20,7 @@
 > **Fora do escopo desta etapa — adicionados em versões futuras:**
 >
 > - 🔔 **Notificações push via Firebase Cloud Messaging (FCM)**: quando a chamada é aberta, os alunos matriculados serão notificados via FCM. Isso exige a integração com Celery + Redis e o SDK do Firebase. Ficará para a etapa de notificações.
-> - 📷 **Evidência fotográfica**: o campo `evidence_photo_url` existe no banco mas **não será populado nesta etapa**. O upload de imagens para S3/MinIO e o envio da foto pelo aluno serão adicionados na etapa de armazenamento de evidências.
+> - 📷 **Evidência fotográfica**: o campo `evidence_photo_url` existe no banco mas **não será populado nesta etapa**. O upload de imagens para Cloudflare R2 / S3 e o envio da foto pelo aluno serão adicionados na etapa de armazenamento de evidências.
 > - 🔐 **Device security avançada**: detecção de GPS spoofing, verificação de mock location ativo e bloqueio de requisições fora de app mobile legítimo serão abordados na etapa de segurança. Os campos de device fingerprint (`device_id`, `ip_address`, `user_agent`, `device_info`) **já existem no banco desde esta etapa** para não requerer migration futura.
 
 ---
