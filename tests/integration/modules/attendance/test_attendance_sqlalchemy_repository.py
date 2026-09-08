@@ -140,3 +140,50 @@ class TestAttendanceSQLAlchemyRepository:
                 room_id=room.id,
                 tolerance_radius_meters=50,
             )
+
+    async def test_close_expired_sessions_updates_status_in_db(self, session):
+        """Deve fechar apenas as sessões de chamada que atingiram o tempo limite de expiração (expires_at <= NOW())."""
+        tenant = await TenantFactory.create(session)
+        room_repo = RoomSQLAlchemyRepository(session)
+        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala Expiração", latitude=-8.0, longitude=-34.0))
+
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma Expiração", discipline_name="Math", room_id=room.id))
+
+        session_repo = SessionSQLAlchemyRepository(session)
+
+        # Sessão 1: Expirou há 10 minutos
+        expired_session = await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc.id,
+                room_id=room.id,
+                day_code="EXP123",
+                expires_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+            )
+        )
+
+        # Sessão 2: Ainda válida (expira em +20 minutos)
+        active_session = await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc.id,
+                room_id=room.id,
+                day_code="ACT456",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=20),
+            )
+        )
+
+        # Executar fecho de expiradas
+        closed = await session_repo.close_expired_sessions()
+        assert len(closed) == 1
+        assert closed[0].id == expired_session.id
+        assert closed[0].status == SessionStatus.CLOSED
+
+        # Verificar no PostgreSQL
+        reloaded_expired = await session_repo.find_by_id(expired_session.id)
+        assert reloaded_expired is not None
+        assert reloaded_expired.status == SessionStatus.CLOSED
+
+        reloaded_active = await session_repo.find_by_id(active_session.id)
+        assert reloaded_active is not None
+        assert reloaded_active.status == SessionStatus.OPEN
+

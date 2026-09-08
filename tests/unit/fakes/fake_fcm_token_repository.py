@@ -32,3 +32,14 @@ class FakeFCMTokenRepository(FCMTokenRepository):
             self.tokens.remove(token)
             return True
         return False
+
+    async def remove_by_tokens(self, fcm_tokens: list[str]) -> int:
+        initial_count = len(self.tokens)
+        self.tokens = [t for t in self.tokens if t.fcm_token not in fcm_tokens]
+        return initial_count - len(self.tokens)
+
+    async def remove_by_user(self, user_id: UUID) -> int:
+        initial_count = len(self.tokens)
+        self.tokens = [t for t in self.tokens if t.user_id != user_id]
+        return initial_count - len(self.tokens)
+

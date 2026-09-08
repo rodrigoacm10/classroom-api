@@ -71,3 +71,19 @@ class FCMTokenSQLAlchemyRepository(FCMTokenRepository):
         deleted_id = result.scalar_one_or_none()
         await self.session.flush()
         return deleted_id is not None
+
+    async def remove_by_tokens(self, fcm_tokens: list[str]) -> int:
+        if not fcm_tokens:
+            return 0
+        stmt = delete(UserFCMTokenModel).where(UserFCMTokenModel.fcm_token.in_(fcm_tokens))
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+        return int(getattr(result, "rowcount", 0))
+
+    async def remove_by_user(self, user_id: UUID) -> int:
+        stmt = delete(UserFCMTokenModel).where(UserFCMTokenModel.user_id == user_id)
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+        return int(getattr(result, "rowcount", 0))
+
+

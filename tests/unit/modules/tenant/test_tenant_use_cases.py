@@ -202,6 +202,59 @@ class TestRemoveTenantMemberUseCase:
                 )
             )
 
+    async def test_remove_tenant_member_cleans_fcm_tokens_when_no_active_memberships_remain(self):
+        """Deve limpar os tokens FCM do usuário quando ele é desvinculado e não possui mais instituições ativas."""
+        from modules.notification.domain.entities.fcm_token import FCMToken
+        from modules.tenant.application.use_cases.remove_tenant_member import (
+            RemoveTenantMemberInput,
+            RemoveTenantMemberUseCase,
+        )
+        from tests.unit.fakes.fake_fcm_token_repository import FakeFCMTokenRepository
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        fcm_token_repo = FakeFCMTokenRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        admin = UserFactory.make()
+        member_user = UserFactory.make()
+
+        member_repo.seed(TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN))
+        member_to_remove = TenantMember(tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+
+        member_repo.seed(member_to_remove)
+
+        # Cadastrar token FCM para o usuário que será removido
+        await fcm_token_repo.upsert(
+            FCMToken(
+                user_id=member_user.id,
+                device_id="device_1",
+                fcm_token="token_fcm_123",
+                platform="android",
+            )
+        )
+
+        use_case = RemoveTenantMemberUseCase(
+            tenant_repo=tenant_repo,
+            member_repo=member_repo,
+            fcm_token_repo=fcm_token_repo,
+        )
+
+        removed = await use_case.execute(
+            RemoveTenantMemberInput(
+                tenant_id=tenant.id,
+                user_id_to_remove=member_user.id,
+            )
+        )
+
+        assert removed.deleted is True
+        # Como o usuário não tem mais nenhuma tenant ativa, seus tokens devem ser removidos
+        remaining_tokens = await fcm_token_repo.find_by_user_and_device(member_user.id, "device_1")
+        assert remaining_tokens is None
+
+
 
 @pytest.mark.asyncio
 class TestAddTenantMemberUseCase:

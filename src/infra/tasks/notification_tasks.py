@@ -1,9 +1,14 @@
+import asyncio
 import logging
 from celery import Task
 from firebase_admin import messaging
 from firebase_admin.exceptions import FirebaseError
 
+from infra.database.session import AsyncSessionLocal
 from infra.tasks.celery_app import celery_app
+from modules.notification.infra.repositories.fcm_token_sqlalchemy_repository import (
+    FCMTokenSQLAlchemyRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +19,25 @@ FCM_MAX_TOKENS_PER_BATCH = 500
 def _chunk(lst: list, size: int) -> list[list]:
     """Divide uma lista em sublistas de tamanho máximo `size`."""
     return [lst[i : i + size] for i in range(0, len(lst), size)]
+
+
+def _cleanup_stale_tokens(stale_tokens: list[str]) -> None:
+    """Remove tokens inativos/desinstalados do banco de dados de forma assíncrona."""
+    if not stale_tokens:
+        return
+    logger.info("Identificados %d tokens inativos/desinstalados para remoção.", len(stale_tokens))
+
+    async def _cleanup() -> None:
+        async with AsyncSessionLocal() as session:
+            repo = FCMTokenSQLAlchemyRepository(session)
+            removed = await repo.remove_by_tokens(stale_tokens)
+            logger.info("Removidos %d tokens inválidos do banco de dados.", removed)
+
+    try:
+        asyncio.run(_cleanup())
+    except Exception as err:
+        logger.error("Erro ao remover tokens FCM inválidos do banco: %s", err)
+
 
 
 @celery_app.task(
@@ -92,7 +116,9 @@ def send_push_notification(
                         stale_tokens.append(batch[idx])
 
             if stale_tokens:
-                logger.info("Identificados %d tokens inativos/desinstalados para remoção.", len(stale_tokens))
+                _cleanup_stale_tokens(stale_tokens)
+
+
 
         except FirebaseError as exc:
             logger.error("Firebase batch error: %s. Retrying...", exc)

@@ -81,8 +81,8 @@ class TestNotificationTasks:
             # Lote 2 com 50
             assert len(mock_send.call_args_list[1].args[0].tokens) == 50
 
-    def test_send_push_notification_identifies_stale_tokens(self):
-        """Deve registrar aviso em log e identificar tokens inativos/desinstalados sem interromper o fluxo com exceções não tratadas."""
+    def test_send_push_notification_identifies_and_cleans_stale_tokens(self):
+        """Deve identificar tokens inativos/desinstalados (UNREGISTERED/registration-token-not-registered) e acionar a remoção no banco de dados."""
         mock_resp = MagicMock()
         mock_resp.success_count = 1
         mock_resp.failure_count = 1
@@ -97,12 +97,17 @@ class TestNotificationTasks:
         mock_resp.responses = [success_item, failed_item]
 
         with patch("firebase_admin.messaging.send_each_for_multicast", return_value=mock_resp):
-            res = send_push_notification(
-                title="Aviso",
-                body="Mensagem",
-                data={},
-                fcm_tokens=["token_valid", "token_stale"],
-            )
+            with patch(
+                "modules.notification.infra.repositories.fcm_token_sqlalchemy_repository.FCMTokenSQLAlchemyRepository.remove_by_tokens"
+            ) as mock_remove:
+                res = send_push_notification(
+                    title="Aviso",
+                    body="Mensagem",
+                    data={},
+                    fcm_tokens=["token_valid", "token_stale"],
+                )
 
-            assert res["success_count"] == 1
-            assert res["failure_count"] == 1
+                assert res["success_count"] == 1
+                assert res["failure_count"] == 1
+                mock_remove.assert_called_once_with(["token_stale"])
+

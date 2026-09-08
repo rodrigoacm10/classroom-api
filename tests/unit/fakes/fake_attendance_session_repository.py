@@ -37,3 +37,14 @@ class FakeAttendanceSessionRepository(AttendanceSessionRepository):
         self, subject_class_id: UUID
     ) -> list[AttendanceSession]:
         return [s for s in self.sessions.values() if s.subject_class_id == subject_class_id]
+
+    async def close_expired_sessions(self) -> list[AttendanceSession]:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        closed: list[AttendanceSession] = []
+        for session in self.sessions.values():
+            if session.status == SessionStatus.OPEN and session.expires_at <= now:
+                session.close()
+                closed.append(session)
+        return closed
+

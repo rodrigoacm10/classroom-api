@@ -160,6 +160,42 @@ class TestTenantRouterEndpoints:
         assert data["user_id"] == str(member_user.id)
         assert data["tenant_id"] == str(tenant.id)
 
+    async def test_remove_tenant_member_cleans_fcm_tokens_e2e(self, client, session):
+        """DELETE /tenants/{id}/members/{user_id} -> Deve remover os tokens FCM do usuário quando ele é desvinculado e não tem outras tenants."""
+        from modules.notification.domain.entities.fcm_token import FCMToken
+        from modules.notification.infra.repositories.fcm_token_sqlalchemy_repository import (
+            FCMTokenSQLAlchemyRepository,
+        )
+
+        admin = await UserFactory.create(session)
+        member_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+
+        # Cadastrar token FCM no PostgreSQL para o aluno
+        fcm_repo = FCMTokenSQLAlchemyRepository(session)
+        await fcm_repo.upsert(
+            FCMToken(
+                user_id=member_user.id,
+                device_id="mobile_device_10",
+                fcm_token="fcm_token_e2e_val",
+                platform="android",
+            )
+        )
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        assert response.status_code == 200
+
+        # Verificar se o token FCM foi removido do banco de dados no nível E2E
+        deleted_token = await fcm_repo.find_by_user_and_device(member_user.id, "mobile_device_10")
+        assert deleted_token is None
+
+
     async def test_remove_single_admin_bad_request(self, client, session):
         """DELETE /tenants/{id}/members/{user_id} -> Deve retornar 400 Bad Request ao tentar remover o único ADMIN."""
         admin = await UserFactory.create(session)
