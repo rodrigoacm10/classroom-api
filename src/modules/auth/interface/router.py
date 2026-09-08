@@ -7,13 +7,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
 from infra.database.session import get_db
+from modules.auth.application.use_cases.forgot_password import (
+    ForgotPasswordInput,
+    ForgotPasswordUseCase,
+)
 from modules.auth.application.use_cases.login import LoginInput, LoginUseCase
 from modules.auth.application.use_cases.logout import LogoutUseCase
 from modules.auth.application.use_cases.refresh_token import (
     RefreshTokenInput,
     RefreshTokenUseCase,
 )
+from modules.auth.application.use_cases.reset_password import (
+    ResetPasswordInput,
+    ResetPasswordUseCase,
+)
 from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, SwitchTenantUseCase
+from modules.auth.interface.schemas.password_reset_schemas import (
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+)
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
 )
@@ -227,3 +239,53 @@ async def logout(
         _clear_refresh_cookie(response)
 
     return MessageResponse(message="Logout realizado com sucesso. Token revogado.")
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+@limiter.limit("3/minute")
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """
+    Solicita a recuperação de senha enviando um código OTP de 6 dígitos para o e-mail.
+    Segurança: Retorna 200 genérico mesmo se o e-mail não existir (anti-enumeração).
+    Taxa limite: 3 requisições por minuto por IP.
+    """
+    user_repo = UserSQLAlchemyRepository(session=db)
+    use_case = ForgotPasswordUseCase(user_repo=user_repo)
+
+    await use_case.execute(ForgotPasswordInput(email=body.email))
+
+    return MessageResponse(
+        message="Se o e-mail estiver cadastrado, você receberá um código de recuperação em instantes."
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+@limiter.limit("5/minute")
+async def reset_password(
+    request: Request,
+    body: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """
+    Confirma o código OTP de 6 dígitos e redefine a senha do usuário.
+    Invalida todas as sessões e tokens JWT anteriores do usuário no Redis.
+    Taxa limite: 5 requisições por minuto por IP.
+    """
+    user_repo = UserSQLAlchemyRepository(session=db)
+    use_case = ResetPasswordUseCase(user_repo=user_repo)
+
+    await use_case.execute(
+        ResetPasswordInput(
+            email=body.email,
+            code=body.code,
+            new_password=body.new_password,
+        )
+    )
+
+    return MessageResponse(
+        message="Senha redefinida com sucesso. Faça login com suas novas credenciais."
+    )
