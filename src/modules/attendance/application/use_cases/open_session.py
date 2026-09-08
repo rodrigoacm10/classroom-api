@@ -4,10 +4,12 @@ import secrets
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
+from modules.attendance.domain.events.attendance_events import AttendanceSessionOpenedEvent
 from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
 from modules.room.domain.repositories.room_repository import RoomRepository
 from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
 from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository, TenantRepository
+from shared.events.event_dispatcher import EventDispatcher
 from shared.enums.user_role import UserRole
 from shared.exceptions import (
     BusinessRuleException,
@@ -42,12 +44,14 @@ class OpenAttendanceSessionUseCase:
         tenant_repo: TenantRepository,
         member_repo: TenantMemberRepository,
         room_repo: RoomRepository,
+        event_dispatcher: EventDispatcher,
     ) -> None:
         self.session_repo = session_repo
         self.subject_class_repo = subject_class_repo
         self.tenant_repo = tenant_repo
         self.member_repo = member_repo
         self.room_repo = room_repo
+        self.event_dispatcher = event_dispatcher
 
     async def execute(self, data: OpenAttendanceSessionInput) -> AttendanceSession:
         tenant = await self.tenant_repo.find_by_id(data.tenant_id)
@@ -94,4 +98,17 @@ class OpenAttendanceSessionUseCase:
             expires_at=expires_at,
         )
 
-        return await self.session_repo.save(session)
+        saved_session = await self.session_repo.save(session)
+
+        # Publicar evento — o Use Case não sabe quem vai reagir nem como
+        await self.event_dispatcher.publish(
+            AttendanceSessionOpenedEvent(
+                session_id=saved_session.id,
+                subject_class_id=data.subject_class_id,
+                subject_class_name=subject_class.name,
+                day_code=saved_session.day_code,
+                duration_minutes=data.duration_minutes,
+            )
+        )
+
+        return saved_session

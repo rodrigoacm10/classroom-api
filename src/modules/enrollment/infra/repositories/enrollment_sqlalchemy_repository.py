@@ -4,10 +4,13 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.models.enrollment import EnrollmentModel
+from infra.database.models.tenant import TenantMemberModel
+from infra.database.models.user_fcm_token import UserFCMTokenModel
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.enrollment.infra.mappers.enrollment_mapper import EnrollmentMapper
 from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
+
 
 
 class EnrollmentSQLAlchemyRepository:
@@ -98,3 +101,19 @@ class EnrollmentSQLAlchemyRepository:
         result = await self.session.execute(stmt)
         await self.session.commit()
         return len(result.fetchall())
+
+    async def find_active_fcm_tokens(self, subject_class_id: UUID) -> list[str]:
+        stmt = (
+            select(UserFCMTokenModel.fcm_token)
+            .select_from(EnrollmentModel)
+            .join(TenantMemberModel, TenantMemberModel.id == EnrollmentModel.tenant_member_id)
+            .join(UserFCMTokenModel, UserFCMTokenModel.user_id == TenantMemberModel.user_id)
+            .where(
+                EnrollmentModel.subject_class_id == subject_class_id,
+                EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+                EnrollmentModel.deleted == False,  # noqa: E712
+            )
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+

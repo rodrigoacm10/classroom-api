@@ -2,13 +2,14 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
+from modules.attendance.domain.events.attendance_events import AttendanceSessionClosedEvent
 from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
 from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
 from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository, TenantRepository
+from shared.events.event_dispatcher import EventDispatcher
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.exceptions import (
-    BusinessRuleException,
     ForbiddenException,
     ResourceAlreadyExistsException,
     ResourceNotFoundException,
@@ -32,11 +33,13 @@ class CloseAttendanceSessionUseCase:
         subject_class_repo: SubjectClassRepository,
         tenant_repo: TenantRepository,
         member_repo: TenantMemberRepository,
+        event_dispatcher: EventDispatcher,
     ) -> None:
         self.session_repo = session_repo
         self.subject_class_repo = subject_class_repo
         self.tenant_repo = tenant_repo
         self.member_repo = member_repo
+        self.event_dispatcher = event_dispatcher
 
     async def execute(self, data: CloseAttendanceSessionInput) -> AttendanceSession:
         tenant = await self.tenant_repo.find_by_id(data.tenant_id)
@@ -67,4 +70,15 @@ class CloseAttendanceSessionUseCase:
             raise ResourceAlreadyExistsException("A chamada já está encerrada.")
 
         session.close()
-        return await self.session_repo.save(session)
+        saved_session = await self.session_repo.save(session)
+
+        # Publicar evento — o Use Case não sabe quem vai reagir nem como
+        await self.event_dispatcher.publish(
+            AttendanceSessionClosedEvent(
+                session_id=saved_session.id,
+                subject_class_id=data.subject_class_id,
+                subject_class_name=subject_class.name,
+            )
+        )
+
+        return saved_session

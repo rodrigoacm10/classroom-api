@@ -166,3 +166,28 @@ class TestAttendanceSessionRouter:
             headers=prof_headers,
         )
         assert cancel2_res.status_code == 409
+
+    async def test_open_session_dispatches_notification_event(self, client, session):
+        """Abertura de chamada deve publicar AttendanceSessionOpenedEvent no EventDispatcher."""
+        from unittest.mock import AsyncMock, patch
+
+        tenant, admin_headers, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
+
+        with patch(
+            "shared.events.event_dispatcher.EventDispatcher.publish",
+            new_callable=AsyncMock,
+        ) as mock_publish:
+            res = await client.post(
+                f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+                json={"room_id": room_id, "duration_minutes": 15},
+                headers=prof_headers,
+            )
+            assert res.status_code == 201
+            mock_publish.assert_called_once()
+            published_event = mock_publish.call_args.args[0]
+            from modules.attendance.domain.events.attendance_events import AttendanceSessionOpenedEvent
+            assert isinstance(published_event, AttendanceSessionOpenedEvent)
+            assert published_event.day_code == res.json()["day_code"]
+            assert published_event.duration_minutes == 15
+
+

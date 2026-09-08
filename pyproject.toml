@@ -23,6 +23,7 @@ dependencies = [
     "slowapi>=0.1.10",
     "resend>=2.42.0",
     "shapely>=2.1.2",
+    "firebase-admin>=7.5.0",
 ]
 
 [dependency-groups]

@@ -33,6 +33,7 @@ from security.dependencies.current_user import AuthContext, get_auth_context
 from security.dependencies.require_role import require_role
 from shared.enums.record_status import RecordStatus
 from shared.enums.user_role import UserRole
+from shared.events.event_dispatcher import EventDispatcher
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/subject-classes/{subject_class_id}/attendance-sessions",
@@ -50,6 +51,7 @@ async def open_attendance_session(
     tenant_id: UUID,
     subject_class_id: UUID,
     body: CreateAttendanceSessionRequest,
+    request: Request,
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceSessionResponse:
@@ -59,6 +61,7 @@ async def open_attendance_session(
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
     room_repo = RoomSQLAlchemyRepository(session=db)
+    event_dispatcher: EventDispatcher = request.app.state.event_dispatcher
 
     use_case = OpenAttendanceSessionUseCase(
         session_repo=session_repo,
@@ -66,6 +69,7 @@ async def open_attendance_session(
         tenant_repo=tenant_repo,
         member_repo=member_repo,
         room_repo=room_repo,
+        event_dispatcher=event_dispatcher,
     )
 
     session = await use_case.execute(
@@ -144,6 +148,7 @@ async def close_attendance_session(
     tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
+    request: Request,
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceSessionResponse:
@@ -152,12 +157,14 @@ async def close_attendance_session(
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    event_dispatcher: EventDispatcher = request.app.state.event_dispatcher
 
     use_case = CloseAttendanceSessionUseCase(
         session_repo=session_repo,
         subject_class_repo=subject_class_repo,
         tenant_repo=tenant_repo,
         member_repo=member_repo,
+        event_dispatcher=event_dispatcher,
     )
 
     session = await use_case.execute(

@@ -6,6 +6,7 @@ from infra.database.models.subject_class import SubjectClassModel
 from infra.database.models.tenant import TenantMemberModel, TenantModel
 from infra.database.models.tenant_invite import TenantInviteModel
 from infra.database.models.user import UserModel
+from infra.database.models.user_fcm_token import UserFCMTokenModel
 
 __all__ = [
     "UserModel",
@@ -17,4 +18,5 @@ __all__ = [
     "EnrollmentModel",
     "AttendanceSessionModel",
     "AttendanceRecordModel",
+    "UserFCMTokenModel",
 ]
