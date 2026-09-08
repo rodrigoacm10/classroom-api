@@ -40,3 +40,8 @@ class EnrollmentRepository(Protocol):
         Chamado pelo UpdateTenantMemberRoleUseCase quando a role muda de ALUNO.
         """
         ...
+
+    async def find_active_fcm_tokens(self, subject_class_id: UUID) -> list[str]:
+        """Busca os tokens FCM de todos os alunos ativos matriculados em uma turma."""
+        ...
+

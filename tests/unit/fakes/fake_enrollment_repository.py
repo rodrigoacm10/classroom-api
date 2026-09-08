@@ -87,3 +87,15 @@ class FakeEnrollmentRepository:
                 e.drop_reason = DropReason.ROLE_CHANGE
                 count += 1
         return count
+
+    def set_active_fcm_tokens(self, subject_class_id: UUID, tokens: list[str]) -> None:
+        if not hasattr(self, "_active_fcm_tokens"):
+            self._active_fcm_tokens = {}
+        self._active_fcm_tokens[subject_class_id] = tokens
+
+    async def find_active_fcm_tokens(self, subject_class_id: UUID) -> list[str]:
+        if not hasattr(self, "_active_fcm_tokens"):
+            return []
+        return self._active_fcm_tokens.get(subject_class_id, [])
+
+

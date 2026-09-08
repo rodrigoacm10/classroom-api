@@ -169,3 +169,36 @@ class TestEnrollmentSQLAlchemyRepository:
         saved_e3 = await repo.save(e3_new)
         assert saved_e3.id is not None
         assert saved_e3.id != e1.id
+
+    async def test_find_active_fcm_tokens_returns_all_student_device_tokens(self, session):
+        """Deve retornar os tokens FCM de todos os dispositivos (celular + tablet) dos alunos ativos da turma."""
+        from modules.notification.domain.entities.fcm_token import FCMToken
+        from modules.notification.infra.repositories.fcm_token_sqlalchemy_repository import (
+            FCMTokenSQLAlchemyRepository,
+        )
+
+        user1 = await UserFactory.create(session)  # Aluno 1 (com celular e tablet)
+        user2 = await UserFactory.create(session)  # Aluno 2 (com apenas celular)
+        tenant = await TenantFactory.create(session)
+
+        m1 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user1.id, role=UserRole.ALUNO)
+        m2 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO)
+
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma FCM", discipline_name="Mobile"))
+
+        repo = EnrollmentSQLAlchemyRepository(session)
+        await repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=m1.id, status=EnrollmentStatus.ACTIVE))
+        await repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=m2.id, status=EnrollmentStatus.ACTIVE))
+
+        # Cadastra tokens de celular e tablet no banco
+        fcm_repo = FCMTokenSQLAlchemyRepository(session)
+        await fcm_repo.upsert(FCMToken(user_id=user1.id, device_id="dev-mobile-1", fcm_token="token-user1-mobile", platform="android"))
+        await fcm_repo.upsert(FCMToken(user_id=user1.id, device_id="dev-tablet-1", fcm_token="token-user1-tablet", platform="ios"))
+        await fcm_repo.upsert(FCMToken(user_id=user2.id, device_id="dev-mobile-2", fcm_token="token-user2-mobile", platform="android"))
+
+        tokens = await repo.find_active_fcm_tokens(sc.id)
+        assert len(tokens) == 3
+        assert "token-user1-mobile" in tokens
+        assert "token-user1-tablet" in tokens
+        assert "token-user2-mobile" in tokens

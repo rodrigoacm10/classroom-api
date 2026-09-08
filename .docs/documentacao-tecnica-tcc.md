@@ -26,7 +26,7 @@
         ┌────────────────────┼────────────────────┐
         │                    │                     │
 ┌───────▼────────┐  ┌────────▼─────────┐  ┌────────▼────────┐
-│ PostgreSQL       │  │ Redis (broker)    │  │ Storage (S3/MinIO)│
+│ PostgreSQL       │  │ Redis (broker)    │  │ Storage (Cloudflare R2/S3)│
 │ + PostGIS         │  │ + Celery workers   │  │ (fotos evidência)  │
 │ (Neon)            │  │ (tarefas async)     │  │                    │
 └───────────────────┘  └─────────────────────┘  └────────────────────┘
@@ -56,7 +56,7 @@ interface → application → domain ← (nunca para fora)
 |---|---|
 | `domain/` | Entidades, regras de negócio puras, interfaces de repositório. Não conhece FastAPI, SQLAlchemy, Redis nem HTTP. |
 | `application/` | Casos de uso: orquestra o domínio, chama repositórios via interface, não conhece HTTP nem SQLAlchemy. |
-| `infra/` | Implementações concretas: SQLAlchemy, Celery, FCM, S3/MinIO, Redis. Implementa as interfaces definidas no domínio. |
+| `infra/` | Implementações concretas: SQLAlchemy, Celery, FCM, Storage (Cloudflare R2 / S3 via boto3), Redis. Implementa as interfaces definidas no domínio. |
 | `interface/` | Camada HTTP: routers FastAPI + schemas Pydantic. Recebe a requisição, delega ao caso de uso, devolve a resposta. |
 
 #### Ciclo de vida de uma requisição
@@ -148,7 +148,7 @@ Celery Task → Redis → Worker → FCM / Resend / S3
 | Fila assíncrona | **Celery + Redis** (evolução de `BackgroundTasks`) | Processa notificações em lote e relatórios sem travar a API |
 | Notificação push | **Firebase Cloud Messaging (FCM)** | Avisa o aluno em tempo real quando a chamada abre |
 | E-mail | **Resend / SendGrid / SES** | Confirmações, relatórios periódicos, alertas formais |
-| Armazenamento de arquivos | **MinIO ou AWS S3** | Guarda fotos de evidência fora do banco relacional |
+| Armazenamento de arquivos | **Cloudflare R2 (ou AWS S3)** | Guarda fotos de evidência fora do banco relacional (compatível S3) |
 | Autenticação | **JWT (JSON Web Token)** | Autentica requisições da API sem manter sessão no servidor |
 | Versionamento | **Git + GitHub** | Histórico de código, colaboração em equipe, obrigatório pela disciplina |
 | Testes | **Pytest** (backend) + **Jest** (frontend/mobile) | Garantir que regras de negócio críticas (ex: validação de presença) não quebrem |
@@ -324,7 +324,7 @@ app/
 │   │   ├── session.py             # AsyncSession factory, get_db dependency
 │   │   └── base.py                # DeclarativeBase SQLAlchemy
 │   ├── storage/
-│   │   └── s3_client.py           # upload de fotos de evidência (S3/MinIO)
+│   │   └── s3_client.py           # upload de fotos de evidência (Cloudflare R2/S3)
 │   └── queue/
 │       ├── celery_app.py          # instância Celery + configuração Redis broker
 │       └── workers/

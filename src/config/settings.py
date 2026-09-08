@@ -22,5 +22,21 @@ class Settings(BaseSettings):
     invite_expire_hours: int = 72               # Tempo de expiração do convite em horas
     password_reset_expire_minutes: int = 15     # Tempo de expiração do código de recuperação em minutos
 
+    # Firebase Cloud Messaging
+    firebase_credentials_path: str = "credentials/firebase-service-account.json"
+    firebase_credentials_json: str = ""         # Conteúdo JSON inline (para produção / CI-CD)
+
+    # Celery
+    celery_broker_url: str = ""                 # Se vazio, utiliza redis_url como fallback
+    celery_result_backend: str = ""             # Se vazio, utiliza redis_url como fallback
+
+    @property
+    def effective_celery_broker(self) -> str:
+        return self.celery_broker_url or self.redis_url
+
+    @property
+    def effective_celery_backend(self) -> str:
+        return self.celery_result_backend or self.redis_url
+
 
 settings = Settings()

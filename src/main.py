@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import asyncio
 import sys
 
@@ -10,23 +11,50 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from config.settings import settings
+from modules.attendance.application.handlers.attendance_notification_handler import (
+    register_attendance_event_handlers,
+)
+from modules.attendance.interface.router import router as attendance_router
 from modules.auth.interface.router import router as auth_router
 from modules.enrollment.interface.router import (
     member_enrollments_router,
     router as enrollment_router,
 )
+from modules.notification.interface.router import router as notification_router
 from modules.room.interface.router import router as room_router
 from modules.subject_class.interface.router import router as subject_class_router
 from modules.tenant.interface.invite_router import invites_router, tenant_invites_router
 from modules.tenant.interface.tenant_router import router as tenant_router
 from modules.user.interface.router import router as user_router
 from security.rate_limiter import limiter
+from shared.events.event_dispatcher import EventDispatcher
 from shared.exception_handlers import register_exception_handlers
+
+
+def create_event_dispatcher() -> EventDispatcher:
+    """Cria e configura o EventDispatcher com os handlers registrados da aplicação."""
+    dispatcher = EventDispatcher()
+    register_attendance_event_handlers(dispatcher)
+    return dispatcher
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Inicializa recursos da aplicação no startup."""
+    app.state.event_dispatcher = create_event_dispatcher()
+    yield
+
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
+    lifespan=lifespan,
 )
+
+# Inicializa o dispatcher antecipadamente para que os testes E2E (que não
+# disparam o lifespan) também tenham acesso ao app.state.event_dispatcher.
+# O lifespan substitui pela instância real (com handlers registrados) no startup.
+app.state.event_dispatcher = EventDispatcher()
 
 # Registrar handlers globais de exceções de domínio (404, 403, 400, 409)
 register_exception_handlers(app)
@@ -61,7 +89,8 @@ app.include_router(enrollment_router)
 app.include_router(member_enrollments_router)
 app.include_router(tenant_invites_router)
 app.include_router(invites_router)
-
+app.include_router(attendance_router)
+app.include_router(notification_router)
 
 
 @app.get("/")
