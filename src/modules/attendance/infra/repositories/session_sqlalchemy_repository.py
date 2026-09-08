@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -8,6 +9,7 @@ from infra.database.models.attendance_session import AttendanceSessionModel
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.infra.mappers.attendance_session_mapper import AttendanceSessionMapper
 from shared.enums.session_status import SessionStatus
+
 
 
 class SessionSQLAlchemyRepository:
@@ -97,3 +99,28 @@ class SessionSQLAlchemyRepository:
         )
         result = await self.session.execute(stmt)
         return [AttendanceSessionMapper.to_domain(m) for m in result.scalars().all()]
+
+    async def close_expired_sessions(self) -> list[AttendanceSession]:
+        now = datetime.now(timezone.utc)
+        stmt = (
+            select(AttendanceSessionModel)
+            .options(
+                joinedload(AttendanceSessionModel.subject_class),
+                joinedload(AttendanceSessionModel.room),
+            )
+            .where(
+                AttendanceSessionModel.status == SessionStatus.OPEN,
+                AttendanceSessionModel.expires_at <= now,
+            )
+        )
+        result = await self.session.execute(stmt)
+        expired_models = result.scalars().all()
+
+        closed_sessions: list[AttendanceSession] = []
+        for model in expired_models:
+            model.status = SessionStatus.CLOSED
+            closed_sessions.append(AttendanceSessionMapper.to_domain(model))
+
+        await self.session.commit()
+        return closed_sessions
+

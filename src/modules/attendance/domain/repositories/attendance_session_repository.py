@@ -21,3 +21,6 @@ class AttendanceSessionRepository(Protocol):
     async def list_by_class(
         self, subject_class_id: UUID
     ) -> list[AttendanceSession]: ...
+
+    async def close_expired_sessions(self) -> list[AttendanceSession]: ...
+
