@@ -40,7 +40,7 @@ class ConfirmAttendanceInput:
     ip_address: str | None = None
     user_agent: str | None = None
     device_info: dict | None = None
-
+    evidence_photo_url: str | None = None
 
 class ConfirmAttendanceUseCase:
 
@@ -160,4 +160,5 @@ class ConfirmAttendanceUseCase:
             ip_address=data.ip_address,
             user_agent=data.user_agent,
             device_info=data.device_info,
+            evidence_photo_url=data.evidence_photo_url,
         )

@@ -24,6 +24,8 @@ dependencies = [
     "resend>=2.42.0",
     "shapely>=2.1.2",
     "firebase-admin>=7.5.0",
+    "boto3>=1.43.90",
+    "python-multipart>=0.0.32",
 ]
 
 [dependency-groups]
