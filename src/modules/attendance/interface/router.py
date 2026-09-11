@@ -1,9 +1,11 @@
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Request, status
+import json
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
+from infra.storage.r2_storage_service import R2StorageService
 from modules.attendance.application.use_cases.cancel_session import CancelAttendanceSessionInput, CancelAttendanceSessionUseCase
 from modules.attendance.application.use_cases.close_session import CloseAttendanceSessionInput, CloseAttendanceSessionUseCase
 from modules.attendance.application.use_cases.confirm_attendance import ConfirmAttendanceInput, ConfirmAttendanceUseCase
@@ -17,7 +19,6 @@ from modules.attendance.infra.repositories.record_sqlalchemy_repository import R
 from modules.attendance.infra.repositories.session_sqlalchemy_repository import SessionSQLAlchemyRepository
 from modules.attendance.interface.schemas.record_schemas import (
     AttendanceRecordResponse,
-    ConfirmAttendanceRequest,
     ReviewAttendanceRecordRequest,
 )
 from modules.attendance.interface.schemas.session_schemas import (
@@ -34,6 +35,11 @@ from security.dependencies.require_role import require_role
 from shared.enums.record_status import RecordStatus
 from shared.enums.user_role import UserRole
 from shared.events.event_dispatcher import EventDispatcher
+
+
+ALLOWED_EVIDENCE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_EVIDENCE_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/subject-classes/{subject_class_id}/attendance-sessions",
@@ -225,12 +231,57 @@ async def confirm_attendance(
     tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
-    body: ConfirmAttendanceRequest,
     request: Request,
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
+    day_code: str = Form(..., min_length=1, max_length=10, description="Código de 6 caracteres alfanuméricos exibido pelo professor"),
+    latitude: float = Form(..., ge=-90.0, le=90.0, description="Latitude do dispositivo (WGS84)"),
+    longitude: float = Form(..., ge=-180.0, le=180.0, description="Longitude do dispositivo (WGS84)"),
+    gps_accuracy_meters: float | None = Form(default=None, ge=0.0, description="Precisão do GPS em metros relatada pelo dispositivo"),
+    device_id: str | None = Form(default=None, max_length=64, description="Identificador único do dispositivo"),
+    device_info: str | None = Form(default=None, description="Metadados do dispositivo em formato JSON (string)"),
+    photo: UploadFile | None = File(default=None, description="Foto de evidência opcional (JPEG, PNG ou WebP, até 5MB)"),
 ) -> AttendanceRecordResponse:
-    """Confirma presença de um aluno matriculado validando código e geolocalização."""
+    """Confirma presença de um aluno matriculado validando código e geolocalização, com foto de evidência opcional."""
+
+    # Parse do device_info (chega como string JSON, pois multipart/form-data só aceita texto)
+    device_info_dict: dict | None = None
+    if device_info:
+        try:
+            device_info_dict = json.loads(device_info)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="device_info deve ser uma string JSON válida.",
+            )
+
+    # Processamento da foto de evidência (opcional)
+    evidence_photo_url: str | None = None
+    if photo is not None:
+        if photo.content_type not in ALLOWED_EVIDENCE_CONTENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Tipo de arquivo não suportado: {photo.content_type}. Use JPEG, PNG ou WebP.",
+            )
+
+        file_bytes = await photo.read()
+
+        if len(file_bytes) > MAX_EVIDENCE_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Arquivo muito grande. Tamanho máximo: 5 MB.",
+            )
+
+        extension = photo.content_type.split("/")[-1]
+        key = f"evidence/{session_id}/{uuid4()}.{extension}"
+
+        storage = R2StorageService()
+        evidence_photo_url = await storage.upload(
+            file_bytes=file_bytes,
+            key=key,
+            content_type=photo.content_type,
+        )
+
     session_repo = SessionSQLAlchemyRepository(session=db)
     record_repo = RecordSQLAlchemyRepository(session=db)
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
@@ -258,14 +309,15 @@ async def confirm_attendance(
             subject_class_id=subject_class_id,
             session_id=session_id,
             user_id=auth.user.id,
-            day_code=body.day_code,
-            latitude=body.latitude,
-            longitude=body.longitude,
-            gps_accuracy_meters=body.gps_accuracy_meters,
-            device_id=body.device_id,
+            day_code=day_code,
+            latitude=latitude,
+            longitude=longitude,
+            gps_accuracy_meters=gps_accuracy_meters,
+            device_id=device_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            device_info=body.device_info,
+            device_info=device_info_dict,
+            evidence_photo_url=evidence_photo_url,
         )
     )
     return AttendanceRecordResponse.model_validate(record)

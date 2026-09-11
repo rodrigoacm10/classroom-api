@@ -537,4 +537,61 @@ class TestConfirmAttendanceUseCase:
                     user_agent="okhttp/4.9.0",
                 )
             )
+            
+    async def test_confirm_attendance_with_evidence_photo_url(self):
+        """Quando evidence_photo_url é fornecida, deve ser persistida no record."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        photo_url = "https://fake-r2.dev/evidence/session-id/uuid.jpg"
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_url=photo_url,
+            )
+        )
+
+        assert record.evidence_photo_url == photo_url
+
+    async def test_confirm_attendance_without_evidence_photo_url(self):
+        """Quando evidence_photo_url não é fornecida, o campo deve permanecer None."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+            )
+        )
+
+        assert record.evidence_photo_url is None          
 
