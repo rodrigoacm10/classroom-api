@@ -1,0 +1,13 @@
+---
+description: Telas e IA (Paper). Não aplicar em chats de API/código.
+globs: .design/**/*.md
+alwaysApply: false
+---
+
+# Telas Locus
+
+- Estes markdowns são brief de fluxo e dados, não design system. Não inventar paleta, tipo ou biblioteca de componentes a partir daqui.
+- Contrato de dados: routers e schemas em `src/modules/*/interface/`. Não recopiar JSON nos markdowns.
+- Cartões em `.design/web/screens/` e `.design/mobile/screens/`: regiões + binding. O desenho vai no Paper.
+- Com Paper aberto: 1 artboard por pedido. Não escrever frontend neste repo.
+- Campo da API que o cartão marca “Não mostrar” fica fora da UI.
