@@ -37,7 +37,12 @@ class AttendanceSessionModel(Base):
         DateTime(timezone=True), nullable=True
     )
     status: Mapped[SessionStatus] = mapped_column(
-        Enum(SessionStatus, name="session_status", native_enum=True),
+        Enum(
+            SessionStatus,
+            name="session_status",
+            native_enum=True,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         default=SessionStatus.OPEN,
         nullable=False,
     )

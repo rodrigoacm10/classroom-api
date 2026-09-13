@@ -23,10 +23,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     session_status_enum = sa.Enum('open', 'closed', name='session_status')
-    session_status_enum.create(op.get_bind(), checkfirst=True)
-
     record_status_enum = sa.Enum('regular', 'irregular', 'approved', 'rejected', name='record_status')
-    record_status_enum.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
         'attendance_sessions',
