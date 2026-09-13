@@ -24,6 +24,7 @@ dependencies = [
     "resend>=2.42.0",
     "shapely>=2.1.2",
     "firebase-admin>=7.5.0",
+    "numpy>=2.5.2",
 ]
 
 [dependency-groups]
