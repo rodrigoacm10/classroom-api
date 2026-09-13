@@ -16,7 +16,7 @@ class RoomSQLAlchemyRepository:
     async def save(self, room: Room) -> Room:
         model = RoomMapper.to_model(room)
         merged = await self.session.merge(model)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(merged)
         return RoomMapper.to_domain(merged)
 

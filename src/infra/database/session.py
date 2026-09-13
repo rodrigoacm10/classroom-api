@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -27,6 +28,22 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+@asynccontextmanager
+async def session_scope() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Uma transação por unidade de trabalho: commit se terminar bem, rollback se falhar.
+
+    Use em requests HTTP (`get_db`), tasks Celery e qualquer script fora do FastAPI.
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency do FastAPI que fornece uma AsyncSession por requisição.
@@ -34,5 +51,5 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     Uso nos routers:
         db: AsyncSession = Depends(get_db)
     """
-    async with AsyncSessionLocal() as session:
+    async with session_scope() as session:
         yield session

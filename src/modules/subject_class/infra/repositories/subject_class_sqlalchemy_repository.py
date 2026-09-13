@@ -16,7 +16,7 @@ class SubjectClassSQLAlchemyRepository:
     async def save(self, subject_class: SubjectClass) -> SubjectClass:
         model = SubjectClassMapper.to_model(subject_class)
         merged = await self.session.merge(model)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(merged)
         return SubjectClassMapper.to_domain(merged)
 

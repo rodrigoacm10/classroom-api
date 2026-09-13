@@ -20,7 +20,7 @@ class SessionSQLAlchemyRepository:
     async def save(self, session: AttendanceSession) -> AttendanceSession:
         model = AttendanceSessionMapper.to_model(session)
         merged = await self.session.merge(model)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(merged)
 
         # Refetch with relations
@@ -121,6 +121,6 @@ class SessionSQLAlchemyRepository:
             model.status = SessionStatus.CLOSED
             closed_sessions.append(AttendanceSessionMapper.to_domain(model))
 
-        await self.session.commit()
+        await self.session.flush()
         return closed_sessions
 
