@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     celery_broker_url: str = ""                 # Se vazio, utiliza redis_url como fallback
     celery_result_backend: str = ""             # Se vazio, utiliza redis_url como fallback
 
+    # Módulo de relatórios — estratégia de paralelismo
+    report_strategy: str = "process_pool"  # "sequential" | "process_pool" | "thread_pool_numpy"
+    report_max_workers: int = 0            # 0 = usar cpu_budget() automaticamente
+
     @property
     def effective_celery_broker(self) -> str:
         return self.celery_broker_url or self.redis_url

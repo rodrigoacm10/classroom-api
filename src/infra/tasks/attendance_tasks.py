@@ -2,7 +2,7 @@ import asyncio
 import logging
 from celery import Task
 
-from infra.database.session import AsyncSessionLocal
+from infra.database.session import session_scope
 from infra.tasks.celery_app import celery_app
 from modules.attendance.application.handlers.attendance_notification_handler import (
     AttendancePushNotificationHandler,
@@ -32,7 +32,7 @@ def close_expired_sessions_task(self: Task) -> dict[str, int]:
 
 
     async def _run() -> int:
-        async with AsyncSessionLocal() as session:
+        async with session_scope() as session:
             session_repo = SessionSQLAlchemyRepository(session)
             enrollment_repo = EnrollmentSQLAlchemyRepository(session)
             handler = AttendancePushNotificationHandler(enrollment_repo=enrollment_repo)

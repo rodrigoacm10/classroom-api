@@ -28,6 +28,6 @@ class UserSQLAlchemyRepository:
     async def save(self, user: User) -> User:
         model = UserMapper.to_model(user)
         merged_model = await self.session.merge(model)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(merged_model)
         return UserMapper.to_domain(merged_model)

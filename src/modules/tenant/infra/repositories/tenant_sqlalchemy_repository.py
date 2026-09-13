@@ -32,6 +32,6 @@ class TenantSQLAlchemyRepository:
     async def save(self, tenant: Tenant) -> Tenant:
         model = TenantMapper.to_model(tenant)
         merged_model = await self.session.merge(model)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(merged_model)
         return TenantMapper.to_domain(merged_model)

@@ -204,3 +204,34 @@ class TestAttendanceRecordRouter:
         )
         assert res.status_code == 409
         assert res.json()["detail"] == "A chamada foi cancelada."
+
+    async def test_confirm_attendance_when_student_not_enrolled_in_class_returns_403(
+        self, client, session
+    ):
+        """Aluno da instituição, sem matrícula na turma, não confirma a chamada."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code, _, _, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        outsider_user = await UserFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=outsider_user.id, role=UserRole.ALUNO
+        )
+        outsider_token = create_access_token(
+            user_id=outsider_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value
+        )
+        outsider_headers = {
+            "Authorization": f"Bearer {outsider_token}",
+            "User-Agent": "okhttp/4.9.0",
+        }
+
+        res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            headers=outsider_headers,
+        )
+        assert res.status_code == 403
+        assert res.json()["detail"] == "Aluno não possui matrícula ativa nesta turma."

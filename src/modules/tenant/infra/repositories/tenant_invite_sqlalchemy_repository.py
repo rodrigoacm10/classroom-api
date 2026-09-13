@@ -41,6 +41,6 @@ class TenantInviteSQLAlchemyRepository:
     async def save(self, invite: TenantInvite) -> TenantInvite:
         model = TenantInviteMapper.to_model(invite)
         merged = await self.session.merge(model)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(merged)
         return TenantInviteMapper.to_domain(merged)
