@@ -388,8 +388,8 @@ class TestConfirmAttendanceUseCase:
                 )
             )
 
-    async def test_confirm_attendance_raises_when_no_active_enrollment(self):
-        """Deve lançar ForbiddenException se aluno não possuir matrícula ativa na turma."""
+    async def test_confirm_attendance_raises_when_user_is_not_tenant_member(self):
+        """Deve lançar ForbiddenException se o usuário não for membro da instituição."""
         (
             use_case,
             tenant,
@@ -397,15 +397,58 @@ class TestConfirmAttendanceUseCase:
             session, _, _, _, _, _,
         ) = await self._setup_fixtures()
 
-        non_enrolled_user = uuid4()
+        outsider_user = uuid4()
 
-        with pytest.raises(ForbiddenException):
+        with pytest.raises(ForbiddenException, match="não é membro"):
             await use_case.execute(
                 ConfirmAttendanceInput(
                     tenant_id=tenant.id,
                     subject_class_id=subject_class.id,
                     session_id=session.id,
-                    user_id=non_enrolled_user,
+                    user_id=outsider_user,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                )
+            )
+
+    async def test_confirm_attendance_raises_when_student_not_enrolled_in_class(self):
+        """Aluno da instituição, sem matrícula na turma da chamada, não pode confirmar."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session, _, _, _, _, _,
+        ) = await self._setup_fixtures()
+
+        other_user_id = uuid4()
+        other_member = TenantMember(
+            tenant_id=tenant.id, user_id=other_user_id, role=UserRole.ALUNO
+        )
+        await use_case.member_repo.save(other_member)
+
+        other_class = SubjectClass(
+            tenant_id=tenant.id,
+            name="Outra Turma",
+            discipline_name="Cálculo",
+            professor_id=uuid4(),
+        )
+        await use_case.subject_class_repo.save(other_class)
+        await use_case.enrollment_repo.save(
+            Enrollment(
+                subject_class_id=other_class.id,
+                tenant_member_id=other_member.id,
+                status=EnrollmentStatus.ACTIVE,
+            )
+        )
+
+        with pytest.raises(ForbiddenException, match="não possui matrícula ativa nesta turma"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=other_user_id,
                     day_code="X3KP7Q",
                     latitude=-8.047610,
                     longitude=-34.877010,

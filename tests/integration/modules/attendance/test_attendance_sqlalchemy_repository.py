@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
@@ -186,4 +188,101 @@ class TestAttendanceSQLAlchemyRepository:
         reloaded_active = await session_repo.find_by_id(active_session.id)
         assert reloaded_active is not None
         assert reloaded_active.status == SessionStatus.OPEN
+
+    async def test_session_status_pg_enum_labels_are_lowercase_values(self, session):
+        """O tipo nativo session_status deve aceitar os values do enum Python, não os names."""
+        labels = (
+            await session.execute(
+                text(
+                    """
+                    SELECT e.enumlabel
+                    FROM pg_enum e
+                    JOIN pg_type t ON e.enumtypid = t.oid
+                    WHERE t.typname = 'session_status'
+                    ORDER BY e.enumsortorder
+                    """
+                )
+            )
+        ).scalars().all()
+
+        assert labels == ["open", "closed", "cancelled"]
+
+        accepted = await session.execute(text("SELECT 'open'::session_status::text"))
+        assert accepted.scalar_one() == "open"
+
+        cancelled = await session.execute(text("SELECT 'cancelled'::session_status::text"))
+        assert cancelled.scalar_one() == "cancelled"
+
+    async def test_session_status_pg_enum_rejects_member_name_open(self, session):
+        """
+        Reproduz o erro original: invalid input value for enum session_status: "OPEN".
+        O SQLAlchemy precisa bindar 'open', porque o Postgres rejeita o name 'OPEN'.
+        """
+        with pytest.raises(DBAPIError, match='invalid input value for enum session_status: "OPEN"'):
+            await session.execute(text("SELECT 'OPEN'::session_status"))
+
+    async def test_find_open_session_persists_and_filters_lowercase_open(self, session):
+        """Abrir sessão persiste 'open' e find_open_session_by_class consegue filtrar esse valor."""
+        tenant = await TenantFactory.create(session)
+        room_repo = RoomSQLAlchemyRepository(session)
+        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala Enum", latitude=-8.0, longitude=-34.0))
+
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        sc = await sc_repo.save(
+            SubjectClass(tenant_id=tenant.id, name="Turma Enum", discipline_name="Math", room_id=room.id)
+        )
+
+        session_repo = SessionSQLAlchemyRepository(session)
+        saved = await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc.id,
+                room_id=room.id,
+                day_code="ENUM01",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+            )
+        )
+
+        stored = (
+            await session.execute(
+                text("SELECT status::text FROM attendance_sessions WHERE id = :id"),
+                {"id": saved.id},
+            )
+        ).scalar_one()
+        assert stored == "open"
+
+        found = await session_repo.find_open_session_by_class(sc.id)
+        assert found is not None
+        assert found.id == saved.id
+        assert found.status == SessionStatus.OPEN
+
+    async def test_cancelled_session_persists_lowercase_cancelled(self, session):
+        """Cancelar sessão deve gravar 'cancelled', valor que a migration adiciona ao enum."""
+        tenant = await TenantFactory.create(session)
+        room_repo = RoomSQLAlchemyRepository(session)
+        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala Cancel", latitude=-8.0, longitude=-34.0))
+
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        sc = await sc_repo.save(
+            SubjectClass(tenant_id=tenant.id, name="Turma Cancel", discipline_name="Math", room_id=room.id)
+        )
+
+        att_session = AttendanceSession(
+            subject_class_id=sc.id,
+            room_id=room.id,
+            day_code="CANC01",
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+        )
+        att_session.cancel()
+
+        session_repo = SessionSQLAlchemyRepository(session)
+        saved = await session_repo.save(att_session)
+        assert saved.status == SessionStatus.CANCELLED
+
+        stored = (
+            await session.execute(
+                text("SELECT status::text FROM attendance_sessions WHERE id = :id"),
+                {"id": saved.id},
+            )
+        ).scalar_one()
+        assert stored == "cancelled"
 

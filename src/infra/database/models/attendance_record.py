@@ -54,7 +54,12 @@ class AttendanceRecordModel(Base):
 
     # Auditoria de Irregularidades
     record_status: Mapped[RecordStatus] = mapped_column(
-        Enum(RecordStatus, name="record_status", native_enum=True),
+        Enum(
+            RecordStatus,
+            name="record_status",
+            native_enum=True,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         default=RecordStatus.REGULAR,
         nullable=False,
     )

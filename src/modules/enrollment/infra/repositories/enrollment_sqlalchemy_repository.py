@@ -21,7 +21,7 @@ class EnrollmentSQLAlchemyRepository:
     async def save(self, enrollment: Enrollment) -> Enrollment:
         model = EnrollmentMapper.to_model(enrollment)
         merged = await self.session.merge(model)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(merged)
         return EnrollmentMapper.to_domain(merged)
 
@@ -99,7 +99,7 @@ class EnrollmentSQLAlchemyRepository:
             .returning(EnrollmentModel.id)
         )
         result = await self.session.execute(stmt)
-        await self.session.commit()
+        await self.session.flush()
         return len(result.fetchall())
 
     async def find_active_fcm_tokens(self, subject_class_id: UUID) -> list[str]:

@@ -26,6 +26,7 @@ dependencies = [
     "firebase-admin>=7.5.0",
     "boto3>=1.43.90",
     "python-multipart>=0.0.32",
+    "numpy>=2.5.2",
 ]
 
 [dependency-groups]

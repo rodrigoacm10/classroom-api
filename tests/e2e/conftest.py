@@ -11,8 +11,9 @@ Estratégia de isolamento:
 
 O `client` captura a `session` no closure de `override_get_db`, de modo que tanto
 o código do teste quanto o handler FastAPI usam o MESMO objeto de sessão.
-Quando o handler faz `session.commit()` internamente, ele comita um SAVEPOINT
-(não a transação externa), então o `rollback()` ao final do teste desfaz tudo.
+Os handlers só fazem `flush` na mesma sessão do teste. O `get_db` de produção
+commita no fim da request; aqui o override não commita, e o `rollback()` do
+teste desfaz tudo.
 """
 from collections.abc import AsyncGenerator
 
@@ -47,6 +48,7 @@ async def create_tables(engine) -> AsyncGenerator[None, None]:
 
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
     yield
