@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 
 from security.jwt import create_access_token
@@ -235,3 +237,62 @@ class TestAttendanceRecordRouter:
         )
         assert res.status_code == 403
         assert res.json()["detail"] == "Aluno não possui matrícula ativa nesta turma."
+
+    async def test_list_session_roster_e2e(self, client, session):
+        """Professor lista todos os alunos da chamada; quem não marcou vem com horário, distância e status nulos."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers,
+            _,
+            student1_member,
+            student2_member,
+        ) = await self._setup_fixtures(session, client)
+
+        confirm_res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            headers=student1_headers,
+        )
+        assert confirm_res.status_code == 201
+        confirmed = confirm_res.json()
+
+        student_roster = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
+            headers=student1_headers,
+        )
+        assert student_roster.status_code == 403
+
+        roster_res = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
+            headers=prof_headers,
+        )
+        assert roster_res.status_code == 200
+        items = roster_res.json()
+        assert len(items) == 2
+        by_member = {item["tenant_member_id"]: item for item in items}
+
+        present = by_member[str(student1_member.id)]
+        assert present["student_name"]
+        assert present["record_id"] == confirmed["id"]
+        assert present["confirmed_at"] == confirmed["confirmed_at"]
+        assert present["distance_meters"] == pytest.approx(confirmed["distance_meters"])
+        assert present["within_radius"] is True
+        assert present["record_status"] == RecordStatus.REGULAR.value
+
+        absent = by_member[str(student2_member.id)]
+        assert absent["student_name"]
+        assert absent["record_id"] is None
+        assert absent["confirmed_at"] is None
+        assert absent["distance_meters"] is None
+        assert absent["within_radius"] is None
+        assert absent["record_status"] is None
+
+        missing = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{uuid4()}/roster",
+            headers=prof_headers,
+        )
+        assert missing.status_code == 404

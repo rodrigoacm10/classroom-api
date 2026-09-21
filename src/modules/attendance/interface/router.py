@@ -10,6 +10,7 @@ from modules.attendance.application.use_cases.confirm_attendance import ConfirmA
 from modules.attendance.application.use_cases.get_record import GetAttendanceRecordInput, GetAttendanceRecordUseCase
 from modules.attendance.application.use_cases.get_session import GetAttendanceSessionInput, GetAttendanceSessionUseCase
 from modules.attendance.application.use_cases.list_records import ListAttendanceRecordsInput, ListAttendanceRecordsUseCase
+from modules.attendance.application.use_cases.list_session_roster import ListSessionRosterInput, ListSessionRosterUseCase
 from modules.attendance.application.use_cases.list_sessions import ListAttendanceSessionsInput, ListAttendanceSessionsUseCase
 from modules.attendance.application.use_cases.open_session import OpenAttendanceSessionInput, OpenAttendanceSessionUseCase
 from modules.attendance.application.use_cases.review_record import ReviewAttendanceRecordInput, ReviewAttendanceRecordUseCase
@@ -19,6 +20,7 @@ from modules.attendance.interface.schemas.record_schemas import (
     AttendanceRecordResponse,
     ConfirmAttendanceRequest,
     ReviewAttendanceRecordRequest,
+    SessionRosterItemResponse,
 )
 from modules.attendance.interface.schemas.session_schemas import (
     AttendanceSessionResponse,
@@ -304,6 +306,39 @@ async def list_attendance_records(
         )
     )
     return [AttendanceRecordResponse.model_validate(r) for r in records]
+
+
+@router.get(
+    "/{session_id}/roster",
+    response_model=list[SessionRosterItemResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
+)
+async def list_session_roster(
+    tenant_id: UUID,
+    subject_class_id: UUID,
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> list[SessionRosterItemResponse]:
+    """Lista todos os alunos ativos da turma na chamada, com horário, distância e status quando houver presença."""
+    record_repo = RecordSQLAlchemyRepository(session=db)
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+
+    use_case = ListSessionRosterUseCase(
+        record_repo=record_repo,
+        session_repo=session_repo,
+        subject_class_repo=subject_class_repo,
+        tenant_repo=tenant_repo,
+    )
+    roster = await use_case.execute(
+        ListSessionRosterInput(
+            tenant_id=tenant_id,
+            subject_class_id=subject_class_id,
+            session_id=session_id,
+        )
+    )
+    return [SessionRosterItemResponse.model_validate(item) for item in roster]
 
 
 @router.get(

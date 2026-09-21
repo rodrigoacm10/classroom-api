@@ -286,3 +286,176 @@ class TestAttendanceSQLAlchemyRepository:
         ).scalar_one()
         assert stored == "cancelled"
 
+    async def test_session_stats_include_students_confirmed_and_irregular(self, session):
+        """GET da sessão agrega duração, alunos ativos, confirmados e irregulares."""
+        from modules.enrollment.domain.entities.enrollment import Enrollment
+        from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+            EnrollmentSQLAlchemyRepository,
+        )
+        from shared.enums.enrollment_status import EnrollmentStatus
+
+        tenant = await TenantFactory.create(session)
+        student_a = await UserFactory.create(session, name="Aluno A")
+        student_b = await UserFactory.create(session, name="Aluno B")
+        student_dropped = await UserFactory.create(session, name="Dropado")
+        member_a = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student_a.id, role=UserRole.ALUNO
+        )
+        member_b = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student_b.id, role=UserRole.ALUNO
+        )
+        member_dropped = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student_dropped.id, role=UserRole.ALUNO
+        )
+
+        room = await RoomSQLAlchemyRepository(session).save(
+            Room(tenant_id=tenant.id, name="Lab Stats", latitude=-8.0, longitude=-34.0)
+        )
+        sc = await SubjectClassSQLAlchemyRepository(session).save(
+            SubjectClass(tenant_id=tenant.id, name="POO", discipline_name="Prog", room_id=room.id)
+        )
+        enrollment_repo = EnrollmentSQLAlchemyRepository(session)
+        await enrollment_repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=member_a.id))
+        await enrollment_repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=member_b.id))
+        await enrollment_repo.save(
+            Enrollment(
+                subject_class_id=sc.id,
+                tenant_member_id=member_dropped.id,
+                status=EnrollmentStatus.DROPPED,
+            )
+        )
+
+        opened_at = datetime.now(timezone.utc)
+        att_session = await SessionSQLAlchemyRepository(session).save(
+            AttendanceSession(
+                subject_class_id=sc.id,
+                room_id=room.id,
+                day_code="STAT01",
+                opened_at=opened_at,
+                expires_at=opened_at + timedelta(minutes=20),
+            )
+        )
+        record_repo = RecordSQLAlchemyRepository(session)
+        await record_repo.save(
+            AttendanceRecord(
+                session_id=att_session.id,
+                tenant_member_id=member_a.id,
+                latitude=-8.0,
+                longitude=-34.0,
+                distance_meters=3.0,
+                within_radius=True,
+                record_status=RecordStatus.REGULAR,
+            )
+        )
+        await record_repo.save(
+            AttendanceRecord(
+                session_id=att_session.id,
+                tenant_member_id=member_b.id,
+                latitude=-8.0,
+                longitude=-34.0,
+                distance_meters=80.0,
+                within_radius=False,
+                record_status=RecordStatus.IRREGULAR,
+            )
+        )
+
+        found = await SessionSQLAlchemyRepository(session).find_by_id_and_class(
+            att_session.id, sc.id
+        )
+        assert found is not None
+        assert found.duration_minutes == 20
+        assert found.total_students == 2
+        assert found.confirmed_count == 2
+        assert found.irregular_count == 1
+
+        listed = await SessionSQLAlchemyRepository(session).list_by_class(sc.id)
+        assert len(listed) == 1
+        assert listed[0].total_students == 2
+        assert listed[0].confirmed_count == 2
+        assert listed[0].irregular_count == 1
+
+    async def test_list_session_roster_includes_absent_students_and_attendance_fields(self, session):
+        """Roster da chamada lista matriculados ativos com presença opcional; dropados ficam de fora."""
+        from modules.enrollment.domain.entities.enrollment import Enrollment
+        from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+            EnrollmentSQLAlchemyRepository,
+        )
+        from shared.enums.enrollment_status import EnrollmentStatus
+
+        tenant = await TenantFactory.create(session)
+        present_user = await UserFactory.create(session, name="Ana Silva")
+        absent_user = await UserFactory.create(session, name="Bruno Lima")
+        dropped_user = await UserFactory.create(session, name="Carla Souza")
+        present_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=present_user.id, role=UserRole.ALUNO
+        )
+        absent_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=absent_user.id, role=UserRole.ALUNO
+        )
+        dropped_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=dropped_user.id, role=UserRole.ALUNO
+        )
+
+        room = await RoomSQLAlchemyRepository(session).save(
+            Room(tenant_id=tenant.id, name="Lab Roster", latitude=-8.0, longitude=-34.0)
+        )
+        sc = await SubjectClassSQLAlchemyRepository(session).save(
+            SubjectClass(tenant_id=tenant.id, name="POO", discipline_name="Prog", room_id=room.id)
+        )
+
+        enrollment_repo = EnrollmentSQLAlchemyRepository(session)
+        await enrollment_repo.save(
+            Enrollment(subject_class_id=sc.id, tenant_member_id=present_member.id)
+        )
+        await enrollment_repo.save(
+            Enrollment(subject_class_id=sc.id, tenant_member_id=absent_member.id)
+        )
+        await enrollment_repo.save(
+            Enrollment(
+                subject_class_id=sc.id,
+                tenant_member_id=dropped_member.id,
+                status=EnrollmentStatus.DROPPED,
+            )
+        )
+
+        att_session = await SessionSQLAlchemyRepository(session).save(
+            AttendanceSession(
+                subject_class_id=sc.id,
+                room_id=room.id,
+                day_code="ROST01",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
+            )
+        )
+        record = await RecordSQLAlchemyRepository(session).save(
+            AttendanceRecord(
+                session_id=att_session.id,
+                tenant_member_id=present_member.id,
+                latitude=-8.0,
+                longitude=-34.0,
+                distance_meters=4.2,
+                within_radius=True,
+                record_status=RecordStatus.REGULAR,
+            )
+        )
+
+        roster = await RecordSQLAlchemyRepository(session).list_session_roster(
+            att_session.id, sc.id
+        )
+        assert [item.student_name for item in roster] == ["Ana Silva", "Bruno Lima"]
+
+        ana = roster[0]
+        assert ana.tenant_member_id == present_member.id
+        assert ana.record_id == record.id
+        assert ana.confirmed_at is not None
+        assert ana.distance_meters == pytest.approx(4.2)
+        assert ana.within_radius is True
+        assert ana.record_status == RecordStatus.REGULAR
+
+        bruno = roster[1]
+        assert bruno.tenant_member_id == absent_member.id
+        assert bruno.record_id is None
+        assert bruno.confirmed_at is None
+        assert bruno.distance_meters is None
+        assert bruno.within_radius is None
+        assert bruno.record_status is None
+
