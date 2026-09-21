@@ -42,3 +42,16 @@ class AttendanceRecordResponse(BaseModel):
     evidence_photo_url: str | None
 
     model_config = {"from_attributes": True}
+
+
+class SessionRosterItemResponse(BaseModel):
+    tenant_member_id: UUID
+    student_name: str
+    enrollment_id: UUID
+    record_id: UUID | None = None
+    confirmed_at: datetime | None = None
+    distance_meters: float | None = None
+    within_radius: bool | None = None
+    record_status: RecordStatus | None = None
+
+    model_config = {"from_attributes": True}

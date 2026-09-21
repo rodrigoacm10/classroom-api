@@ -256,6 +256,54 @@ class TestSubjectClassUseCases:
         assert "Ativa 1" in names
         assert "Ativa 2" in names
         assert "Deletada" not in names
+        assert all(r.student_count == 0 for r in result)
+        assert all(r.attendance_rate == 0.0 for r in result)
+
+    async def test_list_subject_classes_filters_by_professor_id(self):
+        """Deve listar apenas as turmas do professor responsável informado."""
+        subject_class_repo = FakeSubjectClassRepository()
+        tenant_repo = FakeTenantRepository()
+        tenant = Tenant(name="UPE", slug="upe")
+        await tenant_repo.save(tenant)
+
+        professor_a = uuid4()
+        professor_b = uuid4()
+        sc1 = SubjectClass(tenant_id=tenant.id, professor_id=professor_a, room_id=uuid4(), name="Do A", discipline_name="D1")
+        sc2 = SubjectClass(tenant_id=tenant.id, professor_id=professor_b, room_id=uuid4(), name="Do B", discipline_name="D2")
+        await subject_class_repo.save(sc1)
+        await subject_class_repo.save(sc2)
+
+        use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+        result = await use_case.execute(
+            ListSubjectClassesInput(tenant_id=tenant.id, professor_id=professor_a)
+        )
+
+        assert len(result) == 1
+        assert result[0].name == "Do A"
+        assert result[0].professor_id == professor_a
+
+    async def test_list_subject_classes_filters_by_room_id(self):
+        """Deve listar apenas as turmas vinculadas à sala informada."""
+        subject_class_repo = FakeSubjectClassRepository()
+        tenant_repo = FakeTenantRepository()
+        tenant = Tenant(name="UPE", slug="upe")
+        await tenant_repo.save(tenant)
+
+        room_a = uuid4()
+        room_b = uuid4()
+        sc1 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=room_a, name="Na sala A", discipline_name="D1")
+        sc2 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=room_b, name="Na sala B", discipline_name="D2")
+        await subject_class_repo.save(sc1)
+        await subject_class_repo.save(sc2)
+
+        use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+        result = await use_case.execute(
+            ListSubjectClassesInput(tenant_id=tenant.id, room_id=room_a)
+        )
+
+        assert len(result) == 1
+        assert result[0].name == "Na sala A"
+        assert result[0].room_id == room_a
 
     async def test_update_subject_class_success(self):
         """Deve atualizar nome, disciplina e sala da turma com sucesso."""
@@ -340,3 +388,16 @@ class TestSubjectClassUseCases:
 
         sc_active = await subject_class_repo.find_by_id(sc.id, include_deleted=False)
         assert sc_active is None
+
+
+class TestSubjectClassSummary:
+    def test_compute_attendance_rate(self):
+        """Taxa da turma é presentes / (alunos × sessões); zero quando não há base."""
+        from modules.subject_class.domain.entities.subject_class_summary import (
+            SubjectClassSummary,
+        )
+
+        assert SubjectClassSummary.compute_attendance_rate(1, 2, 1) == 0.5
+        assert SubjectClassSummary.compute_attendance_rate(0, 0, 3) == 0.0
+        assert SubjectClassSummary.compute_attendance_rate(4, 2, 0) == 0.0
+        assert SubjectClassSummary.compute_attendance_rate(3, 2, 2) == 0.75

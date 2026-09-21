@@ -26,6 +26,10 @@ from modules.enrollment.application.use_cases.list_enrollments_by_member import 
     ListEnrollmentsByMemberInput,
     ListEnrollmentsByMemberUseCase,
 )
+from modules.enrollment.application.use_cases.list_student_subject_classes import (
+    ListStudentSubjectClassesInput,
+    ListStudentSubjectClassesUseCase,
+)
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.subject_class.domain.entities.subject_class import SubjectClass
 from modules.tenant.application.use_cases.update_tenant_member_role import (
@@ -530,4 +534,75 @@ class TestEnrollmentUseCases:
         with pytest.raises(BusinessRuleException):
             await use_case.execute(
                 ListEnrollmentsByMemberInput(tenant_id=uuid4(), tenant_member_id=member.id)
+            )
+
+
+class TestStudentSubjectClassSummary:
+    def test_compute_attendance_rate(self):
+        """Taxa do aluno é presentes / sessões; zero quando não há aula."""
+        from modules.enrollment.domain.entities.student_subject_class_summary import (
+            StudentSubjectClassSummary,
+        )
+
+        assert StudentSubjectClassSummary.compute_attendance_rate(1, 2) == 0.5
+        assert StudentSubjectClassSummary.compute_attendance_rate(2, 2) == 1.0
+        assert StudentSubjectClassSummary.compute_attendance_rate(0, 0) == 0.0
+        assert StudentSubjectClassSummary.compute_attendance_rate(3, 0) == 0.0
+
+
+@pytest.mark.asyncio
+class TestListStudentSubjectClassesUseCase:
+    async def test_list_student_subject_classes_success(self):
+        """Deve listar as turmas do aluno, omitindo matrículas de outro membro."""
+        enrollment_repo = FakeEnrollmentRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant_id = uuid4()
+        member = TenantMember(tenant_id=tenant_id, user_id=uuid4(), role=UserRole.ALUNO)
+        other = TenantMember(tenant_id=tenant_id, user_id=uuid4(), role=UserRole.ALUNO)
+        await member_repo.save(member)
+        await member_repo.save(other)
+
+        mine = Enrollment(subject_class_id=uuid4(), tenant_member_id=member.id)
+        theirs = Enrollment(subject_class_id=uuid4(), tenant_member_id=other.id)
+        await enrollment_repo.save(mine)
+        await enrollment_repo.save(theirs)
+
+        use_case = ListStudentSubjectClassesUseCase(
+            enrollment_repo=enrollment_repo,
+            member_repo=member_repo,
+        )
+        result = await use_case.execute(
+            ListStudentSubjectClassesInput(tenant_id=tenant_id, tenant_member_id=member.id)
+        )
+
+        assert len(result) == 1
+        assert result[0].enrollment_id == mine.id
+        assert result[0].subject_class_id == mine.subject_class_id
+        assert result[0].status == EnrollmentStatus.ACTIVE
+
+    async def test_list_student_subject_classes_member_not_found(self):
+        """Deve lançar ResourceNotFoundException se o membro não existir."""
+        use_case = ListStudentSubjectClassesUseCase(
+            enrollment_repo=FakeEnrollmentRepository(),
+            member_repo=FakeTenantMemberRepository(),
+        )
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(
+                ListStudentSubjectClassesInput(tenant_id=uuid4(), tenant_member_id=uuid4())
+            )
+
+    async def test_list_student_subject_classes_wrong_tenant(self):
+        """Deve lançar BusinessRuleException se o membro pertencer a outro tenant."""
+        member_repo = FakeTenantMemberRepository()
+        member = TenantMember(tenant_id=uuid4(), user_id=uuid4(), role=UserRole.ALUNO)
+        await member_repo.save(member)
+
+        use_case = ListStudentSubjectClassesUseCase(
+            enrollment_repo=FakeEnrollmentRepository(),
+            member_repo=member_repo,
+        )
+        with pytest.raises(BusinessRuleException):
+            await use_case.execute(
+                ListStudentSubjectClassesInput(tenant_id=uuid4(), tenant_member_id=member.id)
             )

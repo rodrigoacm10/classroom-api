@@ -422,4 +422,111 @@ class TestEnrollmentRouterEndpoints:
         assert len(data) == 1
         assert data[0]["subject_class_id"] == sc_id
 
+    async def test_list_student_subject_classes_includes_room_professor_and_attendance(
+        self, client, session
+    ):
+        """GET /members/{id}/subject-classes devolve turma, sala, professor e taxa do aluno."""
+        admin_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
+        )
+        admin_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)}"
+        }
+
+        prof_user = await UserFactory.create(session, name="Prof Carla")
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=prof_user.id, role=UserRole.PROFESSOR
+        )
+        prof_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)}"
+        }
+
+        room_res = await client.post(
+            f"/tenants/{tenant.id}/rooms",
+            json={"name": "Auditório", "latitude": -8.0476, "longitude": -34.8770},
+            headers=admin_headers,
+        )
+        assert room_res.status_code == 201
+        room_id = room_res.json()["id"]
+
+        sc_res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes",
+            json={"room_id": room_id, "name": "POO", "discipline_name": "Programação"},
+            headers=prof_headers,
+        )
+        assert sc_res.status_code == 201
+        sc_id = sc_res.json()["id"]
+        professor_id = sc_res.json()["professor_id"]
+
+        empty_res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes",
+            json={"room_id": room_id, "name": "Cálculo", "discipline_name": "Matemática"},
+            headers=prof_headers,
+        )
+        assert empty_res.status_code == 201
+        empty_id = empty_res.json()["id"]
+
+        student_user = await UserFactory.create(session, name="Aluno Pedro")
+        student_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student_user.id, role=UserRole.ALUNO
+        )
+        student_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=student_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)}",
+            "User-Agent": "okhttp/4.9.0",
+        }
+
+        for class_id in (sc_id, empty_id):
+            enroll_res = await client.post(
+                f"/tenants/{tenant.id}/subject-classes/{class_id}/enrollments",
+                json={"tenant_member_id": str(student_member.id)},
+                headers=admin_headers,
+            )
+            assert enroll_res.status_code == 201
+
+        open_res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            json={"room_id": room_id, "duration_minutes": 20},
+            headers=prof_headers,
+        )
+        assert open_res.status_code == 201
+        session_data = open_res.json()
+
+        confirm_res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_data['id']}/confirm",
+            json={
+                "day_code": session_data["day_code"],
+                "latitude": -8.04761,
+                "longitude": -34.87701,
+            },
+            headers=student_headers,
+        )
+        assert confirm_res.status_code == 201
+
+        list_res = await client.get(
+            f"/tenants/{tenant.id}/members/{student_member.id}/subject-classes",
+            headers=student_headers,
+        )
+        assert list_res.status_code == 200
+        items = list_res.json()
+        assert len(items) == 2
+        by_id = {item["subject_class_id"]: item for item in items}
+
+        poo = by_id[sc_id]
+        assert poo["name"] == "POO"
+        assert poo["discipline_name"] == "Programação"
+        assert poo["room_id"] == room_id
+        assert poo["room_name"] == "Auditório"
+        assert poo["professor_id"] == professor_id
+        assert poo["professor_name"] == "Prof Carla"
+        assert poo["attendance_rate"] == 1.0
+        assert poo["status"] == EnrollmentStatus.ACTIVE.value
+
+        calc = by_id[empty_id]
+        assert calc["name"] == "Cálculo"
+        assert calc["room_name"] == "Auditório"
+        assert calc["professor_name"] == "Prof Carla"
+        assert calc["attendance_rate"] == 0.0
+
 

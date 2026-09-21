@@ -2,6 +2,7 @@ from typing import Protocol
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
+from modules.attendance.domain.entities.session_roster_item import SessionRosterItem
 from shared.enums.record_status import RecordStatus
 
 
@@ -43,3 +44,7 @@ class AttendanceRecordRepository(Protocol):
     async def list_by_session(
         self, session_id: UUID, record_status: RecordStatus | None = None
     ) -> list[AttendanceRecord]: ...
+
+    async def list_session_roster(
+        self, session_id: UUID, subject_class_id: UUID
+    ) -> list[SessionRosterItem]: ...

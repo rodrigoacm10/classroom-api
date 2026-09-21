@@ -5,17 +5,22 @@ from uuid import UUID
 from geoalchemy2.functions import ST_Distance, ST_GeographyFromText
 from geoalchemy2.shape import to_shape
 from shapely.geometry import Point
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.models.attendance_record import AttendanceRecordModel
+from infra.database.models.enrollment import EnrollmentModel
 from infra.database.models.room import RoomModel
+from infra.database.models.tenant import TenantMemberModel
+from infra.database.models.user import UserModel
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
+from modules.attendance.domain.entities.session_roster_item import SessionRosterItem
 from modules.attendance.domain.repositories.attendance_record_repository import AttendanceRecordRepository
 from modules.attendance.infra.mappers.attendance_record_mapper import AttendanceRecordMapper
+from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
-from shared.exceptions import BusinessRuleException, ResourceAlreadyExistsException
+from shared.exceptions import ResourceAlreadyExistsException
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -153,3 +158,65 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
         stmt = stmt.order_by(AttendanceRecordModel.confirmed_at.asc())
         result = await self.session.execute(stmt)
         return [AttendanceRecordMapper.to_domain(m) for m in result.scalars().all()]
+
+    async def list_session_roster(
+        self, session_id: UUID, subject_class_id: UUID
+    ) -> list[SessionRosterItem]:
+        stmt = (
+            select(
+                EnrollmentModel.id,
+                EnrollmentModel.tenant_member_id,
+                UserModel.name,
+                AttendanceRecordModel.id,
+                AttendanceRecordModel.confirmed_at,
+                AttendanceRecordModel.distance_meters,
+                AttendanceRecordModel.within_radius,
+                AttendanceRecordModel.record_status,
+            )
+            .join(
+                TenantMemberModel,
+                TenantMemberModel.id == EnrollmentModel.tenant_member_id,
+            )
+            .join(UserModel, UserModel.id == TenantMemberModel.user_id)
+            .outerjoin(
+                AttendanceRecordModel,
+                and_(
+                    AttendanceRecordModel.session_id == session_id,
+                    AttendanceRecordModel.tenant_member_id
+                    == EnrollmentModel.tenant_member_id,
+                ),
+            )
+            .where(
+                EnrollmentModel.subject_class_id == subject_class_id,
+                EnrollmentModel.deleted.is_(False),
+                EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+            )
+            .order_by(UserModel.name.asc())
+        )
+        result = await self.session.execute(stmt)
+        items: list[SessionRosterItem] = []
+        for (
+            enrollment_id,
+            tenant_member_id,
+            student_name,
+            record_id,
+            confirmed_at,
+            distance_meters,
+            within_radius,
+            record_status,
+        ) in result.all():
+            items.append(
+                SessionRosterItem(
+                    tenant_member_id=tenant_member_id,
+                    student_name=student_name,
+                    enrollment_id=enrollment_id,
+                    record_id=record_id,
+                    confirmed_at=confirmed_at,
+                    distance_meters=float(distance_meters)
+                    if distance_meters is not None
+                    else None,
+                    within_radius=within_radius,
+                    record_status=record_status,
+                )
+            )
+        return items

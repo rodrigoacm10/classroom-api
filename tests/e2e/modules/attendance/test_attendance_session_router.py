@@ -114,6 +114,92 @@ class TestAttendanceSessionRouter:
         assert get_data["subject_class"]["name"] == "POO"
         assert get_data["subject_class"]["discipline_name"] == "Programação"
         assert get_data["room"]["name"] == "Lab 101"
+        assert get_data["duration_minutes"] == 15
+        assert get_data["total_students"] == 0
+        assert get_data["confirmed_count"] == 0
+        assert get_data["irregular_count"] == 0
+
+    async def test_get_session_includes_student_and_attendance_counts(self, client, session):
+        """GET da sessão devolve duração, total de alunos, confirmados e irregulares."""
+        tenant, admin_headers, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(
+            session, client
+        )
+
+        student1 = await UserFactory.create(session, name="Aluno Um")
+        student2 = await UserFactory.create(session, name="Aluno Dois")
+        member1 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student1.id, role=UserRole.ALUNO
+        )
+        member2 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student2.id, role=UserRole.ALUNO
+        )
+        for member in (member1, member2):
+            enroll_res = await client.post(
+                f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+                json={"tenant_member_id": str(member.id)},
+                headers=admin_headers,
+            )
+            assert enroll_res.status_code == 201
+
+        open_res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            json={"room_id": room_id, "duration_minutes": 20},
+            headers=prof_headers,
+        )
+        assert open_res.status_code == 201
+        opened = open_res.json()
+        assert opened["duration_minutes"] == 20
+        assert opened["total_students"] == 2
+        assert opened["confirmed_count"] == 0
+        assert opened["irregular_count"] == 0
+        session_id = opened["id"]
+        day_code = opened["day_code"]
+
+        student1_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=student1.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)}",
+            "User-Agent": "okhttp/4.9.0",
+        }
+        student2_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=student2.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)}",
+            "User-Agent": "okhttp/4.9.0",
+        }
+
+        regular = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            headers=student1_headers,
+        )
+        assert regular.status_code == 201
+        irregular = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.05600, "longitude": -34.87700},
+            headers=student2_headers,
+        )
+        assert irregular.status_code == 201
+
+        get_res = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}",
+            headers=prof_headers,
+        )
+        assert get_res.status_code == 200
+        data = get_res.json()
+        assert data["day_code"] == day_code
+        assert data["opened_at"]
+        assert data["expires_at"]
+        assert data["duration_minutes"] == 20
+        assert data["total_students"] == 2
+        assert data["confirmed_count"] == 2
+        assert data["irregular_count"] == 1
+
+        list_res = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            headers=prof_headers,
+        )
+        assert list_res.status_code == 200
+        listed = next(item for item in list_res.json() if item["id"] == session_id)
+        assert listed["total_students"] == 2
+        assert listed["confirmed_count"] == 2
+        assert listed["irregular_count"] == 1
 
     async def test_close_session_endpoint_success_and_conflict(self, client, session):
         """PATCH /attendance-sessions/{id}/close encerra a chamada e retorna 409 se já estiver fechada."""
