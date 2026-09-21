@@ -30,6 +30,7 @@ from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repositor
 )
 from modules.subject_class.interface.schemas.subject_class_schemas import (
     CreateSubjectClassRequest,
+    SubjectClassListItemResponse,
     SubjectClassResponse,
     UpdateSubjectClassRequest,
 )
@@ -80,18 +81,28 @@ async def create_subject_class(
     return SubjectClassResponse.model_validate(subject_class)
 
 
-@router.get("", response_model=list[SubjectClassResponse])
+@router.get("", response_model=list[SubjectClassListItemResponse])
 async def list_subject_classes(
     tenant_id: UUID,
+    professor_id: UUID | None = None,
+    room_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
-) -> list[SubjectClassResponse]:
-    """Lista todas as turmas ativas (não deletadas) de uma Tenant."""
+) -> list[SubjectClassListItemResponse]:
+    """Lista turmas ativas da Tenant, com nome do professor, alunos ativos e taxa de presença.
+
+    `professor_id` filtra pelo TenantMember do professor responsável.
+    `room_id` filtra pelas turmas vinculadas à sala.
+    """
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
 
-    classes = await use_case.execute(ListSubjectClassesInput(tenant_id=tenant_id))
-    return [SubjectClassResponse.model_validate(c) for c in classes]
+    classes = await use_case.execute(
+        ListSubjectClassesInput(
+            tenant_id=tenant_id, professor_id=professor_id, room_id=room_id
+        )
+    )
+    return [SubjectClassListItemResponse.model_validate(c) for c in classes]
 
 
 @router.get("/{subject_class_id}", response_model=SubjectClassResponse)
