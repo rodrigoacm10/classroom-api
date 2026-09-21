@@ -2,6 +2,9 @@ from typing import Protocol
 from uuid import UUID
 
 from modules.enrollment.domain.entities.enrollment import Enrollment
+from modules.enrollment.domain.entities.student_subject_class_summary import (
+    StudentSubjectClassSummary,
+)
 from shared.enums.enrollment_status import EnrollmentStatus
 
 
@@ -33,6 +36,14 @@ class EnrollmentRepository(Protocol):
         status: EnrollmentStatus | None = None,
         include_deleted: bool = False,
     ) -> list[Enrollment]: ...
+
+    async def list_summaries_by_member(
+        self,
+        tenant_id: UUID,
+        tenant_member_id: UUID,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> list[StudentSubjectClassSummary]: ...
 
     async def drop_all_active_for_member(self, tenant_member_id: UUID) -> int:
         """Altera o status de todas as matrículas ativas (e não deletadas) de um tenant_member para DROPPED.

@@ -26,6 +26,7 @@ from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository impo
 from modules.enrollment.interface.schemas.enrollment_schemas import (
     EnrollStudentRequest,
     EnrollmentResponse,
+    StudentSubjectClassListItemResponse,
 )
 from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import (
     SubjectClassSQLAlchemyRepository,
@@ -45,6 +46,10 @@ from modules.enrollment.application.use_cases.list_enrollments_by_member import 
     ListEnrollmentsByMemberInput,
     ListEnrollmentsByMemberUseCase,
 )
+from modules.enrollment.application.use_cases.list_student_subject_classes import (
+    ListStudentSubjectClassesInput,
+    ListStudentSubjectClassesUseCase,
+)
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/subject-classes/{subject_class_id}/enrollments",
@@ -54,6 +59,11 @@ router = APIRouter(
 member_enrollments_router = APIRouter(
     prefix="/tenants/{tenant_id}/members/{member_id}/enrollments",
     tags=["enrollments"],
+)
+
+student_subject_classes_router = APIRouter(
+    prefix="/tenants/{tenant_id}/members/{member_id}/subject-classes",
+    tags=["subject-classes"],
 )
 
 
@@ -157,6 +167,34 @@ async def list_enrollments_by_member(
         )
     )
     return [EnrollmentResponse.model_validate(e) for e in enrollments]
+
+
+@student_subject_classes_router.get(
+    "", response_model=list[StudentSubjectClassListItemResponse]
+)
+async def list_student_subject_classes(
+    tenant_id: UUID,
+    member_id: UUID,
+    status: EnrollmentStatus | None = None,
+    include_deleted: bool = False,
+    db: AsyncSession = Depends(get_db),
+) -> list[StudentSubjectClassListItemResponse]:
+    """Lista turmas do aluno com sala, professor e taxa de presença individual."""
+    enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = ListStudentSubjectClassesUseCase(
+        enrollment_repo=enrollment_repo,
+        member_repo=member_repo,
+    )
+    classes = await use_case.execute(
+        ListStudentSubjectClassesInput(
+            tenant_id=tenant_id,
+            tenant_member_id=member_id,
+            status=status,
+            include_deleted=include_deleted,
+        )
+    )
+    return [StudentSubjectClassListItemResponse.model_validate(c) for c in classes]
 
 
 @router.patch(
