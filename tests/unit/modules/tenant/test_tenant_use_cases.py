@@ -405,3 +405,129 @@ class TestUpdateTenantMemberRoleUseCase:
                 )
             )
 
+
+@pytest.mark.asyncio
+class TestListTenantMembersUseCase:
+    async def test_list_tenant_members_success(self):
+        """Deve listar todos os membros da tenant com sucesso."""
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        u1 = UserFactory.make()
+        u2 = UserFactory.make()
+        m1 = TenantMember(tenant_id=tenant.id, user_id=u1.id, role=UserRole.ADMIN)
+        m2 = TenantMember(tenant_id=tenant.id, user_id=u2.id, role=UserRole.ALUNO)
+        member_repo.seed(m1)
+        member_repo.seed(m2)
+
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        result = await use_case.execute(ListTenantMembersInput(tenant_id=tenant.id))
+        assert result.total == 2
+        assert len(result.items) == 2
+
+    async def test_list_tenant_members_filter_by_role(self):
+        """Deve filtrar membros por papel (role)."""
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        u1 = UserFactory.make()
+        u2 = UserFactory.make()
+        m1 = TenantMember(tenant_id=tenant.id, user_id=u1.id, role=UserRole.ADMIN)
+        m2 = TenantMember(tenant_id=tenant.id, user_id=u2.id, role=UserRole.ALUNO)
+        member_repo.seed(m1)
+        member_repo.seed(m2)
+
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        result = await use_case.execute(
+            ListTenantMembersInput(tenant_id=tenant.id, role=UserRole.ALUNO)
+        )
+        assert result.total == 1
+        assert len(result.items) == 1
+        assert result.items[0].user_id == u2.id
+
+    async def test_list_tenant_members_tenant_not_found(self):
+        """Deve lançar ResourceNotFoundException se a tenant não existir."""
+        from uuid import uuid4
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(ListTenantMembersInput(tenant_id=uuid4()))
+
+    async def test_list_tenant_members_filter_by_search_subject_class_and_date(self):
+        """Deve passar os filtros de search, subject_class_id e período de datas para o repositório."""
+        from datetime import datetime, timezone
+        from uuid import uuid4
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        u1 = UserFactory.make(name="Carlos Silva", email="carlos@test.com")
+        u2 = UserFactory.make(name="Ana Souza", email="ana@test.com")
+
+        sc_id = uuid4()
+        now = datetime.now(timezone.utc)
+
+        m1 = TenantMember(tenant_id=tenant.id, user_id=u1.id, role=UserRole.ALUNO, created_at=now)
+        setattr(m1, "_user_name", u1.name)
+        setattr(m1, "_user_email", u1.email)
+        setattr(m1, "_subject_class_id", sc_id)
+
+        m2 = TenantMember(tenant_id=tenant.id, user_id=u2.id, role=UserRole.PROFESSOR, created_at=now)
+        setattr(m2, "_user_name", u2.name)
+        setattr(m2, "_user_email", u2.email)
+
+        member_repo.seed(m1)
+        member_repo.seed(m2)
+
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        # Teste por busca textual
+        res_search = await use_case.execute(
+            ListTenantMembersInput(tenant_id=tenant.id, search="carlos")
+        )
+        assert res_search.total == 1
+        assert len(res_search.items) == 1
+        assert res_search.items[0].user_id == u1.id
+
+        # Teste por turma
+        res_class = await use_case.execute(
+            ListTenantMembersInput(tenant_id=tenant.id, subject_class_id=sc_id)
+        )
+        assert res_class.total == 1
+        assert len(res_class.items) == 1
+        assert res_class.items[0].user_id == u1.id
+
+
+
