@@ -2,6 +2,7 @@ from uuid import UUID
 
 from modules.subject_class.domain.entities.subject_class import SubjectClass
 from modules.subject_class.domain.entities.subject_class_summary import SubjectClassSummary
+from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeSubjectClassRepository:
@@ -65,6 +66,30 @@ class FakeSubjectClassRepository:
             )
             for c in classes
         ]
+
+    async def find_summaries_by_tenant_paginated(
+        self,
+        tenant_id: UUID,
+        pagination: PaginationParams,
+        include_deleted: bool = False,
+        professor_id: UUID | None = None,
+        room_id: UUID | None = None,
+        search: str | None = None,
+    ) -> Page[SubjectClassSummary]:
+        summaries = await self.list_summaries_by_tenant(
+            tenant_id=tenant_id,
+            include_deleted=include_deleted,
+            professor_id=professor_id,
+            room_id=room_id,
+        )
+        if search:
+            s = search.lower()
+            summaries = [
+                sm for sm in summaries
+                if s in sm.name.lower() or s in sm.discipline_name.lower()
+            ]
+        summaries.sort(key=lambda sm: sm.created_at, reverse=True)
+        return paginate_list(summaries, pagination)
 
     async def delete(self, subject_class: SubjectClass) -> None:
         subject_class.deleted = True

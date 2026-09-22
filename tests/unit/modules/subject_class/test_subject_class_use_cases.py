@@ -251,13 +251,14 @@ class TestSubjectClassUseCases:
         use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
         result = await use_case.execute(ListSubjectClassesInput(tenant_id=tenant.id))
 
-        assert len(result) == 2
-        names = [r.name for r in result]
+        assert len(result.items) == 2
+        assert result.total == 2
+        names = [r.name for r in result.items]
         assert "Ativa 1" in names
         assert "Ativa 2" in names
         assert "Deletada" not in names
-        assert all(r.student_count == 0 for r in result)
-        assert all(r.attendance_rate == 0.0 for r in result)
+        assert all(r.student_count == 0 for r in result.items)
+        assert all(r.attendance_rate == 0.0 for r in result.items)
 
     async def test_list_subject_classes_filters_by_professor_id(self):
         """Deve listar apenas as turmas do professor responsável informado."""
@@ -278,9 +279,9 @@ class TestSubjectClassUseCases:
             ListSubjectClassesInput(tenant_id=tenant.id, professor_id=professor_a)
         )
 
-        assert len(result) == 1
-        assert result[0].name == "Do A"
-        assert result[0].professor_id == professor_a
+        assert len(result.items) == 1
+        assert result.items[0].name == "Do A"
+        assert result.items[0].professor_id == professor_a
 
     async def test_list_subject_classes_filters_by_room_id(self):
         """Deve listar apenas as turmas vinculadas à sala informada."""
@@ -301,9 +302,41 @@ class TestSubjectClassUseCases:
             ListSubjectClassesInput(tenant_id=tenant.id, room_id=room_a)
         )
 
-        assert len(result) == 1
-        assert result[0].name == "Na sala A"
-        assert result[0].room_id == room_a
+        assert len(result.items) == 1
+        assert result.items[0].name == "Na sala A"
+        assert result.items[0].room_id == room_a
+
+    async def test_list_subject_classes_filters_by_search_and_pagination(self):
+        """Deve filtrar turmas por termo de busca no nome ou nome da disciplina e aplicar paginação."""
+        from shared.pagination import PaginationParams
+
+        subject_class_repo = FakeSubjectClassRepository()
+        tenant_repo = FakeTenantRepository()
+        tenant = Tenant(name="UPE", slug="upe")
+        await tenant_repo.save(tenant)
+
+        sc1 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Turma P1", discipline_name="Cálculo 1")
+        sc2 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Turma P2", discipline_name="Cálculo 2")
+        sc3 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Turma P3", discipline_name="Física 1")
+        await subject_class_repo.save(sc1)
+        await subject_class_repo.save(sc2)
+        await subject_class_repo.save(sc3)
+
+        use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+        res_search = await use_case.execute(
+            ListSubjectClassesInput(tenant_id=tenant.id, search="Cálculo")
+        )
+        assert len(res_search.items) == 2
+        assert res_search.total == 2
+
+        res_paged = await use_case.execute(
+            ListSubjectClassesInput(
+                tenant_id=tenant.id,
+                pagination=PaginationParams(page=1, page_size=2),
+            )
+        )
+        assert len(res_paged.items) == 2
+        assert res_paged.total == 3
 
     async def test_update_subject_class_success(self):
         """Deve atualizar nome, disciplina e sala da turma com sucesso."""
