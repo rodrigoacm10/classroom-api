@@ -311,3 +311,46 @@ class TestSubjectClassSQLAlchemyRepository:
         assert summaries[0].room_id == room_a.id
         assert summaries[0].name == "Turma Sala A"
         assert summaries[0].professor_name == "Prof Sala"
+
+    async def test_find_summaries_by_tenant_paginated(self, session):
+        """Deve retornar os resumos paginados de turmas por tenant, suportando busca por nome/disciplina."""
+        from shared.pagination import PaginationParams
+
+        tenant = await TenantFactory.create(session)
+        professor = await UserFactory.create(session, name="Prof Paginated")
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=professor.id, role=UserRole.PROFESSOR
+        )
+        room = await RoomSQLAlchemyRepository(session).save(
+            Room(tenant_id=tenant.id, name="Sala P", latitude=-8.0, longitude=-34.0)
+        )
+        repo = SubjectClassSQLAlchemyRepository(session)
+        await repo.save(
+            SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Turma Alfa", discipline_name="Matemática 1")
+        )
+        await repo.save(
+            SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Turma Beta", discipline_name="Matemática 2")
+        )
+        await repo.save(
+            SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Turma Gama", discipline_name="Física 1")
+        )
+
+        # Pagination page 1
+        page1 = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=2),
+        )
+        assert len(page1.items) == 2
+        assert page1.total == 3
+        assert page1.page == 1
+        assert page1.page_size == 2
+        assert page1.pages == 2
+
+        # Search filter
+        search_res = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            search="Matemática",
+        )
+        assert len(search_res.items) == 2
+        assert search_res.total == 2

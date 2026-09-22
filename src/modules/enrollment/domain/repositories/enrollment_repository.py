@@ -6,6 +6,7 @@ from modules.enrollment.domain.entities.student_subject_class_summary import (
     StudentSubjectClassSummary,
 )
 from shared.enums.enrollment_status import EnrollmentStatus
+from shared.pagination import Page, PaginationParams
 
 
 class EnrollmentRepository(Protocol):
@@ -29,6 +30,14 @@ class EnrollmentRepository(Protocol):
         status: EnrollmentStatus | None = None,
         include_deleted: bool = False,
     ) -> list[Enrollment]: ...
+
+    async def find_by_class_paginated(
+        self,
+        subject_class_id: UUID,
+        pagination: PaginationParams,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> Page[Enrollment]: ...
 
     async def list_by_member(
         self,

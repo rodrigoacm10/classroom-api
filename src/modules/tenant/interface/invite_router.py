@@ -1,11 +1,15 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
 from modules.tenant.application.use_cases.accept_invite import AcceptInviteUseCase
 from modules.tenant.application.use_cases.get_invite import GetInviteUseCase
+from modules.tenant.application.use_cases.list_tenant_invites import (
+    ListTenantInvitesInput,
+    ListTenantInvitesUseCase,
+)
 from modules.tenant.application.use_cases.revoke_invite import (
     RevokeInviteInput,
     RevokeInviteUseCase,
@@ -33,6 +37,7 @@ from modules.user.infra.repositories.user_sqlalchemy_repository import UserSQLAl
 from security.dependencies.current_user import get_current_user
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
+from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 tenant_invites_router = APIRouter(prefix="/tenants", tags=["Invites"])
 invites_router = APIRouter(prefix="/invites", tags=["Invites"])
@@ -89,6 +94,62 @@ async def send_invite(
         expires_at=invite.expires_at,
         created_at=invite.created_at,
     )
+
+
+@tenant_invites_router.get(
+    "/{tenant_id}/invites",
+    response_model=PageResponse[InviteStatusResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+async def list_tenant_invites(
+    tenant_id: UUID,
+    pagination: PaginationParams = Depends(get_pagination_params),
+    status_filter: str | None = Query(
+        None,
+        alias="status",
+        description="Filtrar por status (pending, accepted, expired, revoked)",
+    ),
+    role: UserRole | None = Query(None, description="Filtrar por papel (role)"),
+    search: str | None = Query(None, description="Busca por e-mail"),
+    db: AsyncSession = Depends(get_db),
+) -> PageResponse[InviteStatusResponse]:
+    """
+    Lista convites de uma Tenant/Instituição com suporte a paginação por offset e filtros por status, papel e e-mail.
+    Requer perfil de ADMIN na tenant ativa.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    invite_repo = TenantInviteSQLAlchemyRepository(session=db)
+    use_case = ListTenantInvitesUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
+
+    page = await use_case.execute(
+        ListTenantInvitesInput(
+            tenant_id=tenant_id,
+            pagination=pagination,
+            status=status_filter,
+            role=role,
+            search=search,
+        )
+    )
+
+    tenant = await tenant_repo.find_by_id(tenant_id)
+    tenant_name = tenant.name if tenant else ""
+
+    items = [
+        InviteStatusResponse(
+            id=invite.id,
+            tenant_id=invite.tenant_id,
+            tenant_name=tenant_name,
+            email=invite.email,
+            role=invite.role,
+            token=invite.token,
+            status=invite.status,
+            expires_at=invite.expires_at,
+            created_at=invite.created_at,
+        )
+        for invite in page.items
+    ]
+
+    return PageResponse.of(page, items)
 
 
 @tenant_invites_router.delete(

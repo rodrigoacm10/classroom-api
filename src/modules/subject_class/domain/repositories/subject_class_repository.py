@@ -3,6 +3,7 @@ from uuid import UUID
 
 from modules.subject_class.domain.entities.subject_class import SubjectClass
 from modules.subject_class.domain.entities.subject_class_summary import SubjectClassSummary
+from shared.pagination import Page, PaginationParams
 
 
 class SubjectClassRepository(Protocol):
@@ -28,5 +29,15 @@ class SubjectClassRepository(Protocol):
         professor_id: UUID | None = None,
         room_id: UUID | None = None,
     ) -> list[SubjectClassSummary]: ...
+
+    async def find_summaries_by_tenant_paginated(
+        self,
+        tenant_id: UUID,
+        pagination: PaginationParams,
+        include_deleted: bool = False,
+        professor_id: UUID | None = None,
+        room_id: UUID | None = None,
+        search: str | None = None,
+    ) -> Page[SubjectClassSummary]: ...
 
     async def delete(self, subject_class: SubjectClass) -> None: ...

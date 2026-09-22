@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
@@ -42,6 +42,7 @@ from modules.user.domain.entities.user import User
 from security.dependencies.current_user import get_current_user
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
+from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 router = APIRouter(prefix="/tenants/{tenant_id}/subject-classes", tags=["subject-classes"])
 
@@ -81,28 +82,31 @@ async def create_subject_class(
     return SubjectClassResponse.model_validate(subject_class)
 
 
-@router.get("", response_model=list[SubjectClassListItemResponse])
+@router.get("", response_model=PageResponse[SubjectClassListItemResponse])
 async def list_subject_classes(
     tenant_id: UUID,
-    professor_id: UUID | None = None,
-    room_id: UUID | None = None,
+    pagination: PaginationParams = Depends(get_pagination_params),
+    professor_id: UUID | None = Query(None, description="Filtrar por ID do professor responsável"),
+    room_id: UUID | None = Query(None, description="Filtrar por ID da sala vinculada"),
+    search: str | None = Query(None, description="Busca por nome da turma ou disciplina"),
     db: AsyncSession = Depends(get_db),
-) -> list[SubjectClassListItemResponse]:
-    """Lista turmas ativas da Tenant, com nome do professor, alunos ativos e taxa de presença.
-
-    `professor_id` filtra pelo TenantMember do professor responsável.
-    `room_id` filtra pelas turmas vinculadas à sala.
-    """
+) -> PageResponse[SubjectClassListItemResponse]:
+    """Lista turmas ativas da Tenant com paginação offset, nome do professor, alunos ativos e taxa de presença."""
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
 
-    classes = await use_case.execute(
+    page = await use_case.execute(
         ListSubjectClassesInput(
-            tenant_id=tenant_id, professor_id=professor_id, room_id=room_id
+            tenant_id=tenant_id,
+            pagination=pagination,
+            professor_id=professor_id,
+            room_id=room_id,
+            search=search,
         )
     )
-    return [SubjectClassListItemResponse.model_validate(c) for c in classes]
+    items = [SubjectClassListItemResponse.model_validate(c) for c in page.items]
+    return PageResponse.of(page, items)
 
 
 @router.get("/{subject_class_id}", response_model=SubjectClassResponse)

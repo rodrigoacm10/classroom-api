@@ -1,7 +1,10 @@
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
+from shared.enums.session_status import SessionStatus
+from shared.pagination import Page, PaginationParams
 
 
 class AttendanceSessionRepository(Protocol):
@@ -21,6 +24,15 @@ class AttendanceSessionRepository(Protocol):
     async def list_by_class(
         self, subject_class_id: UUID
     ) -> list[AttendanceSession]: ...
+
+    async def find_by_class_paginated(
+        self,
+        subject_class_id: UUID,
+        pagination: PaginationParams,
+        status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+    ) -> Page[AttendanceSession]: ...
 
     async def close_expired_sessions(self) -> list[AttendanceSession]: ...
 

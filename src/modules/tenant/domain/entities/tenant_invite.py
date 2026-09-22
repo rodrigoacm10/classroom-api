@@ -1,6 +1,7 @@
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID, uuid4
 
 from shared.enums.user_role import UserRole
@@ -37,3 +38,13 @@ class TenantInvite:
     @property
     def is_pending(self) -> bool:
         return not self.is_accepted and not self.is_revoked and not self.is_expired
+
+    @property
+    def status(self) -> Literal["pending", "accepted", "expired", "revoked"]:
+        if self.is_accepted:
+            return "accepted"
+        if self.is_revoked:
+            return "revoked"
+        if self.is_expired:
+            return "expired"
+        return "pending"

@@ -7,6 +7,7 @@ from modules.enrollment.domain.entities.student_subject_class_summary import (
 )
 from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
+from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeEnrollmentRepository:
@@ -59,6 +60,21 @@ class FakeEnrollmentRepository:
                 continue
             result.append(e)
         return result
+
+    async def find_by_class_paginated(
+        self,
+        subject_class_id: UUID,
+        pagination: PaginationParams,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> Page[Enrollment]:
+        items = await self.list_by_subject_class(
+            subject_class_id=subject_class_id,
+            status=status,
+            include_deleted=include_deleted,
+        )
+        items.sort(key=lambda e: e.enrolled_at, reverse=True)
+        return paginate_list(items, pagination)
 
     async def list_by_member(
         self,

@@ -123,7 +123,7 @@ class TestSubjectClassRouterEndpoints:
 
         list_res = await client.get(f"/tenants/{tenant.id}/subject-classes", headers=headers)
         assert list_res.status_code == 200
-        items = list_res.json()
+        items = list_res.json()["items"]
         assert len(items) >= 1
         listed = next(item for item in items if item["id"] == sc_id)
         assert listed["name"] == "Turma 101"
@@ -189,7 +189,7 @@ class TestSubjectClassRouterEndpoints:
         assert get_res.status_code == 404
 
         list_res = await client.get(f"/tenants/{tenant.id}/subject-classes", headers=headers)
-        ids = [item["id"] for item in list_res.json()]
+        ids = [item["id"] for item in list_res.json()["items"]]
         assert sc_id not in ids
 
         patch_res = await client.patch(f"/tenants/{tenant.id}/subject-classes/{sc_id}", json={"name": "Novo"}, headers=headers)
@@ -275,7 +275,7 @@ class TestSubjectClassRouterEndpoints:
 
         list_res = await client.get(f"/tenants/{tenant.id}/subject-classes", headers=prof_headers)
         assert list_res.status_code == 200
-        listed = next(item for item in list_res.json() if item["id"] == sc_id)
+        listed = next(item for item in list_res.json()["items"] if item["id"] == sc_id)
         assert listed["name"] == "Turma Lista"
         assert listed["discipline_name"] == "POO"
         assert listed["professor_name"] == "Prof Carlos"
@@ -336,7 +336,7 @@ class TestSubjectClassRouterEndpoints:
             headers=admin_headers,
         )
         assert filtered.status_code == 200
-        items = filtered.json()
+        items = filtered.json()["items"]
         assert len(items) == 1
         assert items[0]["id"] == class_a_id
         assert items[0]["professor_id"] == str(member_a.id)
@@ -385,7 +385,7 @@ class TestSubjectClassRouterEndpoints:
 
         unfiltered = await client.get(f"/tenants/{tenant.id}/subject-classes", headers=headers)
         assert unfiltered.status_code == 200
-        assert len(unfiltered.json()) == 2
+        assert len(unfiltered.json()["items"]) == 2
 
         filtered = await client.get(
             f"/tenants/{tenant.id}/subject-classes",
@@ -393,7 +393,7 @@ class TestSubjectClassRouterEndpoints:
             headers=headers,
         )
         assert filtered.status_code == 200
-        items = filtered.json()
+        items = filtered.json()["items"]
         assert len(items) == 1
         assert items[0]["id"] == class_a_id
         assert items[0]["room_id"] == room_a_id
@@ -402,3 +402,60 @@ class TestSubjectClassRouterEndpoints:
         assert items[0]["professor_name"] == admin_user.name
         assert items[0]["student_count"] == 0
         assert items[0]["attendance_rate"] == 0.0
+
+    async def test_list_subject_classes_pagination_and_search(self, client, session):
+        """GET /subject-classes -> Deve suportar paginação offset e busca por nome/disciplina."""
+        admin_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
+        )
+        headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)}"
+        }
+
+        room_res = await client.post(
+            f"/tenants/{tenant.id}/rooms",
+            json={"name": "Sala Pag", "latitude": -8.0, "longitude": -34.0},
+            headers=headers,
+        )
+        room_id = room_res.json()["id"]
+
+        await client.post(
+            f"/tenants/{tenant.id}/subject-classes",
+            json={"room_id": room_id, "name": "Turma 101", "discipline_name": "Matemática 1"},
+            headers=headers,
+        )
+        await client.post(
+            f"/tenants/{tenant.id}/subject-classes",
+            json={"room_id": room_id, "name": "Turma 102", "discipline_name": "Matemática 2"},
+            headers=headers,
+        )
+        await client.post(
+            f"/tenants/{tenant.id}/subject-classes",
+            json={"room_id": room_id, "name": "Turma 201", "discipline_name": "História 1"},
+            headers=headers,
+        )
+
+        # Test pagination
+        res_p1 = await client.get(
+            f"/tenants/{tenant.id}/subject-classes?page=1&page_size=2",
+            headers=headers,
+        )
+        assert res_p1.status_code == 200
+        p1_data = res_p1.json()
+        assert len(p1_data["items"]) == 2
+        assert p1_data["total"] == 3
+        assert p1_data["page"] == 1
+        assert p1_data["page_size"] == 2
+        assert p1_data["pages"] == 2
+
+        # Test search
+        res_search = await client.get(
+            f"/tenants/{tenant.id}/subject-classes?search=Matemática",
+            headers=headers,
+        )
+        assert res_search.status_code == 200
+        search_data = res_search.json()
+        assert len(search_data["items"]) == 2
+        assert search_data["total"] == 2

@@ -13,6 +13,7 @@ from modules.attendance.infra.mappers.attendance_session_mapper import Attendanc
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
+from shared.pagination import Page, PaginationParams
 
 
 
@@ -119,6 +120,45 @@ class SessionSQLAlchemyRepository:
         sessions = [AttendanceSessionMapper.to_domain(m) for m in result.scalars().all()]
         await self._apply_stats(sessions)
         return sessions
+
+    async def find_by_class_paginated(
+        self,
+        subject_class_id: UUID,
+        pagination: PaginationParams,
+        status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+    ) -> Page[AttendanceSession]:
+        conditions = [AttendanceSessionModel.subject_class_id == subject_class_id]
+
+        if status is not None:
+            conditions.append(AttendanceSessionModel.status == status)
+
+        if opened_after is not None:
+            conditions.append(AttendanceSessionModel.opened_at >= opened_after)
+
+        if opened_before is not None:
+            conditions.append(AttendanceSessionModel.opened_at <= opened_before)
+
+        count_stmt = select(func.count(AttendanceSessionModel.id)).where(*conditions)
+        total = (await self.session.execute(count_stmt)).scalar_one() or 0
+
+        items_stmt = (
+            select(AttendanceSessionModel)
+            .options(
+                joinedload(AttendanceSessionModel.subject_class),
+                joinedload(AttendanceSessionModel.room),
+            )
+            .where(*conditions)
+            .order_by(AttendanceSessionModel.opened_at.desc())
+            .offset(pagination.offset)
+            .limit(pagination.page_size)
+        )
+        result = await self.session.execute(items_stmt)
+        sessions = [AttendanceSessionMapper.to_domain(m) for m in result.scalars().all()]
+        await self._apply_stats(sessions)
+
+        return Page.from_params(sessions, total=total, pagination=pagination)
 
     async def close_expired_sessions(self) -> list[AttendanceSession]:
         now = datetime.now(timezone.utc)

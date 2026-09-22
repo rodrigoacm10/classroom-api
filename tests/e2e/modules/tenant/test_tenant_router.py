@@ -283,3 +283,90 @@ class TestTenantRouterEndpoints:
         response = await client.patch(f"/tenants/{tenant.id}/members/{admin.id}/role", json=payload, headers=headers)
         assert response.status_code == 400
         assert "único administrador" in response.json()["detail"]
+
+    async def test_list_tenant_members_success_for_admin_and_coordenador(self, client, session):
+        """GET /tenants/{id}/members -> Deve listar os membros quando for ADMIN ou COORDENADOR."""
+        admin = await UserFactory.create(session)
+        coordenador = await UserFactory.create(session)
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=coordenador.id, role=UserRole.COORDENADOR)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+
+        # Token ADMIN
+        admin_token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+        res_admin = await client.get(f"/tenants/{tenant.id}/members", headers=admin_headers)
+        assert res_admin.status_code == 200
+        data_admin = res_admin.json()
+        assert data_admin["total"] == 3
+        assert len(data_admin["items"]) == 3
+        assert data_admin["page"] == 1
+        assert data_admin["page_size"] == 20
+        assert data_admin["pages"] == 1
+
+        # Token COORDENADOR
+        coord_token = create_access_token(user_id=coordenador.id, tenant_id=tenant.id, role=UserRole.COORDENADOR.value)
+        coord_headers = {"Authorization": f"Bearer {coord_token}"}
+        res_coord = await client.get(f"/tenants/{tenant.id}/members", headers=coord_headers)
+        assert res_coord.status_code == 200
+        data_coord = res_coord.json()
+        assert data_coord["total"] == 3
+        assert len(data_coord["items"]) == 3
+
+    async def test_list_tenant_members_filter_by_role(self, client, session):
+        """GET /tenants/{id}/members?role=aluno -> Deve filtrar membros por papel."""
+        admin = await UserFactory.create(session)
+        aluno = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=aluno.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(f"/tenants/{tenant.id}/members?role=aluno", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        assert data["items"][0]["user_id"] == str(aluno.id)
+
+    async def test_list_tenant_members_forbidden_for_student(self, client, session):
+        """GET /tenants/{id}/members -> Deve retornar 403 Forbidden para papel ALUNO."""
+        aluno = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=aluno.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=aluno.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(f"/tenants/{tenant.id}/members", headers=headers)
+        assert response.status_code == 403
+
+    async def test_list_tenant_members_filter_by_search_query_param(self, client, session):
+        """GET /tenants/{id}/members?search=marcos -> Deve filtrar membros por nome/e-mail."""
+        admin = await UserFactory.create(session)
+        user_marcos = await UserFactory.create(session, name="Marcos Aurelio", email="marcos@test.com")
+        user_beatriz = await UserFactory.create(session, name="Beatriz Ramos", email="beatriz@test.com")
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user_marcos.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user_beatriz.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(f"/tenants/{tenant.id}/members?search=marcos", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        assert data["items"][0]["user_id"] == str(user_marcos.id)
+
+

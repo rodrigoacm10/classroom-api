@@ -1,6 +1,8 @@
 from uuid import UUID
 
 from modules.tenant.domain.entities.tenant_invite import TenantInvite
+from shared.enums.user_role import UserRole
+from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeTenantInviteRepository:
@@ -36,6 +38,31 @@ class FakeTenantInviteRepository:
             ),
             None,
         )
+
+    async def find_by_tenant_id_paginated(
+        self,
+        tenant_id: UUID,
+        pagination: PaginationParams,
+        status: str | None = None,
+        role: UserRole | None = None,
+        search: str | None = None,
+    ) -> Page[TenantInvite]:
+        invites = [i for i in self._store.values() if i.tenant_id == tenant_id]
+
+        if role is not None:
+            invites = [i for i in invites if i.role == role]
+
+        if search:
+            s = search.lower()
+            invites = [i for i in invites if s in i.email.lower()]
+
+        if status:
+            st = status.lower()
+            invites = [i for i in invites if i.status.lower() == st]
+
+        invites.sort(key=lambda i: i.created_at, reverse=True)
+
+        return paginate_list(invites, pagination)
 
     async def save(self, invite: TenantInvite) -> TenantInvite:
         self._store[invite.id] = invite

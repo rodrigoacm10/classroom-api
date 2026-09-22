@@ -189,7 +189,8 @@ class TestEnrollmentRouterEndpoints:
             headers=headers,
         )
         assert res_all.status_code == 200
-        assert len(res_all.json()) == 2
+        assert len(res_all.json()["items"]) == 2
+        assert res_all.json()["total"] == 2
 
         # GET ?status=active -> includes only st1
         res_active = await client.get(
@@ -197,9 +198,44 @@ class TestEnrollmentRouterEndpoints:
             headers=headers,
         )
         assert res_active.status_code == 200
-        data_active = res_active.json()
+        data_active = res_active.json()["items"]
         assert len(data_active) == 1
         assert data_active[0]["tenant_member_id"] == str(st1_member.id)
+
+    async def test_list_enrollments_pagination(self, client, session):
+        """GET /enrollments -> Deve respeitar parâmetros de paginação offset."""
+        tenant, _, _, headers, sc_id = await self._setup_tenant_class(session, client)
+
+        for _ in range(3):
+            st_user = await UserFactory.create(session)
+            st_member = await TenantFactory.create_member(
+                session, tenant_id=tenant.id, user_id=st_user.id, role=UserRole.ALUNO
+            )
+            await client.post(
+                f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+                json={"tenant_member_id": str(st_member.id)},
+                headers=headers,
+            )
+
+        res_p1 = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?page=1&page_size=2",
+            headers=headers,
+        )
+        assert res_p1.status_code == 200
+        p1_data = res_p1.json()
+        assert len(p1_data["items"]) == 2
+        assert p1_data["total"] == 3
+        assert p1_data["page"] == 1
+        assert p1_data["page_size"] == 2
+        assert p1_data["pages"] == 2
+
+        res_p2 = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?page=2&page_size=2",
+            headers=headers,
+        )
+        assert res_p2.status_code == 200
+        p2_data = res_p2.json()
+        assert len(p2_data["items"]) == 1
 
     async def test_drop_and_reactivate_enrollment(self, client, session):
         """PATCH /enrollments/{id} -> Cancela (status=dropped). POST novamente reativa (201)."""
@@ -262,14 +298,14 @@ class TestEnrollmentRouterEndpoints:
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
             headers=headers,
         )
-        assert len(res_list.json()) == 0
+        assert len(res_list.json()["items"]) == 0
 
         # Verify present with include_deleted=true
         res_deleted_list = await client.get(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?include_deleted=true",
             headers=headers,
         )
-        assert len(res_deleted_list.json()) == 1
+        assert len(res_deleted_list.json()["items"]) == 1
 
         # Re-enroll creates new record
         res_re_enroll = await client.post(
@@ -310,15 +346,15 @@ class TestEnrollmentRouterEndpoints:
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?status=active",
             headers=headers,
         )
-        assert len(res_active.json()) == 0
+        assert len(res_active.json()["items"]) == 0
 
         # Check list of all enrollments -> contains dropped enrollment
         res_all = await client.get(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
             headers=headers,
         )
-        assert len(res_all.json()) == 1
-        assert res_all.json()[0]["status"] == EnrollmentStatus.DROPPED.value
+        assert len(res_all.json()["items"]) == 1
+        assert res_all.json()["items"][0]["status"] == EnrollmentStatus.DROPPED.value
 
     async def test_drop_and_delete_enrollment_forbidden_for_professor_and_aluno(self, client, session):
         """PATCH e DELETE /enrollments/{id} por PROFESSOR ou ALUNO deve retornar 403 Forbidden."""

@@ -20,6 +20,7 @@ from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
+from shared.pagination import Page, PaginationParams
 
 
 
@@ -76,6 +77,37 @@ class EnrollmentSQLAlchemyRepository:
             stmt = stmt.where(EnrollmentModel.status == status)
         result = await self.session.execute(stmt)
         return [EnrollmentMapper.to_domain(m) for m in result.scalars().all()]
+
+    async def find_by_class_paginated(
+        self,
+        subject_class_id: UUID,
+        pagination: PaginationParams,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> Page[Enrollment]:
+        conditions = [EnrollmentModel.subject_class_id == subject_class_id]
+
+        if not include_deleted:
+            conditions.append(EnrollmentModel.deleted.is_(False))
+
+        if status is not None:
+            conditions.append(EnrollmentModel.status == status)
+
+        count_stmt = select(func.count(EnrollmentModel.id)).where(*conditions)
+        total = (await self.session.execute(count_stmt)).scalar_one() or 0
+
+        items_stmt = (
+            select(EnrollmentModel)
+            .where(*conditions)
+            .order_by(EnrollmentModel.enrolled_at.desc())
+            .offset(pagination.offset)
+            .limit(pagination.page_size)
+        )
+        result = await self.session.execute(items_stmt)
+        models = result.scalars().all()
+        items = [EnrollmentMapper.to_domain(m) for m in models]
+
+        return Page.from_params(items, total=total, pagination=pagination)
 
     async def list_by_member(
         self,
