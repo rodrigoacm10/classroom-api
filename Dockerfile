@@ -26,4 +26,5 @@ COPY . .
 EXPOSE 8000
 
 # Roda as migrations e sobe a API
-CMD alembic upgrade head && uv run uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Usa /bin/sh -c para permitir && e expansão de variáveis ($PORT)
+CMD ["/bin/sh", "-c", "uv run alembic upgrade head && uv run uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
