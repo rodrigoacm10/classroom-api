@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
@@ -37,6 +37,7 @@ from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository impor
 from security.dependencies.require_role import require_role
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.user_role import UserRole
+from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 from modules.enrollment.application.use_cases.get_enrollment import (
     GetEnrollmentInput,
@@ -98,30 +99,33 @@ async def enroll_student(
     return EnrollmentResponse.model_validate(enrollment)
 
 
-@router.get("", response_model=list[EnrollmentResponse])
+@router.get("", response_model=PageResponse[EnrollmentResponse])
 async def list_enrollments(
     tenant_id: UUID,
     subject_class_id: UUID,
-    status: EnrollmentStatus | None = None,
-    include_deleted: bool = False,
+    pagination: PaginationParams = Depends(get_pagination_params),
+    status: EnrollmentStatus | None = Query(None, description="Filtrar por status da matrícula"),
+    include_deleted: bool = Query(False, description="Incluir matrículas removidas"),
     db: AsyncSession = Depends(get_db),
-) -> list[EnrollmentResponse]:
-    """Lista matriculados da turma. Filtrável por status. ADMIN pode incluir deletados."""
+) -> PageResponse[EnrollmentResponse]:
+    """Lista matriculados da turma com paginação offset. Filtrável por status. ADMIN pode incluir deletados."""
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     use_case = ListEnrollmentsUseCase(
         enrollment_repo=enrollment_repo,
         subject_class_repo=subject_class_repo,
     )
-    enrollments = await use_case.execute(
+    page = await use_case.execute(
         ListEnrollmentsInput(
             subject_class_id=subject_class_id,
             tenant_id=tenant_id,
+            pagination=pagination,
             status=status,
             include_deleted=include_deleted,
         )
     )
-    return [EnrollmentResponse.model_validate(e) for e in enrollments]
+    items = [EnrollmentResponse.model_validate(e) for e in page.items]
+    return PageResponse.of(page, items)
 
 
 @router.get("/{enrollment_id}", response_model=EnrollmentResponse)

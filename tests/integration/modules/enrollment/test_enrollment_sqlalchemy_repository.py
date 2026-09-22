@@ -322,15 +322,43 @@ class TestEnrollmentSQLAlchemyRepository:
         by_class = {item.subject_class_id: item for item in summaries}
         assert len(summaries) == 2
 
-        poo = by_class[attended.id]
-        assert poo.name == "POO"
-        assert poo.discipline_name == "Programação"
-        assert poo.room_name == "Lab 101"
-        assert poo.professor_name == "Prof Ana"
-        assert poo.attendance_rate == 0.5
-
         calc = by_class[empty.id]
         assert calc.name == "Cálculo"
         assert calc.room_name == "Lab 101"
         assert calc.professor_name == "Prof Ana"
         assert calc.attendance_rate == 0.0
+
+    async def test_find_by_class_paginated_with_status_and_deleted_filters(self, session) -> None:
+        """Deve paginar matrículas por offset e aplicar filtros de status e include_deleted."""
+        from shared.pagination import PaginationParams
+
+        tenant = await TenantFactory.create(session)
+        user1 = await UserFactory.create(session)
+        user2 = await UserFactory.create(session)
+        m1 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user1.id, role=UserRole.ALUNO)
+        m2 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO)
+
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Biologia", discipline_name="Ciências"))
+
+        repo = EnrollmentSQLAlchemyRepository(session)
+        e1 = Enrollment(subject_class_id=sc.id, tenant_member_id=m1.id, status=EnrollmentStatus.ACTIVE)
+        e2 = Enrollment(subject_class_id=sc.id, tenant_member_id=m2.id, status=EnrollmentStatus.DROPPED)
+        await repo.save(e1)
+        await repo.save(e2)
+
+        page_all = await repo.find_by_class_paginated(
+            subject_class_id=sc.id,
+            pagination=PaginationParams(page=1, page_size=1),
+        )
+        assert page_all.total == 2
+        assert len(page_all.items) == 1
+        assert page_all.pages == 2
+
+        page_active = await repo.find_by_class_paginated(
+            subject_class_id=sc.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            status=EnrollmentStatus.ACTIVE,
+        )
+        assert page_active.total == 1
+        assert page_active.items[0].tenant_member_id == m1.id

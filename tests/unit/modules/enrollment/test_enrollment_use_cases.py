@@ -382,8 +382,8 @@ class TestEnrollmentUseCases:
                 status=EnrollmentStatus.ACTIVE,
             )
         )
-        assert len(active_list) == 1
-        assert active_list[0].id == e1.id
+        assert len(active_list.items) == 1
+        assert active_list.items[0].id == e1.id
 
         # 2. Todos os não deletados
         all_non_deleted = await use_case.execute(
@@ -392,7 +392,7 @@ class TestEnrollmentUseCases:
                 tenant_id=tenant_id,
             )
         )
-        assert len(all_non_deleted) == 2
+        assert len(all_non_deleted.items) == 2
 
         # 3. Incluindo deletados
         all_with_deleted = await use_case.execute(
@@ -402,7 +402,7 @@ class TestEnrollmentUseCases:
                 include_deleted=True,
             )
         )
-        assert len(all_with_deleted) == 3
+        assert len(all_with_deleted.items) == 3
 
     async def test_role_change_from_aluno_drops_active_enrollments(self):
         """Quando a role do membro muda de ALUNO para PROFESSOR/ADMIN, suas matrículas ativas ficam DROPPED."""
