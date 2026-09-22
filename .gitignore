@@ -11,3 +11,13 @@ wheels/
 
 # Environment
 .env
+
+# Credentials & secrets
+credentials/
+*.json
+
+# Artefato gerado pelo script de benchmark do módulo de relatórios
+benchmark_report_results.csv
+
+# Inventário local da task 11 — não versionar
+.tasks/_uncommitted-parallelism.md

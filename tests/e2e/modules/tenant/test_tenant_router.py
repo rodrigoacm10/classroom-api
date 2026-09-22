@@ -1,0 +1,372 @@
+import pytest
+
+from security.jwt import create_access_token
+from shared.enums.user_role import UserRole
+from tests.factories.tenant_factory import TenantFactory
+from tests.factories.user_factory import UserFactory
+
+
+@pytest.mark.asyncio
+class TestTenantRouterEndpoints:
+    """Testes E2E para as rotas do módulo Tenant."""
+
+    async def test_create_tenant_success(self, client, session):
+        """POST /tenants/ -> Deve criar a tenant e definir o usuário autenticado como ADMIN."""
+        user = await UserFactory.create(session)
+        token = create_access_token(user_id=user.id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        payload = {
+            "name": "Nova Escola E2E",
+            "slug": "nova-escola-e2e",
+        }
+
+        response = await client.post("/tenants/", json=payload, headers=headers)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "Nova Escola E2E"
+        assert data["slug"] == "nova-escola-e2e"
+        assert data["active"] is True
+        assert data["deleted"] is False
+
+        # Verifica se o criador se tornou automaticamente ADMIN da tenant criada
+        me_response = await client.get("/tenants/me", headers=headers)
+        assert me_response.status_code == 200
+        my_tenants = me_response.json()
+        assert len(my_tenants) == 1
+        assert my_tenants[0]["id"] == data["id"]
+        assert my_tenants[0]["role"] == UserRole.ADMIN.value
+
+    async def test_list_my_tenants_success(self, client, session):
+        """GET /tenants/me -> Deve listar as tenants ativas e não deletadas do usuário."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, name="Minha Escola")
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get("/tenants/me", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == str(tenant.id)
+        assert data[0]["active"] is True
+        assert data[0]["deleted"] is False
+
+    async def test_deactivate_tenant_success(self, client, session):
+        """PATCH /tenants/{id}/deactivate -> Deve desativar a tenant quando o usuário for ADMIN."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=True)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.patch(f"/tenants/{tenant.id}/deactivate", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(tenant.id)
+        assert data["active"] is False
+
+    async def test_activate_tenant_success(self, client, session):
+        """PATCH /tenants/{id}/activate -> Deve ativar a tenant quando o usuário for ADMIN."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=False)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.patch(f"/tenants/{tenant.id}/activate", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(tenant.id)
+        assert data["active"] is True
+
+    async def test_soft_delete_tenant_success(self, client, session):
+        """DELETE /tenants/{id} -> Deve realizar o soft delete da tenant quando o usuário for ADMIN."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=True, deleted=False)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(tenant.id)
+        assert data["deleted"] is True
+
+        # Após o soft delete, GET /tenants/me não deve listar a tenant deletada
+        me_response = await client.get("/tenants/me", headers=headers)
+        assert me_response.status_code == 200
+        assert len(me_response.json()) == 0
+
+    async def test_deactivate_tenant_requires_admin_role(self, client, session):
+        """PATCH /tenants/{id}/deactivate -> Deve retornar status 403 se o usuário não for ADMIN."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.patch(f"/tenants/{tenant.id}/deactivate", headers=headers)
+        assert response.status_code == 403
+
+    async def test_cannot_switch_to_deactivated_tenant(self, client, session):
+        """POST /auth/switch-tenant -> Deve retornar status 403 ao tentar alternar para tenant desativada."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=False, deleted=False)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        base_token = create_access_token(user_id=user.id)
+        headers = {"Authorization": f"Bearer {base_token}"}
+
+        response = await client.post("/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers)
+        assert response.status_code == 403
+        assert "desativada" in response.json()["detail"]
+
+    async def test_cannot_switch_to_deleted_tenant(self, client, session):
+        """POST /auth/switch-tenant -> Deve retornar status 403 ao tentar alternar para tenant deletada."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, active=True, deleted=True)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+
+        base_token = create_access_token(user_id=user.id)
+        headers = {"Authorization": f"Bearer {base_token}"}
+
+        response = await client.post("/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers)
+        assert response.status_code == 403
+        assert "não encontrada" in response.json()["detail"]
+
+    async def test_remove_tenant_member_success(self, client, session):
+        """DELETE /tenants/{id}/members/{user_id} -> Deve realizar o soft delete do membro com sucesso quando for ADMIN."""
+        admin = await UserFactory.create(session)
+        member_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.PROFESSOR)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user_id"] == str(member_user.id)
+        assert data["tenant_id"] == str(tenant.id)
+
+    async def test_remove_tenant_member_cleans_fcm_tokens_e2e(self, client, session):
+        """DELETE /tenants/{id}/members/{user_id} -> Deve remover os tokens FCM do usuário quando ele é desvinculado e não tem outras tenants."""
+        from modules.notification.domain.entities.fcm_token import FCMToken
+        from modules.notification.infra.repositories.fcm_token_sqlalchemy_repository import (
+            FCMTokenSQLAlchemyRepository,
+        )
+
+        admin = await UserFactory.create(session)
+        member_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+
+        # Cadastrar token FCM no PostgreSQL para o aluno
+        fcm_repo = FCMTokenSQLAlchemyRepository(session)
+        await fcm_repo.upsert(
+            FCMToken(
+                user_id=member_user.id,
+                device_id="mobile_device_10",
+                fcm_token="fcm_token_e2e_val",
+                platform="android",
+            )
+        )
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        assert response.status_code == 200
+
+        # Verificar se o token FCM foi removido do banco de dados no nível E2E
+        deleted_token = await fcm_repo.find_by_user_and_device(member_user.id, "mobile_device_10")
+        assert deleted_token is None
+
+
+    async def test_remove_single_admin_bad_request(self, client, session):
+        """DELETE /tenants/{id}/members/{user_id} -> Deve retornar 400 Bad Request ao tentar remover o único ADMIN."""
+        admin = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/members/{admin.id}", headers=headers)
+        assert response.status_code == 400
+        assert "único administrador" in response.json()["detail"]
+
+    async def test_remove_tenant_member_requires_admin_role(self, client, session):
+        """DELETE /tenants/{id}/members/{user_id} -> Deve retornar 403 Forbidden se o usuário não for ADMIN."""
+        professor = await UserFactory.create(session)
+        member_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=professor.id, role=UserRole.PROFESSOR)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+
+        # Token do PROFESSOR (não-ADMIN)
+        token = create_access_token(user_id=professor.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        assert response.status_code == 403
+        assert "não autorizado" in response.json()["detail"]
+
+    async def test_add_tenant_member_direct_success(self, client, session):
+        """POST /tenants/{id}/members -> Deve adicionar membro diretamente com sucesso quando for ADMIN."""
+        admin = await UserFactory.create(session)
+        new_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        payload = {
+            "user_id": str(new_user.id),
+            "role": "professor",
+        }
+
+        response = await client.post(f"/tenants/{tenant.id}/members", json=payload, headers=headers)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["user_id"] == str(new_user.id)
+        assert data["tenant_id"] == str(tenant.id)
+        assert data["role"] == "professor"
+
+    async def test_update_tenant_member_role_success(self, client, session):
+        """PATCH /tenants/{id}/members/{user_id}/role -> Deve alterar a role do membro com sucesso quando for ADMIN."""
+        admin = await UserFactory.create(session)
+        member_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        payload = {"role": "professor"}
+        response = await client.patch(f"/tenants/{tenant.id}/members/{member_user.id}/role", json=payload, headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user_id"] == str(member_user.id)
+        assert data["role"] == "professor"
+
+    async def test_update_tenant_member_role_demote_single_admin_bad_request(self, client, session):
+        """PATCH /tenants/{id}/members/{user_id}/role -> Deve retornar 400 Bad Request ao tentar rebaixar o único ADMIN."""
+        admin = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        payload = {"role": "aluno"}
+        response = await client.patch(f"/tenants/{tenant.id}/members/{admin.id}/role", json=payload, headers=headers)
+        assert response.status_code == 400
+        assert "único administrador" in response.json()["detail"]
+
+    async def test_list_tenant_members_success_for_admin_and_coordenador(self, client, session):
+        """GET /tenants/{id}/members -> Deve listar os membros quando for ADMIN ou COORDENADOR."""
+        admin = await UserFactory.create(session)
+        coordenador = await UserFactory.create(session)
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=coordenador.id, role=UserRole.COORDENADOR)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+
+        # Token ADMIN
+        admin_token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+        res_admin = await client.get(f"/tenants/{tenant.id}/members", headers=admin_headers)
+        assert res_admin.status_code == 200
+        data_admin = res_admin.json()
+        assert data_admin["total"] == 3
+        assert len(data_admin["items"]) == 3
+        assert data_admin["page"] == 1
+        assert data_admin["page_size"] == 20
+        assert data_admin["pages"] == 1
+
+        # Token COORDENADOR
+        coord_token = create_access_token(user_id=coordenador.id, tenant_id=tenant.id, role=UserRole.COORDENADOR.value)
+        coord_headers = {"Authorization": f"Bearer {coord_token}"}
+        res_coord = await client.get(f"/tenants/{tenant.id}/members", headers=coord_headers)
+        assert res_coord.status_code == 200
+        data_coord = res_coord.json()
+        assert data_coord["total"] == 3
+        assert len(data_coord["items"]) == 3
+
+    async def test_list_tenant_members_filter_by_role(self, client, session):
+        """GET /tenants/{id}/members?role=aluno -> Deve filtrar membros por papel."""
+        admin = await UserFactory.create(session)
+        aluno = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=aluno.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(f"/tenants/{tenant.id}/members?role=aluno", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        assert data["items"][0]["user_id"] == str(aluno.id)
+
+    async def test_list_tenant_members_forbidden_for_student(self, client, session):
+        """GET /tenants/{id}/members -> Deve retornar 403 Forbidden para papel ALUNO."""
+        aluno = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=aluno.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=aluno.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(f"/tenants/{tenant.id}/members", headers=headers)
+        assert response.status_code == 403
+
+    async def test_list_tenant_members_filter_by_search_query_param(self, client, session):
+        """GET /tenants/{id}/members?search=marcos -> Deve filtrar membros por nome/e-mail."""
+        admin = await UserFactory.create(session)
+        user_marcos = await UserFactory.create(session, name="Marcos Aurelio", email="marcos@test.com")
+        user_beatriz = await UserFactory.create(session, name="Beatriz Ramos", email="beatriz@test.com")
+        tenant = await TenantFactory.create(session)
+
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user_marcos.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user_beatriz.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(f"/tenants/{tenant.id}/members?search=marcos", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert len(data["items"]) == 1
+        assert data["items"][0]["user_id"] == str(user_marcos.id)
+
+

@@ -1,0 +1,533 @@
+import pytest
+
+from modules.tenant.application.use_cases.activate_tenant import ActivateTenantUseCase
+from modules.tenant.application.use_cases.create_tenant import (
+    CreateTenantInput,
+    CreateTenantUseCase,
+)
+from modules.tenant.application.use_cases.deactivate_tenant import DeactivateTenantUseCase
+from modules.tenant.application.use_cases.delete_tenant import DeleteTenantUseCase
+from modules.tenant.application.use_cases.list_my_tenants import ListMyTenantsUseCase
+from modules.tenant.domain.entities.tenant_member import TenantMember
+from shared.enums.user_role import UserRole
+from shared.exceptions import ResourceNotFoundException
+from tests.factories.tenant_factory import TenantFactory
+from tests.factories.user_factory import UserFactory
+from tests.unit.fakes.fake_tenant_member_repository import FakeTenantMemberRepository
+from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
+
+
+@pytest.mark.asyncio
+class TestCreateTenantUseCase:
+    async def test_create_tenant_success(self):
+        """Deve criar a tenant com sucesso e associar o criador como ADMIN."""
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        use_case = CreateTenantUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        user = UserFactory.make()
+        result = await use_case.execute(
+            CreateTenantInput(
+                name="Escola Alpha",
+                slug="escola-alpha",
+                owner_user_id=str(user.id),
+            )
+        )
+
+        assert result.tenant.name == "Escola Alpha"
+        assert result.tenant.slug == "escola-alpha"
+        assert result.tenant.active is True
+        assert result.tenant.deleted is False
+        assert result.member.role == UserRole.ADMIN
+
+
+@pytest.mark.asyncio
+class TestDeleteTenantUseCase:
+    async def test_soft_delete_tenant_success(self):
+        """Deve realizar o soft delete da tenant alterando a flag deleted para True."""
+        tenant_repo = FakeTenantRepository()
+        tenant = TenantFactory.make(active=True, deleted=False)
+        tenant_repo.seed(tenant)
+
+        use_case = DeleteTenantUseCase(tenant_repo=tenant_repo)
+        deleted_tenant = await use_case.execute(tenant.id)
+
+        assert deleted_tenant.deleted is True
+        # Consulta normal deve retornar None agora que foi deletado
+        found = await tenant_repo.find_by_id(tenant.id)
+        assert found is None
+
+    async def test_soft_delete_non_existent_tenant_raises_not_found(self):
+        """Deve lançar ResourceNotFoundException ao tentar deletar tenant inexistente."""
+        tenant_repo = FakeTenantRepository()
+        use_case = DeleteTenantUseCase(tenant_repo=tenant_repo)
+
+        dummy_tenant = TenantFactory.make()
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(dummy_tenant.id)
+
+
+@pytest.mark.asyncio
+class TestActivateTenantUseCase:
+    async def test_activate_tenant_success(self):
+        """Deve ativar a tenant alterando a flag active para True."""
+        tenant_repo = FakeTenantRepository()
+        tenant = TenantFactory.make(active=False, deleted=False)
+        tenant_repo.seed(tenant)
+
+        use_case = ActivateTenantUseCase(tenant_repo=tenant_repo)
+        updated_tenant = await use_case.execute(tenant.id)
+
+        assert updated_tenant.active is True
+
+    async def test_activate_deleted_tenant_raises_not_found(self):
+        """Deve lançar ResourceNotFoundException ao tentar ativar tenant deletada."""
+        tenant_repo = FakeTenantRepository()
+        tenant = TenantFactory.make(active=False, deleted=True)
+        tenant_repo.seed(tenant)
+
+        use_case = ActivateTenantUseCase(tenant_repo=tenant_repo)
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(tenant.id)
+
+
+@pytest.mark.asyncio
+class TestDeactivateTenantUseCase:
+    async def test_deactivate_tenant_success(self):
+        """Deve desativar a tenant alterando a flag active para False."""
+        tenant_repo = FakeTenantRepository()
+        tenant = TenantFactory.make(active=True, deleted=False)
+        tenant_repo.seed(tenant)
+
+        use_case = DeactivateTenantUseCase(tenant_repo=tenant_repo)
+        updated_tenant = await use_case.execute(tenant.id)
+
+        assert updated_tenant.active is False
+
+
+@pytest.mark.asyncio
+class TestListMyTenantsUseCase:
+    async def test_list_my_tenants_excludes_deleted_tenants(self):
+        """Deve listar apenas as tenants do usuário que não foram deletadas."""
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        user = UserFactory.make()
+
+        active_tenant = TenantFactory.make(name="Active School", active=True, deleted=False)
+        deleted_tenant = TenantFactory.make(name="Deleted School", active=True, deleted=True)
+
+        tenant_repo.seed(active_tenant)
+        tenant_repo.seed(deleted_tenant)
+
+        member_repo.seed(
+            TenantMember(tenant_id=active_tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        )
+        member_repo.seed(
+            TenantMember(tenant_id=deleted_tenant.id, user_id=user.id, role=UserRole.PROFESSOR)
+        )
+
+        use_case = ListMyTenantsUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+        items = await use_case.execute(user.id)
+
+        assert len(items) == 1
+        assert items[0].tenant.id == active_tenant.id
+        assert items[0].tenant.name == "Active School"
+
+
+@pytest.mark.asyncio
+class TestRemoveTenantMemberUseCase:
+    async def test_remove_tenant_member_success(self):
+        """Deve marcar o membro como deleted=True com sucesso."""
+        from modules.tenant.application.use_cases.remove_tenant_member import (
+            RemoveTenantMemberInput,
+            RemoveTenantMemberUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        admin = UserFactory.make()
+        member_user = UserFactory.make()
+
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        )
+        member_to_remove = TenantMember(
+            tenant_id=tenant.id, user_id=member_user.id, role=UserRole.PROFESSOR
+        )
+        member_repo.seed(member_to_remove)
+
+        use_case = RemoveTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+        removed = await use_case.execute(
+            RemoveTenantMemberInput(
+                tenant_id=tenant.id,
+                user_id_to_remove=member_user.id,
+            )
+        )
+
+        assert removed.deleted is True
+        # Consulta normal de membro ativo deve retornar None agora
+        found = await member_repo.find_by_tenant_and_user(tenant.id, member_user.id)
+        assert found is None
+
+    async def test_remove_single_admin_raises_business_rule_exception(self):
+        """Deve proibir a remoção do único administrador da instituição."""
+        from modules.tenant.application.use_cases.remove_tenant_member import (
+            RemoveTenantMemberInput,
+            RemoveTenantMemberUseCase,
+        )
+        from shared.exceptions import BusinessRuleException
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        admin = UserFactory.make()
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        )
+
+        use_case = RemoveTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        with pytest.raises(BusinessRuleException, match="único administrador"):
+            await use_case.execute(
+                RemoveTenantMemberInput(
+                    tenant_id=tenant.id,
+                    user_id_to_remove=admin.id,
+                )
+            )
+
+    async def test_remove_tenant_member_cleans_fcm_tokens_when_no_active_memberships_remain(self):
+        """Deve limpar os tokens FCM do usuário quando ele é desvinculado e não possui mais instituições ativas."""
+        from modules.notification.domain.entities.fcm_token import FCMToken
+        from modules.tenant.application.use_cases.remove_tenant_member import (
+            RemoveTenantMemberInput,
+            RemoveTenantMemberUseCase,
+        )
+        from tests.unit.fakes.fake_fcm_token_repository import FakeFCMTokenRepository
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        fcm_token_repo = FakeFCMTokenRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        admin = UserFactory.make()
+        member_user = UserFactory.make()
+
+        member_repo.seed(TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN))
+        member_to_remove = TenantMember(tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+
+        member_repo.seed(member_to_remove)
+
+        # Cadastrar token FCM para o usuário que será removido
+        await fcm_token_repo.upsert(
+            FCMToken(
+                user_id=member_user.id,
+                device_id="device_1",
+                fcm_token="token_fcm_123",
+                platform="android",
+            )
+        )
+
+        use_case = RemoveTenantMemberUseCase(
+            tenant_repo=tenant_repo,
+            member_repo=member_repo,
+            fcm_token_repo=fcm_token_repo,
+        )
+
+        removed = await use_case.execute(
+            RemoveTenantMemberInput(
+                tenant_id=tenant.id,
+                user_id_to_remove=member_user.id,
+            )
+        )
+
+        assert removed.deleted is True
+        # Como o usuário não tem mais nenhuma tenant ativa, seus tokens devem ser removidos
+        remaining_tokens = await fcm_token_repo.find_by_user_and_device(member_user.id, "device_1")
+        assert remaining_tokens is None
+
+
+
+@pytest.mark.asyncio
+class TestAddTenantMemberUseCase:
+    async def test_add_tenant_member_success(self):
+        """Deve adicionar um novo membro à tenant com sucesso."""
+        from modules.tenant.application.use_cases.add_tenant_member import (
+            AddTenantMemberInput,
+            AddTenantMemberUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        new_user = UserFactory.make()
+
+        use_case = AddTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+        member = await use_case.execute(
+            AddTenantMemberInput(
+                tenant_id=tenant.id,
+                user_id=new_user.id,
+                role=UserRole.PROFESSOR,
+            )
+        )
+
+        assert member.tenant_id == tenant.id
+        assert member.user_id == new_user.id
+        assert member.role == UserRole.PROFESSOR
+        assert member.deleted is False
+
+    async def test_add_tenant_member_already_exists_raises(self):
+        """Deve lançar BusinessRuleException caso o usuário já seja membro ativo."""
+        from modules.tenant.application.use_cases.add_tenant_member import (
+            AddTenantMemberInput,
+            AddTenantMemberUseCase,
+        )
+        from shared.exceptions import BusinessRuleException
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        existing_user = UserFactory.make()
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=existing_user.id, role=UserRole.ALUNO)
+        )
+
+        use_case = AddTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        with pytest.raises(BusinessRuleException, match="já é membro"):
+            await use_case.execute(
+                AddTenantMemberInput(
+                    tenant_id=tenant.id,
+                    user_id=existing_user.id,
+                    role=UserRole.PROFESSOR,
+                )
+            )
+
+
+@pytest.mark.asyncio
+class TestUpdateTenantMemberRoleUseCase:
+    async def test_update_role_success(self):
+        """Deve alterar a role de um membro ativo com sucesso."""
+        from modules.tenant.application.use_cases.update_tenant_member_role import (
+            UpdateTenantMemberRoleInput,
+            UpdateTenantMemberRoleUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        user = UserFactory.make()
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        )
+
+        use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+        updated = await use_case.execute(
+            UpdateTenantMemberRoleInput(
+                tenant_id=tenant.id,
+                user_id_to_update=user.id,
+                new_role=UserRole.PROFESSOR,
+            )
+        )
+
+        assert updated.role == UserRole.PROFESSOR
+
+    async def test_demote_single_admin_raises_business_rule_exception(self):
+        """Deve proibir rebaixar o único administrador ativo da instituição."""
+        from modules.tenant.application.use_cases.update_tenant_member_role import (
+            UpdateTenantMemberRoleInput,
+            UpdateTenantMemberRoleUseCase,
+        )
+        from shared.exceptions import BusinessRuleException
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        admin_user = UserFactory.make()
+        member_repo.seed(
+            TenantMember(tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN)
+        )
+
+        use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        with pytest.raises(BusinessRuleException, match="único administrador"):
+            await use_case.execute(
+                UpdateTenantMemberRoleInput(
+                    tenant_id=tenant.id,
+                    user_id_to_update=admin_user.id,
+                    new_role=UserRole.PROFESSOR,
+                )
+            )
+
+    async def test_update_role_non_existent_member_raises_not_found(self):
+        """Deve lançar ResourceNotFoundException ao tentar alterar role de membro inexistente."""
+        from modules.tenant.application.use_cases.update_tenant_member_role import (
+            UpdateTenantMemberRoleInput,
+            UpdateTenantMemberRoleUseCase,
+        )
+        from shared.exceptions import ResourceNotFoundException
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        dummy_user = UserFactory.make()
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(
+                UpdateTenantMemberRoleInput(
+                    tenant_id=tenant.id,
+                    user_id_to_update=dummy_user.id,
+                    new_role=UserRole.PROFESSOR,
+                )
+            )
+
+
+@pytest.mark.asyncio
+class TestListTenantMembersUseCase:
+    async def test_list_tenant_members_success(self):
+        """Deve listar todos os membros da tenant com sucesso."""
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        u1 = UserFactory.make()
+        u2 = UserFactory.make()
+        m1 = TenantMember(tenant_id=tenant.id, user_id=u1.id, role=UserRole.ADMIN)
+        m2 = TenantMember(tenant_id=tenant.id, user_id=u2.id, role=UserRole.ALUNO)
+        member_repo.seed(m1)
+        member_repo.seed(m2)
+
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        result = await use_case.execute(ListTenantMembersInput(tenant_id=tenant.id))
+        assert result.total == 2
+        assert len(result.items) == 2
+
+    async def test_list_tenant_members_filter_by_role(self):
+        """Deve filtrar membros por papel (role)."""
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        u1 = UserFactory.make()
+        u2 = UserFactory.make()
+        m1 = TenantMember(tenant_id=tenant.id, user_id=u1.id, role=UserRole.ADMIN)
+        m2 = TenantMember(tenant_id=tenant.id, user_id=u2.id, role=UserRole.ALUNO)
+        member_repo.seed(m1)
+        member_repo.seed(m2)
+
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        result = await use_case.execute(
+            ListTenantMembersInput(tenant_id=tenant.id, role=UserRole.ALUNO)
+        )
+        assert result.total == 1
+        assert len(result.items) == 1
+        assert result.items[0].user_id == u2.id
+
+    async def test_list_tenant_members_tenant_not_found(self):
+        """Deve lançar ResourceNotFoundException se a tenant não existir."""
+        from uuid import uuid4
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        with pytest.raises(ResourceNotFoundException):
+            await use_case.execute(ListTenantMembersInput(tenant_id=uuid4()))
+
+    async def test_list_tenant_members_filter_by_search_subject_class_and_date(self):
+        """Deve passar os filtros de search, subject_class_id e período de datas para o repositório."""
+        from datetime import datetime, timezone
+        from uuid import uuid4
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        u1 = UserFactory.make(name="Carlos Silva", email="carlos@test.com")
+        u2 = UserFactory.make(name="Ana Souza", email="ana@test.com")
+
+        sc_id = uuid4()
+        now = datetime.now(timezone.utc)
+
+        m1 = TenantMember(tenant_id=tenant.id, user_id=u1.id, role=UserRole.ALUNO, created_at=now)
+        setattr(m1, "_user_name", u1.name)
+        setattr(m1, "_user_email", u1.email)
+        setattr(m1, "_subject_class_id", sc_id)
+
+        m2 = TenantMember(tenant_id=tenant.id, user_id=u2.id, role=UserRole.PROFESSOR, created_at=now)
+        setattr(m2, "_user_name", u2.name)
+        setattr(m2, "_user_email", u2.email)
+
+        member_repo.seed(m1)
+        member_repo.seed(m2)
+
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        # Teste por busca textual
+        res_search = await use_case.execute(
+            ListTenantMembersInput(tenant_id=tenant.id, search="carlos")
+        )
+        assert res_search.total == 1
+        assert len(res_search.items) == 1
+        assert res_search.items[0].user_id == u1.id
+
+        # Teste por turma
+        res_class = await use_case.execute(
+            ListTenantMembersInput(tenant_id=tenant.id, subject_class_id=sc_id)
+        )
+        assert res_class.total == 1
+        assert len(res_class.items) == 1
+        assert res_class.items[0].user_id == u1.id
+
+
+

@@ -124,7 +124,7 @@ Validar com o professor de Tópicos Avançados se "otimização de processamento
 | Backend / API REST | **Python + FastAPI** | Linguagem prioritária nos slides; suporte nativo a `async`, facilita processamento paralelo e futura integração com IA se necessário |
 | Banco de dados | **PostgreSQL + PostGIS** (hospedado no **Neon**) | PostGIS confirmado como suportado nativamente no Neon (inclusive free tier). Ativar com `CREATE EXTENSION postgis;` no SQL Editor do Neon |
 | ORM / mapeamento geoespacial | GeoAlchemy2 (extensão do SQLAlchemy) | Para mapear tipos `GEOGRAPHY`/`GEOMETRY` nos models Python |
-| Armazenamento de imagens | MinIO (self-hosted, compatível S3) ou AWS S3 | Separar arquivos binários do banco relacional |
+| Armazenamento de imagens | Cloudflare R2 (gratuito, compatível S3) ou AWS S3 | Separar arquivos binários do banco relacional |
 | Fila / processamento assíncrono | Começar com `BackgroundTasks` do FastAPI (mais simples) → evoluir para **Celery + Redis** se sobrar tempo no cronograma | Celery processa tarefas em background; Redis é o broker (fila) que armazena as tarefas pendentes. Migrar de síncrono para fila assíncrona é, em si, uma "otimização" citável no vídeo |
 | Notificações push | **Firebase Cloud Messaging (FCM)** via `@react-native-firebase/messaging` | Gratuito, ativo, bem documentado. iOS exige conta Apple Developer (paga) para configurar APNs — Android funciona sem essa barreira |
 | E-mail | Resend, SendGrid ou Amazon SES | Confirmação de cadastro, relatórios periódicos, alertas formais |

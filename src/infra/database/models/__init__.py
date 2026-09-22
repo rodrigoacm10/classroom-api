@@ -1,6 +1,24 @@
-# Importe os models SQLAlchemy aqui para o Alembic detectá-los no autogenerate.
-#
-# Exemplo, quando criar o model User:
-#   from infra.database.models.user import UserModel
-#
-# Sem esses imports, o `alembic revision --autogenerate` não detecta as tabelas.
+from infra.database.models.attendance_record import AttendanceRecordModel
+from infra.database.models.attendance_session import AttendanceSessionModel
+from infra.database.models.enrollment import EnrollmentModel
+from infra.database.models.room import RoomModel
+from infra.database.models.subject_class import SubjectClassModel
+from infra.database.models.tenant import TenantMemberModel, TenantModel
+from infra.database.models.tenant_invite import TenantInviteModel
+from infra.database.models.user import UserModel
+from infra.database.models.user_fcm_token import UserFCMTokenModel
+from infra.database.models.report_generation_log import ReportGenerationLogModel
+
+__all__ = [
+    "UserModel",
+    "TenantModel",
+    "TenantMemberModel",
+    "TenantInviteModel",
+    "RoomModel",
+    "SubjectClassModel",
+    "EnrollmentModel",
+    "AttendanceSessionModel",
+    "AttendanceRecordModel",
+    "UserFCMTokenModel",
+    "ReportGenerationLogModel",
+]

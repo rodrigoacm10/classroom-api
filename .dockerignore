@@ -1,0 +1,14 @@
+.venv
+.git
+.gitignore
+.env
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+tests/
+.docs/
+.tasks/
+.impeccable/
+benchmark_report_results.csv
+README.md
