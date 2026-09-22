@@ -215,3 +215,122 @@ class TestInviteRouterEndpoints:
         response = await client.post(f"/invites/{invite_model.token}/accept", headers=headers)
         assert response.status_code == 400
         assert "revogado" in response.json()["detail"]
+
+    # ─── GET /tenants/{tenant_id}/invites (Paginated) ──────────────────────
+
+    async def test_list_tenant_invites_admin_success(self, client, session):
+        """GET /tenants/{tenant_id}/invites -> Deve listar convites paginados com sucesso quando for ADMIN."""
+        admin = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session, name="Escola Listagem E2E")
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        inv1 = TenantInviteModel(
+            tenant_id=tenant.id,
+            email="convite1@escola.com",
+            role=UserRole.ALUNO,
+            token="token-list-1",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
+        inv2 = TenantInviteModel(
+            tenant_id=tenant.id,
+            email="convite2@escola.com",
+            role=UserRole.PROFESSOR,
+            token="token-list-2",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
+        inv3 = TenantInviteModel(
+            tenant_id=tenant.id,
+            email="convite3@escola.com",
+            role=UserRole.COORDENADOR,
+            token="token-list-3",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
+        session.add_all([inv1, inv2, inv3])
+        await session.flush()
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(f"/tenants/{tenant.id}/invites?page=1&page_size=2", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total"] == 3
+        assert data["page"] == 1
+        assert data["page_size"] == 2
+        assert data["pages"] == 2
+        assert len(data["items"]) == 2
+
+        first_item = data["items"][0]
+        assert "id" in first_item
+        assert first_item["tenant_id"] == str(tenant.id)
+        assert first_item["tenant_name"] == "Escola Listagem E2E"
+        assert first_item["status"] == "pending"
+
+    async def test_list_tenant_invites_requires_admin_role(self, client, session):
+        """GET /tenants/{tenant_id}/invites -> Deve retornar 403 Forbidden para não-ADMIN."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+
+        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.get(f"/tenants/{tenant.id}/invites", headers=headers)
+        assert response.status_code == 403
+
+    async def test_list_tenant_invites_filter_by_status(self, client, session):
+        """GET /tenants/{tenant_id}/invites -> Deve filtrar por status (ex.: pending vs accepted)."""
+        admin = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        inv_pending = TenantInviteModel(
+            tenant_id=tenant.id,
+            email="pend@escola.com",
+            role=UserRole.ALUNO,
+            token="token-pend-filter",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
+        inv_accepted = TenantInviteModel(
+            tenant_id=tenant.id,
+            email="acc@escola.com",
+            role=UserRole.ALUNO,
+            token="token-acc-filter",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            accepted_at=datetime.now(timezone.utc),
+        )
+        session.add_all([inv_pending, inv_accepted])
+        await session.flush()
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        resp_pending = await client.get(f"/tenants/{tenant.id}/invites?status=pending", headers=headers)
+        assert resp_pending.status_code == 200
+        data_p = resp_pending.json()
+        assert data_p["total"] == 1
+        assert data_p["items"][0]["email"] == "pend@escola.com"
+        assert data_p["items"][0]["status"] == "pending"
+
+        resp_accepted = await client.get(f"/tenants/{tenant.id}/invites?status=accepted", headers=headers)
+        assert resp_accepted.status_code == 200
+        data_a = resp_accepted.json()
+        assert data_a["total"] == 1
+        assert data_a["items"][0]["email"] == "acc@escola.com"
+        assert data_a["items"][0]["status"] == "accepted"
+
+    async def test_list_tenant_invites_tenant_not_found(self, client, session):
+        """GET /tenants/{tenant_id}/invites -> Deve retornar 404 Not Found se a tenant não existir."""
+        from uuid import uuid4
+
+        admin = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+
+        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        non_existent_tenant_id = uuid4()
+        response = await client.get(f"/tenants/{non_existent_tenant_id}/invites", headers=headers)
+        assert response.status_code == 404
