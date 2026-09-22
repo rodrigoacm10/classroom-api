@@ -459,3 +459,54 @@ class TestAttendanceSQLAlchemyRepository:
         assert bruno.within_radius is None
         assert bruno.record_status is None
 
+    async def test_find_by_class_paginated_with_period_and_status_filters(self, session) -> None:
+        """Deve paginar sessões por offset e filtrar por status e período de abertura (opened_at)."""
+        from shared.pagination import PaginationParams
+
+        tenant = await TenantFactory.create(session)
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="História", discipline_name="História"))
+
+        session_repo = SessionSQLAlchemyRepository(session)
+        now = datetime.now(timezone.utc)
+
+        s_open = AttendanceSession(
+            subject_class_id=sc.id,
+            day_code="OPEN01",
+            expires_at=now + timedelta(minutes=30),
+            opened_at=now - timedelta(hours=1),
+            status=SessionStatus.OPEN,
+        )
+        s_closed = AttendanceSession(
+            subject_class_id=sc.id,
+            day_code="CLOS01",
+            expires_at=now - timedelta(minutes=10),
+            opened_at=now - timedelta(days=10),
+            status=SessionStatus.CLOSED,
+        )
+        await session_repo.save(s_open)
+        await session_repo.save(s_closed)
+
+        page_all = await session_repo.find_by_class_paginated(
+            subject_class_id=sc.id,
+            pagination=PaginationParams(page=1, page_size=10),
+        )
+        assert page_all.total == 2
+        assert len(page_all.items) == 2
+
+        page_open = await session_repo.find_by_class_paginated(
+            subject_class_id=sc.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            status=SessionStatus.OPEN,
+        )
+        assert page_open.total == 1
+        assert page_open.items[0].day_code == "OPEN01"
+
+        page_period = await session_repo.find_by_class_paginated(
+            subject_class_id=sc.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            opened_after=now - timedelta(days=1),
+        )
+        assert page_period.total == 1
+        assert page_period.items[0].day_code == "OPEN01"
+

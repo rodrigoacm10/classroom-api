@@ -1,6 +1,7 @@
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
@@ -34,8 +35,10 @@ from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import Tenan
 from security.dependencies.current_user import AuthContext, get_auth_context
 from security.dependencies.require_role import require_role
 from shared.enums.record_status import RecordStatus
+from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.events.event_dispatcher import EventDispatcher
+from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/subject-classes/{subject_class_id}/attendance-sessions",
@@ -87,13 +90,27 @@ async def open_attendance_session(
     return AttendanceSessionResponse.model_validate(session)
 
 
-@router.get("", response_model=list[AttendanceSessionResponse])
+@router.get("", response_model=PageResponse[AttendanceSessionResponse])
 async def list_attendance_sessions(
     tenant_id: UUID,
     subject_class_id: UUID,
+    pagination: PaginationParams = Depends(get_pagination_params),
+    session_status: SessionStatus | None = Query(
+        None,
+        alias="status",
+        description="Filtrar por status da chamada (open, closed, cancelled)",
+    ),
+    opened_after: datetime | None = Query(
+        None,
+        description="Filtrar por chamadas abertas a partir desta data (ISO-8601)",
+    ),
+    opened_before: datetime | None = Query(
+        None,
+        description="Filtrar por chamadas abertas até esta data (ISO-8601)",
+    ),
     db: AsyncSession = Depends(get_db),
-) -> list[AttendanceSessionResponse]:
-    """Lista todas as sessões de chamada de uma turma."""
+) -> PageResponse[AttendanceSessionResponse]:
+    """Lista sessões de chamada de uma turma com paginação offset e filtro por período e status."""
     session_repo = SessionSQLAlchemyRepository(session=db)
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
@@ -104,13 +121,18 @@ async def list_attendance_sessions(
         tenant_repo=tenant_repo,
     )
 
-    sessions = await use_case.execute(
+    page = await use_case.execute(
         ListAttendanceSessionsInput(
             tenant_id=tenant_id,
             subject_class_id=subject_class_id,
+            pagination=pagination,
+            status=session_status,
+            opened_after=opened_after,
+            opened_before=opened_before,
         )
     )
-    return [AttendanceSessionResponse.model_validate(s) for s in sessions]
+    items = [AttendanceSessionResponse.model_validate(s) for s in page.items]
+    return PageResponse.of(page, items)
 
 
 @router.get("/{session_id}", response_model=AttendanceSessionResponse)

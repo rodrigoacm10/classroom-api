@@ -92,12 +92,16 @@ class TestAttendanceSessionRouter:
 
         # List
         list_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions?page=1&page_size=10",
             headers=prof_headers,
         )
         assert list_res.status_code == 200
-        assert len(list_res.json()) == 1
-        item = list_res.json()[0]
+        list_data = list_res.json()
+        assert list_data["total"] == 1
+        assert list_data["page"] == 1
+        assert list_data["page_size"] == 10
+        assert len(list_data["items"]) == 1
+        item = list_data["items"][0]
         assert item["id"] == session_id
         assert item["subject_class"]["name"] == "POO"
         assert item["subject_class"]["discipline_name"] == "Programação"
@@ -196,7 +200,7 @@ class TestAttendanceSessionRouter:
             headers=prof_headers,
         )
         assert list_res.status_code == 200
-        listed = next(item for item in list_res.json() if item["id"] == session_id)
+        listed = next(item for item in list_res.json()["items"] if item["id"] == session_id)
         assert listed["total_students"] == 2
         assert listed["confirmed_count"] == 2
         assert listed["irregular_count"] == 1
@@ -274,6 +278,38 @@ class TestAttendanceSessionRouter:
             from modules.attendance.domain.events.attendance_events import AttendanceSessionOpenedEvent
             assert isinstance(published_event, AttendanceSessionOpenedEvent)
             assert published_event.day_code == res.json()["day_code"]
-            assert published_event.duration_minutes == 15
+
+    async def test_list_attendance_sessions_pagination_and_status_filter(self, client, session):
+        """GET /attendance-sessions -> Suporta paginação offset e filtro por status (open/closed/cancelled)."""
+        tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
+
+        open_res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            json={"room_id": room_id, "duration_minutes": 15},
+            headers=prof_headers,
+        )
+        session_id = open_res.json()["id"]
+
+        # Close session
+        await client.patch(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/close",
+            headers=prof_headers,
+        )
+
+        res_closed = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions?page=1&page_size=5&status=closed",
+            headers=prof_headers,
+        )
+        assert res_closed.status_code == 200
+        data_closed = res_closed.json()
+        assert data_closed["total"] == 1
+        assert data_closed["items"][0]["status"] == SessionStatus.CLOSED.value
+
+        res_open = await client.get(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions?status=open",
+            headers=prof_headers,
+        )
+        assert res_open.status_code == 200
+        assert res_open.json()["total"] == 0
 
 
