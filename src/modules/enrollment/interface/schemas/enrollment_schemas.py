@@ -22,3 +22,18 @@ class EnrollmentResponse(BaseModel):
     drop_reason: DropReason | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class StudentSubjectClassListItemResponse(BaseModel):
+    enrollment_id: UUID
+    subject_class_id: UUID
+    name: str
+    discipline_name: str
+    room_id: UUID | None
+    room_name: str | None
+    professor_id: UUID | None
+    professor_name: str | None
+    attendance_rate: float
+    status: EnrollmentStatus
+
+    model_config = ConfigDict(from_attributes=True)

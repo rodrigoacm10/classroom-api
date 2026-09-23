@@ -1,6 +1,9 @@
 from contextlib import asynccontextmanager
 import asyncio
+from pathlib import Path
 import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -19,6 +22,7 @@ from modules.auth.interface.router import router as auth_router
 from modules.enrollment.interface.router import (
     member_enrollments_router,
     router as enrollment_router,
+    student_subject_classes_router,
 )
 from modules.notification.interface.router import router as notification_router
 from modules.report.interface.router import router as report_router
@@ -88,6 +92,7 @@ app.include_router(room_router)
 app.include_router(subject_class_router)
 app.include_router(enrollment_router)
 app.include_router(member_enrollments_router)
+app.include_router(student_subject_classes_router)
 app.include_router(tenant_invites_router)
 app.include_router(invites_router)
 app.include_router(attendance_router)

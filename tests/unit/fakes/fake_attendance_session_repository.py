@@ -1,8 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
 from shared.enums.session_status import SessionStatus
+from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeAttendanceSessionRepository(AttendanceSessionRepository):
@@ -37,6 +39,28 @@ class FakeAttendanceSessionRepository(AttendanceSessionRepository):
         self, subject_class_id: UUID
     ) -> list[AttendanceSession]:
         return [s for s in self.sessions.values() if s.subject_class_id == subject_class_id]
+
+    async def find_by_class_paginated(
+        self,
+        subject_class_id: UUID,
+        pagination: PaginationParams,
+        status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+    ) -> Page[AttendanceSession]:
+        items = [s for s in self.sessions.values() if s.subject_class_id == subject_class_id]
+
+        if status is not None:
+            items = [s for s in items if s.status == status]
+
+        if opened_after is not None:
+            items = [s for s in items if s.opened_at >= opened_after]
+
+        if opened_before is not None:
+            items = [s for s in items if s.opened_at <= opened_before]
+
+        items.sort(key=lambda s: s.opened_at, reverse=True)
+        return paginate_list(items, pagination)
 
     async def close_expired_sessions(self) -> list[AttendanceSession]:
         from datetime import datetime, timezone

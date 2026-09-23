@@ -2,8 +2,12 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from modules.enrollment.domain.entities.enrollment import Enrollment
+from modules.enrollment.domain.entities.student_subject_class_summary import (
+    StudentSubjectClassSummary,
+)
 from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
+from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeEnrollmentRepository:
@@ -57,6 +61,21 @@ class FakeEnrollmentRepository:
             result.append(e)
         return result
 
+    async def find_by_class_paginated(
+        self,
+        subject_class_id: UUID,
+        pagination: PaginationParams,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> Page[Enrollment]:
+        items = await self.list_by_subject_class(
+            subject_class_id=subject_class_id,
+            status=status,
+            include_deleted=include_deleted,
+        )
+        items.sort(key=lambda e: e.enrolled_at, reverse=True)
+        return paginate_list(items, pagination)
+
     async def list_by_member(
         self,
         tenant_member_id: UUID,
@@ -73,6 +92,34 @@ class FakeEnrollmentRepository:
                 continue
             result.append(e)
         return result
+
+    async def list_summaries_by_member(
+        self,
+        tenant_id: UUID,
+        tenant_member_id: UUID,
+        status: EnrollmentStatus | None = None,
+        include_deleted: bool = False,
+    ) -> list[StudentSubjectClassSummary]:
+        enrollments = await self.list_by_member(
+            tenant_member_id=tenant_member_id,
+            status=status,
+            include_deleted=include_deleted,
+        )
+        return [
+            StudentSubjectClassSummary(
+                enrollment_id=e.id,
+                subject_class_id=e.subject_class_id,
+                name="Turma",
+                discipline_name="Disciplina",
+                room_id=None,
+                room_name=None,
+                professor_id=None,
+                professor_name=None,
+                attendance_rate=0.0,
+                status=e.status,
+            )
+            for e in enrollments
+        ]
 
     async def drop_all_active_for_member(self, tenant_member_id: UUID) -> int:
         count = 0

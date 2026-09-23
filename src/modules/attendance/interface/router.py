@@ -1,6 +1,7 @@
+from datetime import datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, Depends, Query, File, Form, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
@@ -11,6 +12,7 @@ from modules.attendance.application.use_cases.confirm_attendance import ConfirmA
 from modules.attendance.application.use_cases.get_record import GetAttendanceRecordInput, GetAttendanceRecordUseCase
 from modules.attendance.application.use_cases.get_session import GetAttendanceSessionInput, GetAttendanceSessionUseCase
 from modules.attendance.application.use_cases.list_records import ListAttendanceRecordsInput, ListAttendanceRecordsUseCase
+from modules.attendance.application.use_cases.list_session_roster import ListSessionRosterInput, ListSessionRosterUseCase
 from modules.attendance.application.use_cases.list_sessions import ListAttendanceSessionsInput, ListAttendanceSessionsUseCase
 from modules.attendance.application.use_cases.open_session import OpenAttendanceSessionInput, OpenAttendanceSessionUseCase
 from modules.attendance.application.use_cases.review_record import ReviewAttendanceRecordInput, ReviewAttendanceRecordUseCase
@@ -19,6 +21,7 @@ from modules.attendance.infra.repositories.session_sqlalchemy_repository import 
 from modules.attendance.interface.schemas.record_schemas import (
     AttendanceRecordResponse,
     ReviewAttendanceRecordRequest,
+    SessionRosterItemResponse,
 )
 from modules.attendance.interface.schemas.session_schemas import (
     AttendanceSessionResponse,
@@ -32,12 +35,10 @@ from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import Tenan
 from security.dependencies.current_user import AuthContext, get_auth_context
 from security.dependencies.require_role import require_role
 from shared.enums.record_status import RecordStatus
+from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.events.event_dispatcher import EventDispatcher
-
-
-ALLOWED_EVIDENCE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
-MAX_EVIDENCE_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 
 router = APIRouter(
@@ -90,13 +91,27 @@ async def open_attendance_session(
     return AttendanceSessionResponse.model_validate(session)
 
 
-@router.get("", response_model=list[AttendanceSessionResponse])
+@router.get("", response_model=PageResponse[AttendanceSessionResponse])
 async def list_attendance_sessions(
     tenant_id: UUID,
     subject_class_id: UUID,
+    pagination: PaginationParams = Depends(get_pagination_params),
+    session_status: SessionStatus | None = Query(
+        None,
+        alias="status",
+        description="Filtrar por status da chamada (open, closed, cancelled)",
+    ),
+    opened_after: datetime | None = Query(
+        None,
+        description="Filtrar por chamadas abertas a partir desta data (ISO-8601)",
+    ),
+    opened_before: datetime | None = Query(
+        None,
+        description="Filtrar por chamadas abertas até esta data (ISO-8601)",
+    ),
     db: AsyncSession = Depends(get_db),
-) -> list[AttendanceSessionResponse]:
-    """Lista todas as sessões de chamada de uma turma."""
+) -> PageResponse[AttendanceSessionResponse]:
+    """Lista sessões de chamada de uma turma com paginação offset e filtro por período e status."""
     session_repo = SessionSQLAlchemyRepository(session=db)
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
@@ -107,13 +122,18 @@ async def list_attendance_sessions(
         tenant_repo=tenant_repo,
     )
 
-    sessions = await use_case.execute(
+    page = await use_case.execute(
         ListAttendanceSessionsInput(
             tenant_id=tenant_id,
             subject_class_id=subject_class_id,
+            pagination=pagination,
+            status=session_status,
+            opened_after=opened_after,
+            opened_before=opened_before,
         )
     )
-    return [AttendanceSessionResponse.model_validate(s) for s in sessions]
+    items = [AttendanceSessionResponse.model_validate(s) for s in page.items]
+    return PageResponse.of(page, items)
 
 
 @router.get("/{session_id}", response_model=AttendanceSessionResponse)
@@ -326,6 +346,39 @@ async def list_attendance_records(
         )
     )
     return [AttendanceRecordResponse.model_validate(r) for r in records]
+
+
+@router.get(
+    "/{session_id}/roster",
+    response_model=list[SessionRosterItemResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
+)
+async def list_session_roster(
+    tenant_id: UUID,
+    subject_class_id: UUID,
+    session_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> list[SessionRosterItemResponse]:
+    """Lista todos os alunos ativos da turma na chamada, com horário, distância e status quando houver presença."""
+    record_repo = RecordSQLAlchemyRepository(session=db)
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+
+    use_case = ListSessionRosterUseCase(
+        record_repo=record_repo,
+        session_repo=session_repo,
+        subject_class_repo=subject_class_repo,
+        tenant_repo=tenant_repo,
+    )
+    roster = await use_case.execute(
+        ListSessionRosterInput(
+            tenant_id=tenant_id,
+            subject_class_id=subject_class_id,
+            session_id=session_id,
+        )
+    )
+    return [SessionRosterItemResponse.model_validate(item) for item in roster]
 
 
 @router.get(

@@ -37,6 +37,10 @@ class AttendanceSessionResponse(BaseModel):
     expires_at: datetime
     closed_at: datetime | None
     status: SessionStatus
+    duration_minutes: int
+    total_students: int
+    confirmed_count: int
+    irregular_count: int
     created_at: datetime
     updated_at: datetime
 

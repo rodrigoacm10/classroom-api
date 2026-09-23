@@ -1,6 +1,7 @@
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
@@ -23,6 +24,10 @@ from modules.tenant.application.use_cases.create_tenant import (
 from modules.tenant.application.use_cases.deactivate_tenant import DeactivateTenantUseCase
 from modules.tenant.application.use_cases.delete_tenant import DeleteTenantUseCase
 from modules.tenant.application.use_cases.list_my_tenants import ListMyTenantsUseCase
+from modules.tenant.application.use_cases.list_tenant_members import (
+    ListTenantMembersInput,
+    ListTenantMembersUseCase,
+)
 from modules.tenant.application.use_cases.remove_tenant_member import (
     RemoveTenantMemberInput,
     RemoveTenantMemberUseCase,
@@ -49,6 +54,7 @@ from modules.user.domain.entities.user import User
 from security.dependencies.current_user import get_current_user
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
+from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
@@ -112,6 +118,57 @@ async def list_my_tenants(
         )
         for item in items
     ]
+
+
+@router.get(
+    "/{tenant_id}/members",
+    response_model=PageResponse[TenantMemberResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR))],
+)
+async def list_tenant_members(
+    tenant_id: UUID,
+    pagination: PaginationParams = Depends(get_pagination_params),
+    role: UserRole | None = Query(None, description="Filtrar por papel (role)"),
+    search: str | None = Query(None, description="Busca por nome ou e-mail"),
+    subject_class_id: UUID | None = Query(None, description="Filtrar por ID da turma"),
+    created_after: datetime | None = Query(None, description="Membros criados a partir desta data"),
+    created_before: datetime | None = Query(None, description="Membros criados até esta data"),
+    include_deleted: bool = Query(False, description="Incluir membros inativos/deletados"),
+    db: AsyncSession = Depends(get_db),
+) -> PageResponse[TenantMemberResponse]:
+    """
+    Lista membros de uma Tenant/Instituição com suporte a paginação offset, total de registros e filtros avançados.
+    Requer papel de ADMIN ou COORDENADOR na tenant ativa.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    page = await use_case.execute(
+        ListTenantMembersInput(
+            tenant_id=tenant_id,
+            pagination=pagination,
+            role=role,
+            search=search,
+            subject_class_id=subject_class_id,
+            created_after=created_after,
+            created_before=created_before,
+            include_deleted=include_deleted,
+        )
+    )
+
+    items = [
+        TenantMemberResponse(
+            id=member.id,
+            tenant_id=member.tenant_id,
+            user_id=member.user_id,
+            role=member.role,
+            created_at=member.created_at,
+        )
+        for member in page.items
+    ]
+
+    return PageResponse.of(page, items)
 
 
 @router.post(

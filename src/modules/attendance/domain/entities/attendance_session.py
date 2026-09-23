@@ -32,6 +32,20 @@ class AttendanceSession:
     id: UUID = field(default_factory=uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    total_students: int = 0
+    confirmed_count: int = 0
+    irregular_count: int = 0
+
+    @property
+    def duration_minutes(self) -> int:
+        opened = self.opened_at
+        expires = self.expires_at
+        if opened.tzinfo is None:
+            opened = opened.replace(tzinfo=timezone.utc)
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        seconds = (expires - opened).total_seconds()
+        return max(int(round(seconds / 60)), 0)
 
     @property
     def is_open(self) -> bool:

@@ -110,10 +110,12 @@ class TestTenantMemberSQLAlchemyRepository:
 
         assert result == []
 
-    # ─── find_by_tenant_id ───────────────────────────────────────────────────
+    # ─── find_by_tenant_id_paginated ─────────────────────────────────────────
 
-    async def test_find_by_tenant_id_returns_all_members(self) -> None:
-        """Tenant com 2 membros → find_by_tenant_id retorna lista com 2 elementos."""
+    async def test_find_by_tenant_id_paginated_returns_members(self) -> None:
+        """Tenant com 2 membros → find_by_tenant_id_paginated retorna itens paginados."""
+        from shared.pagination import PaginationParams
+
         tenant = await TenantFactory.create(self.session)
         user_1 = await UserFactory.create(self.session)
         user_2 = await UserFactory.create(self.session)
@@ -125,19 +127,24 @@ class TestTenantMemberSQLAlchemyRepository:
             self.session, tenant_id=tenant.id, user_id=user_2.id
         )
 
-        result = await self.repository.find_by_tenant_id(tenant.id)
+        page = await self.repository.find_by_tenant_id_paginated(
+            tenant.id, pagination=PaginationParams(page=1, page_size=10)
+        )
 
-        assert len(result) == 2
-        user_ids = {m.user_id for m in result}
+        assert page.total == 2
+        assert len(page.items) == 2
+        user_ids = {m.user_id for m in page.items}
         assert user_1.id in user_ids
         assert user_2.id in user_ids
 
-    async def test_find_by_tenant_id_does_not_return_members_of_other_tenants(
+    async def test_find_by_tenant_id_paginated_does_not_return_members_of_other_tenants(
         self,
     ) -> None:
         """
         MULTI-TENANT: Busca por tenant_id não deve retornar membros de outras tenants.
         """
+        from shared.pagination import PaginationParams
+
         tenant_a = await TenantFactory.create(self.session)
         tenant_b = await TenantFactory.create(self.session)
         user = await UserFactory.create(self.session)
@@ -148,9 +155,111 @@ class TestTenantMemberSQLAlchemyRepository:
         )
 
         # Busca na tenant A não deve retornar nada
-        result = await self.repository.find_by_tenant_id(tenant_a.id)
+        page = await self.repository.find_by_tenant_id_paginated(
+            tenant_a.id, pagination=PaginationParams(page=1, page_size=10)
+        )
 
-        assert result == []
+        assert page.total == 0
+        assert page.items == []
+
+    async def test_find_by_tenant_id_paginated_filters_by_role(self) -> None:
+        """find_by_tenant_id_paginated com parâmetro role deve filtrar apenas membros com o papel especificado."""
+        from shared.enums.user_role import UserRole
+        from shared.pagination import PaginationParams
+
+        tenant = await TenantFactory.create(self.session)
+        user_1 = await UserFactory.create(self.session)
+        user_2 = await UserFactory.create(self.session)
+
+        await TenantFactory.create_member(
+            self.session, tenant_id=tenant.id, user_id=user_1.id, role=UserRole.ADMIN
+        )
+        await TenantFactory.create_member(
+            self.session, tenant_id=tenant.id, user_id=user_2.id, role=UserRole.ALUNO
+        )
+
+        page = await self.repository.find_by_tenant_id_paginated(
+            tenant.id, pagination=PaginationParams(page=1, page_size=10), role=UserRole.ALUNO
+        )
+
+        assert page.total == 1
+        assert len(page.items) == 1
+        assert page.items[0].user_id == user_2.id
+
+    async def test_find_by_tenant_id_paginated_filters_by_search_and_subject_class(self) -> None:
+        """find_by_tenant_id_paginated com search e subject_class_id deve filtrar os resultados corretamente."""
+        from modules.enrollment.domain.entities.enrollment import Enrollment
+        from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+            EnrollmentSQLAlchemyRepository,
+        )
+        from modules.subject_class.domain.entities.subject_class import SubjectClass
+        from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import (
+            SubjectClassSQLAlchemyRepository,
+        )
+        from shared.enums.user_role import UserRole
+        from shared.pagination import PaginationParams
+
+        tenant = await TenantFactory.create(self.session)
+        user_carlos = await UserFactory.create(self.session, name="Carlos Eduardo", email="carlos@gmail.com")
+        user_ana = await UserFactory.create(self.session, name="Ana Paula", email="ana@gmail.com")
+
+        m_carlos = await TenantFactory.create_member(
+            self.session, tenant_id=tenant.id, user_id=user_carlos.id, role=UserRole.ALUNO
+        )
+        await TenantFactory.create_member(
+            self.session, tenant_id=tenant.id, user_id=user_ana.id, role=UserRole.ALUNO
+        )
+
+        sc = await SubjectClassSQLAlchemyRepository(self.session).save(
+            SubjectClass(tenant_id=tenant.id, name="Matemática", discipline_name="Matemática")
+        )
+        await EnrollmentSQLAlchemyRepository(self.session).save(
+            Enrollment(subject_class_id=sc.id, tenant_member_id=m_carlos.id)
+        )
+
+        # 1. Filtro por search (nome/email)
+        by_search = await self.repository.find_by_tenant_id_paginated(
+            tenant.id, pagination=PaginationParams(page=1, page_size=10), search="carlos"
+        )
+        assert by_search.total == 1
+        assert len(by_search.items) == 1
+        assert by_search.items[0].user_id == user_carlos.id
+
+        # 2. Filtro por turma (subject_class_id)
+        by_class = await self.repository.find_by_tenant_id_paginated(
+            tenant.id, pagination=PaginationParams(page=1, page_size=10), subject_class_id=sc.id
+        )
+        assert by_class.total == 1
+        assert len(by_class.items) == 1
+        assert by_class.items[0].user_id == user_carlos.id
+
+    async def test_find_by_tenant_id_paginated(self) -> None:
+        """find_by_tenant_id_paginated deve aplicar offset, limit e calcular o total corretamente."""
+        from shared.pagination import PaginationParams
+
+        tenant = await TenantFactory.create(self.session)
+        user_1 = await UserFactory.create(self.session)
+        user_2 = await UserFactory.create(self.session)
+        user_3 = await UserFactory.create(self.session)
+
+        await TenantFactory.create_member(self.session, tenant_id=tenant.id, user_id=user_1.id)
+        await TenantFactory.create_member(self.session, tenant_id=tenant.id, user_id=user_2.id)
+        await TenantFactory.create_member(self.session, tenant_id=tenant.id, user_id=user_3.id)
+
+        # Página 1 com page_size=2
+        page1 = await self.repository.find_by_tenant_id_paginated(
+            tenant.id, pagination=PaginationParams(page=1, page_size=2)
+        )
+        assert page1.total == 3
+        assert len(page1.items) == 2
+        assert page1.pages == 2
+
+        # Página 2 com page_size=2
+        page2 = await self.repository.find_by_tenant_id_paginated(
+            tenant.id, pagination=PaginationParams(page=2, page_size=2)
+        )
+        assert page2.total == 3
+        assert len(page2.items) == 1
 
     # ─── save ────────────────────────────────────────────────────────────────
 

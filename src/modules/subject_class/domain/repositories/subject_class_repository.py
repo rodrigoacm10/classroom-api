@@ -2,6 +2,8 @@ from typing import Protocol
 from uuid import UUID
 
 from modules.subject_class.domain.entities.subject_class import SubjectClass
+from modules.subject_class.domain.entities.subject_class_summary import SubjectClassSummary
+from shared.pagination import Page, PaginationParams
 
 
 class SubjectClassRepository(Protocol):
@@ -19,5 +21,23 @@ class SubjectClassRepository(Protocol):
     async def list_by_tenant(
         self, tenant_id: UUID, include_deleted: bool = False
     ) -> list[SubjectClass]: ...
+
+    async def list_summaries_by_tenant(
+        self,
+        tenant_id: UUID,
+        include_deleted: bool = False,
+        professor_id: UUID | None = None,
+        room_id: UUID | None = None,
+    ) -> list[SubjectClassSummary]: ...
+
+    async def find_summaries_by_tenant_paginated(
+        self,
+        tenant_id: UUID,
+        pagination: PaginationParams,
+        include_deleted: bool = False,
+        professor_id: UUID | None = None,
+        room_id: UUID | None = None,
+        search: str | None = None,
+    ) -> Page[SubjectClassSummary]: ...
 
     async def delete(self, subject_class: SubjectClass) -> None: ...

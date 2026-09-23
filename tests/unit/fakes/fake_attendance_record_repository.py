@@ -1,7 +1,8 @@
 import math
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
+from modules.attendance.domain.entities.session_roster_item import SessionRosterItem
 from modules.attendance.domain.repositories.attendance_record_repository import AttendanceRecordRepository
 from shared.enums.record_status import RecordStatus
 from shared.exceptions import BusinessRuleException
@@ -22,9 +23,26 @@ class FakeAttendanceRecordRepository(AttendanceRecordRepository):
     def __init__(self) -> None:
         self.records: dict[UUID, AttendanceRecord] = {}
         self.room_coordinates: dict[UUID, tuple[float, float]] = {}
+        self._enrolled: list[tuple[UUID, UUID, str, UUID]] = []
 
     def seed_room_location(self, room_id: UUID, latitude: float, longitude: float) -> None:
         self.room_coordinates[room_id] = (latitude, longitude)
+
+    def seed_enrolled_student(
+        self,
+        subject_class_id: UUID,
+        tenant_member_id: UUID,
+        student_name: str,
+        enrollment_id: UUID | None = None,
+    ) -> None:
+        self._enrolled.append(
+            (
+                subject_class_id,
+                tenant_member_id,
+                student_name,
+                enrollment_id or uuid4(),
+            )
+        )
 
     async def create_record(
         self,
@@ -116,3 +134,26 @@ class FakeAttendanceRecordRepository(AttendanceRecordRepository):
         if record_status is not None:
             results = [r for r in results if r.record_status == record_status]
         return results
+
+    async def list_session_roster(
+        self, session_id: UUID, subject_class_id: UUID
+    ) -> list[SessionRosterItem]:
+        items: list[SessionRosterItem] = []
+        for class_id, member_id, student_name, enrollment_id in self._enrolled:
+            if class_id != subject_class_id:
+                continue
+            record = await self.find_by_session_and_member(session_id, member_id)
+            items.append(
+                SessionRosterItem(
+                    tenant_member_id=member_id,
+                    student_name=student_name,
+                    enrollment_id=enrollment_id,
+                    record_id=record.id if record else None,
+                    confirmed_at=record.confirmed_at if record else None,
+                    distance_meters=record.distance_meters if record else None,
+                    within_radius=record.within_radius if record else None,
+                    record_status=record.record_status if record else None,
+                )
+            )
+        items.sort(key=lambda item: item.student_name)
+        return items

@@ -27,3 +27,9 @@ class SubjectClassResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SubjectClassListItemResponse(SubjectClassResponse):
+    professor_name: str | None = None
+    student_count: int
+    attendance_rate: float
