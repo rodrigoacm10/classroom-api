@@ -1,6 +1,8 @@
+import json
+from infra.storage.storage_service import StorageService
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
 from modules.attendance.domain.repositories.attendance_record_repository import AttendanceRecordRepository
@@ -17,7 +19,7 @@ from shared.exceptions import (
     ResourceAlreadyExistsException,
     ResourceNotFoundException,
 )
-
+from infra.storage.evidence_photo_service import upload_evidence_photo
 
 def is_mobile_user_agent(ua: str | None) -> bool:
     if not ua:
@@ -39,8 +41,9 @@ class ConfirmAttendanceInput:
     device_id: str | None = None
     ip_address: str | None = None
     user_agent: str | None = None
-    device_info: dict | None = None
-    evidence_photo_url: str | None = None
+    device_info: str | None = None
+    evidence_photo_bytes: bytes | None = None
+    evidence_photo_content_type: str | None = None
 
 class ConfirmAttendanceUseCase:
 
@@ -53,6 +56,7 @@ class ConfirmAttendanceUseCase:
         member_repo: TenantMemberRepository,
         enrollment_repo: EnrollmentRepository,
         room_repo: RoomRepository,
+        storage_service: StorageService,
     ) -> None:
         self.session_repo = session_repo
         self.record_repo = record_repo
@@ -61,8 +65,17 @@ class ConfirmAttendanceUseCase:
         self.member_repo = member_repo
         self.enrollment_repo = enrollment_repo
         self.room_repo = room_repo
+        self.storage_service = storage_service
 
     async def execute(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
+        # 0. Parse do device_info (chega como string JSON via multipart/form-data)
+        device_info_dict: dict | None = None
+        if data.device_info:
+          try:
+              device_info_dict = json.loads(data.device_info)
+          except json.JSONDecodeError as exc:
+              raise BusinessRuleException("device_info deve ser uma string JSON válida.") from exc
+
         # 1. Tenant
         tenant = await self.tenant_repo.find_by_id(data.tenant_id)
         if not tenant or getattr(tenant, "deleted", False):
@@ -128,6 +141,16 @@ class ConfirmAttendanceUseCase:
         # 11. Calcular flags de irregularidade pré-inserção
         flags: list[str] = []
 
+        # 12. Processar foto de evidência (opcional)
+        evidence_photo_url: str | None = None
+        if data.evidence_photo_bytes is not None and data.evidence_photo_content_type is not None:
+            evidence_photo_url = await upload_evidence_photo(
+                storage_service=self.storage_service,
+                session_id=data.session_id,
+                file_bytes=data.evidence_photo_bytes,
+                content_type=data.evidence_photo_content_type,
+            )
+
         # GPS accuracy imprecisa
         if data.gps_accuracy_meters is not None and data.gps_accuracy_meters > tolerance_radius:
             flags.append("low_gps_accuracy")
@@ -159,6 +182,6 @@ class ConfirmAttendanceUseCase:
             device_id=data.device_id,
             ip_address=data.ip_address,
             user_agent=data.user_agent,
-            device_info=data.device_info,
-            evidence_photo_url=data.evidence_photo_url,
+            device_info=device_info_dict,
+            evidence_photo_url=evidence_photo_url,
         )

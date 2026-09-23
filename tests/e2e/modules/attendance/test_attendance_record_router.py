@@ -271,7 +271,7 @@ class TestAttendanceRecordRouter:
             headers=student1_headers,
         )
 
-        assert res.status_code == 422
+        assert res.status_code == 400
 
     async def test_confirm_attendance_photo_too_large(self, client, session):
         """Arquivo maior que 5 MB deve retornar 413."""
@@ -293,7 +293,7 @@ class TestAttendanceRecordRouter:
             headers=student1_headers,
         )
 
-        assert res.status_code == 413
+        assert res.status_code == 400
 
     async def test_confirm_attendance_when_student_not_enrolled_in_class_returns_403(
         self, client, session

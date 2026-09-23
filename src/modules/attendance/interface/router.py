@@ -1,7 +1,6 @@
 from uuid import UUID, uuid4
 
-import json
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
@@ -239,48 +238,16 @@ async def confirm_attendance(
     longitude: float = Form(..., ge=-180.0, le=180.0, description="Longitude do dispositivo (WGS84)"),
     gps_accuracy_meters: float | None = Form(default=None, ge=0.0, description="Precisão do GPS em metros relatada pelo dispositivo"),
     device_id: str | None = Form(default=None, max_length=64, description="Identificador único do dispositivo"),
-    device_info: str | None = Form(default=None, description="Metadados do dispositivo em formato JSON (string)"),
+    device_info: str | None = Form(default=None, description="Metadados do dispositivo em formato JSON (string, processado pelo use case)"),
     photo: UploadFile | None = File(default=None, description="Foto de evidência opcional (JPEG, PNG ou WebP, até 5MB)"),
 ) -> AttendanceRecordResponse:
     """Confirma presença de um aluno matriculado validando código e geolocalização, com foto de evidência opcional."""
 
-    # Parse do device_info (chega como string JSON, pois multipart/form-data só aceita texto)
-    device_info_dict: dict | None = None
-    if device_info:
-        try:
-            device_info_dict = json.loads(device_info)
-        except json.JSONDecodeError:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="device_info deve ser uma string JSON válida.",
-            )
-
-    # Processamento da foto de evidência (opcional)
-    evidence_photo_url: str | None = None
+    photo_bytes: bytes | None = None
+    photo_content_type: str | None = None
     if photo is not None:
-        if photo.content_type not in ALLOWED_EVIDENCE_CONTENT_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Tipo de arquivo não suportado: {photo.content_type}. Use JPEG, PNG ou WebP.",
-            )
-
-        file_bytes = await photo.read()
-
-        if len(file_bytes) > MAX_EVIDENCE_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="Arquivo muito grande. Tamanho máximo: 5 MB.",
-            )
-
-        extension = photo.content_type.split("/")[-1]
-        key = f"evidence/{session_id}/{uuid4()}.{extension}"
-
-        storage = R2StorageService()
-        evidence_photo_url = await storage.upload(
-            file_bytes=file_bytes,
-            key=key,
-            content_type=photo.content_type,
-        )
+        photo_bytes = await photo.read()
+        photo_content_type = photo.content_type
 
     session_repo = SessionSQLAlchemyRepository(session=db)
     record_repo = RecordSQLAlchemyRepository(session=db)
@@ -289,6 +256,7 @@ async def confirm_attendance(
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     room_repo = RoomSQLAlchemyRepository(session=db)
+    storage_service = R2StorageService()
 
     use_case = ConfirmAttendanceUseCase(
         session_repo=session_repo,
@@ -298,6 +266,7 @@ async def confirm_attendance(
         member_repo=member_repo,
         enrollment_repo=enrollment_repo,
         room_repo=room_repo,
+        storage_service=storage_service,
     )
 
     ip_address = request.client.host if request.client else None
@@ -316,8 +285,9 @@ async def confirm_attendance(
             device_id=device_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            device_info=device_info_dict,
-            evidence_photo_url=evidence_photo_url,
+            device_info=device_info,
+            evidence_photo_bytes=photo_bytes,
+            evidence_photo_content_type=photo_content_type,
         )
     )
     return AttendanceRecordResponse.model_validate(record)
