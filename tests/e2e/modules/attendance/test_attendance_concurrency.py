@@ -76,7 +76,14 @@ class TestAttendanceConcurrency:
         payload = {"day_code": day_code, "latitude": -8.0476, "longitude": -34.8770}
 
         # Executa N requisições de confirmação do mesmo aluno
-        responses = [await client.post(url, json=payload, headers=student_headers) for _ in range(5)]
+        responses = [
+            await client.post(
+                url,
+                data={"day_code": day_code, "latitude": str(-8.0476), "longitude": str(-34.8770)},
+                headers=student_headers,
+            )
+            for _ in range(5)
+        ]
 
         status_codes = [r.status_code for r in responses]
 

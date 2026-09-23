@@ -15,6 +15,7 @@ from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.exceptions import BusinessRuleException, ForbiddenException, ResourceAlreadyExistsException
 from tests.factories.tenant_factory import TenantFactory
+from tests.unit.fakes.fake_storage_service import FakeStorageService
 from tests.unit.fakes.fake_attendance_record_repository import FakeAttendanceRecordRepository
 from tests.unit.fakes.fake_attendance_session_repository import FakeAttendanceSessionRepository
 from tests.unit.fakes.fake_enrollment_repository import FakeEnrollmentRepository
@@ -73,6 +74,8 @@ class TestConfirmAttendanceUseCase:
         )
         await session_repo.save(session)
 
+        storage_service = FakeStorageService()
+
         use_case = ConfirmAttendanceUseCase(
             session_repo=session_repo,
             record_repo=record_repo,
@@ -81,6 +84,7 @@ class TestConfirmAttendanceUseCase:
             member_repo=member_repo,
             enrollment_repo=enrollment_repo,
             room_repo=room_repo,
+            storage_service=storage_service,
         )
 
         return (
@@ -93,6 +97,7 @@ class TestConfirmAttendanceUseCase:
             room,
             record_repo,
             session_repo,
+            storage_service,
         )
 
     async def test_confirm_attendance_inside_radius_regular(self):
@@ -104,7 +109,7 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room, _, _, _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -133,7 +138,7 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room, _, _, _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -162,7 +167,7 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room, _, _, _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -192,7 +197,7 @@ class TestConfirmAttendanceUseCase:
             user_id,
             student_member,
             room, _,
-            session_repo,
+            session_repo, _,
         ) = await self._setup_fixtures()
 
         session.expires_at = datetime.now(timezone.utc) + timedelta(seconds=10)
@@ -223,7 +228,7 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room, _, _, _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -252,7 +257,7 @@ class TestConfirmAttendanceUseCase:
             user_id,
             student_member,
             room,
-            record_repo, _,
+            record_repo, _, _,
         ) = await self._setup_fixtures()
 
         device_id = "device-uuid-1234"
@@ -292,7 +297,7 @@ class TestConfirmAttendanceUseCase:
             subject_class,
             session,
             user_id, _, _, _,
-            session_repo,
+            session_repo, _,
         ) = await self._setup_fixtures()
 
         session.status = SessionStatus.CLOSED
@@ -319,7 +324,7 @@ class TestConfirmAttendanceUseCase:
             subject_class,
             session,
             user_id, _, _, _,
-            session_repo,
+            session_repo, _,
         ) = await self._setup_fixtures()
 
         session.status = SessionStatus.CANCELLED
@@ -346,7 +351,7 @@ class TestConfirmAttendanceUseCase:
             subject_class,
             session,
             user_id, _, _, _,
-            session_repo,
+            session_repo, _,
         ) = await self._setup_fixtures()
 
         session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=5)
@@ -372,7 +377,7 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _, _,
+            user_id, _, _, _, _, _,
         ) = await self._setup_fixtures()
 
         with pytest.raises(BusinessRuleException, match="Código da chamada inválido"):
@@ -394,7 +399,7 @@ class TestConfirmAttendanceUseCase:
             use_case,
             tenant,
             subject_class,
-            session, _, _, _, _, _,
+            session, _, _, _, _, _, _,
         ) = await self._setup_fixtures()
 
         outsider_user = uuid4()
@@ -418,7 +423,7 @@ class TestConfirmAttendanceUseCase:
             use_case,
             tenant,
             subject_class,
-            session, _, _, _, _, _,
+            session, _, _, _, _, _, _,
         ) = await self._setup_fixtures()
 
         other_user_id = uuid4()
@@ -462,7 +467,7 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _, _,
+            user_id, _, _, _, _, _,
         ) = await self._setup_fixtures()
 
         await use_case.execute(
@@ -499,7 +504,7 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _, _,
+            user_id, _, _, _, _, _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -528,7 +533,7 @@ class TestConfirmAttendanceUseCase:
             user_id,
             student_member,
             room, _,
-            session_repo,
+            session_repo, _,
         ) = await self._setup_fixtures()
 
         session.room_id = None
@@ -560,7 +565,7 @@ class TestConfirmAttendanceUseCase:
             user_id,
             student_member,
             room, _,
-            session_repo,
+            session_repo, _,
         ) = await self._setup_fixtures()
 
         session.room_id = None
@@ -580,4 +585,62 @@ class TestConfirmAttendanceUseCase:
                     user_agent="okhttp/4.9.0",
                 )
             )
+            
+    async def test_confirm_attendance_with_evidence_photo(self):
+        """Quando uma foto válida é enviada, deve ser feito o upload e a URL persistida."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _, storage_service,
+        ) = await self._setup_fixtures()
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_bytes=b"fake-image-bytes",
+                evidence_photo_content_type="image/jpeg",
+            )
+        )
+
+        assert record.evidence_photo_url == storage_service.return_url
+        assert len(storage_service.uploaded_files) == 1
+
+    async def test_confirm_attendance_without_evidence_photo(self):
+        """Quando nenhuma foto é enviada, o campo deve permanecer None e nenhum upload ocorre."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _, storage_service,
+        ) = await self._setup_fixtures()
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+            )
+        )
+
+        assert record.evidence_photo_url is None
+        assert len(storage_service.uploaded_files) == 0       
 

@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     celery_broker_url: str = ""                 # Se vazio, utiliza redis_url como fallback
     celery_result_backend: str = ""             # Se vazio, utiliza redis_url como fallback
 
+    # Cloudflare R2 — Object Storage (evidências fotográficas)
+    cloudflare_r2_account_id: str = ""
+    cloudflare_r2_access_key_id: str = ""
+    cloudflare_r2_secret_access_key: str = ""
+    cloudflare_r2_bucket_name: str = "classroom-evidence"
+    cloudflare_r2_public_url: str = ""          # Ex: https://pub-XXXX.r2.dev
+
     # Módulo de relatórios — estratégia de paralelismo
     report_strategy: str = "process_pool"  # "sequential" | "process_pool" | "thread_pool_numpy"
     report_max_workers: int = 0            # 0 = usar cpu_budget() automaticamente
@@ -41,6 +48,10 @@ class Settings(BaseSettings):
     @property
     def effective_celery_backend(self) -> str:
         return self.celery_result_backend or self.redis_url
+
+    @property
+    def r2_endpoint_url(self) -> str:
+        return f"https://{self.cloudflare_r2_account_id}.r2.cloudflarestorage.com"    
 
 
 settings = Settings()

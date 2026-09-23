@@ -53,6 +53,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
         ip_address: str | None = None,
         user_agent: str | None = None,
         device_info: dict | None = None,
+        evidence_photo_url: str | None = None,
     ) -> AttendanceRecord:
         student_point = ST_GeographyFromText(f"SRID=4326;POINT({longitude} {latitude})")
 
@@ -93,6 +94,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
             ip_address=ip_address,
             user_agent=user_agent,
             device_info=device_info,
+            evidence_photo_url=evidence_photo_url,
         )
 
         model = AttendanceRecordMapper.to_model(record_entity)

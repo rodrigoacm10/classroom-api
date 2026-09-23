@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 
+from unittest.mock import AsyncMock, patch
 from security.jwt import create_access_token
 from shared.enums.record_status import RecordStatus
 from shared.enums.user_role import UserRole
@@ -109,7 +110,7 @@ class TestAttendanceRecordRouter:
         # Student 1 confirms (inside room radius)
         res1 = await client.post(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
             headers=student1_headers,
         )
         assert res1.status_code == 201
@@ -120,7 +121,7 @@ class TestAttendanceRecordRouter:
         # Student 2 confirms (outside room radius -> ~1km away)
         res2 = await client.post(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            json={"day_code": day_code, "latitude": -8.05600, "longitude": -34.87700},
+            data={"day_code": day_code, "latitude": "-8.05600", "longitude": "-34.87700"},
             headers=student2_headers,
         )
         assert res2.status_code == 201
@@ -161,7 +162,7 @@ class TestAttendanceRecordRouter:
         # Student 2 confirms outside radius -> irregular
         res2 = await client.post(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            json={"day_code": day_code, "latitude": -8.05600, "longitude": -34.87700},
+            data={"day_code": day_code, "latitude": "-8.05600", "longitude": "-34.87700"},
             headers=student2_headers,
         )
         assert res2.status_code == 201
@@ -201,11 +202,100 @@ class TestAttendanceRecordRouter:
         # Aluno tenta confirmar em chamada cancelada
         res = await client.post(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
             headers=student1_headers,
         )
         assert res.status_code == 409
         assert res.json()["detail"] == "A chamada foi cancelada."
+
+    async def test_confirm_attendance_with_photo_upload(self, client, session):
+        """Upload de foto opcional retorna evidence_photo_url no response."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        fake_url = "https://pub-test.r2.dev/evidence/session-id/uuid.jpg"
+
+        with patch("modules.attendance.interface.router.R2StorageService") as MockR2:
+            instance = MockR2.return_value
+            instance.upload = AsyncMock(return_value=fake_url)
+
+            res = await client.post(
+                f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+                data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
+                files={"photo": ("selfie.jpg", b"fake-jpeg-bytes", "image/jpeg")},
+                headers=student1_headers,
+            )
+
+        assert res.status_code == 201
+        assert res.json()["evidence_photo_url"] == fake_url
+
+    async def test_confirm_attendance_without_photo(self, client, session):
+        """Confirmação sem foto deve funcionar normalmente, com evidence_photo_url nulo."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
+            headers=student1_headers,
+        )
+
+        assert res.status_code == 201
+        assert res.json()["evidence_photo_url"] is None
+
+    async def test_confirm_attendance_photo_invalid_mime_type(self, client, session):
+        """Tipo MIME não suportado deve retornar 422."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
+            files={"photo": ("document.pdf", b"fake-pdf", "application/pdf")},
+            headers=student1_headers,
+        )
+
+        assert res.status_code == 400
+
+    async def test_confirm_attendance_photo_too_large(self, client, session):
+        """Arquivo maior que 5 MB deve retornar 413."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        big_file = b"x" * (5 * 1024 * 1024 + 1)
+
+        res = await client.post(
+            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
+            files={"photo": ("big.jpg", big_file, "image/jpeg")},
+            headers=student1_headers,
+        )
+
+        assert res.status_code == 400
 
     async def test_confirm_attendance_when_student_not_enrolled_in_class_returns_403(
         self, client, session
@@ -232,7 +322,7 @@ class TestAttendanceRecordRouter:
 
         res = await client.post(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
             headers=outsider_headers,
         )
         assert res.status_code == 403
@@ -254,7 +344,7 @@ class TestAttendanceRecordRouter:
 
         confirm_res = await client.post(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
             headers=student1_headers,
         )
         assert confirm_res.status_code == 201
