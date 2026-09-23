@@ -264,7 +264,7 @@ class TestSubjectClassRouterEndpoints:
 
         confirm_res = await client.post(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_data['id']}/confirm",
-            json={
+            data={
                 "day_code": session_data["day_code"],
                 "latitude": -8.04761,
                 "longitude": -34.87701,

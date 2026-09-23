@@ -344,7 +344,7 @@ class TestAttendanceRecordRouter:
 
         confirm_res = await client.post(
             f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
             headers=student1_headers,
         )
         assert confirm_res.status_code == 201
