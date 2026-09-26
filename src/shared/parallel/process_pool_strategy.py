@@ -1,18 +1,21 @@
 import threading
 from concurrent.futures import ProcessPoolExecutor
+from typing import Any, Callable
 
 from shared.parallel.cpu_budget import cpu_budget
 
 # Estado herdado pelos workers via copy-on-write do fork (Linux).
 # Evita serializar a lista inteira a cada item — o custo de pickle de
 # milhares de dataclasses anularia o ganho de CPU do paralelismo.
-_WORKER_ITEMS = None
-_WORKER_FN = None
+_WORKER_ITEMS: list[Any] | None = None
+_WORKER_FN: Callable[[Any], Any] | None = None
 _WORKER_LOCK = threading.Lock()
 
 
-def _apply_item_at(index: int):
+def _apply_item_at(index: int) -> Any:
     """Função de módulo picklable: aplica fn ao item herdado pelo fork."""
+    if _WORKER_FN is None or _WORKER_ITEMS is None:
+        raise RuntimeError("Worker state is not initialized.")
     return _WORKER_FN(_WORKER_ITEMS[index])
 
 

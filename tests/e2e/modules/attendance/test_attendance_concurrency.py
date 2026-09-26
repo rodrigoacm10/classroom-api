@@ -39,7 +39,7 @@ class TestAttendanceConcurrency:
         student_headers = {"Authorization": f"Bearer {student_token}", "User-Agent": "okhttp/4.9.0"}
 
         room_res = await client.post(
-            f"/tenants/{tenant.id}/rooms",
+            "/rooms",
             json={"name": "Lab Concorrência", "latitude": -8.0476, "longitude": -34.8770},
             headers=admin_headers,
         )
@@ -47,7 +47,7 @@ class TestAttendanceConcurrency:
         room_id = room_res.json()["id"]
 
         sc_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes",
+            "/subject-classes",
             json={"room_id": room_id, "name": "Concorrência", "discipline_name": "Sistemas"},
             headers=prof_headers,
         )
@@ -56,14 +56,14 @@ class TestAttendanceConcurrency:
 
         # Matricular aluno
         await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student_member.id)},
             headers=admin_headers,
         )
 
         # Abrir chamada
         session_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 15},
             headers=prof_headers,
         )
@@ -72,7 +72,7 @@ class TestAttendanceConcurrency:
         session_id = session_data["id"]
         day_code = session_data["day_code"]
 
-        url = f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm"
+        url = f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm"
         payload = {"day_code": day_code, "latitude": -8.0476, "longitude": -34.8770}
 
         # Executa N requisições de confirmação do mesmo aluno

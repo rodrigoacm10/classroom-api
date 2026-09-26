@@ -31,6 +31,7 @@ from modules.report.domain.services.student_calculator import (  # noqa: E402
     calculate_student_report,
     calculate_student_report_numpy,
 )
+from shared.parallel.compute_strategy import ComputeStrategy  # noqa: E402
 from shared.parallel.process_pool_strategy import ProcessPoolStrategy  # noqa: E402
 from shared.parallel.sequential_strategy import SequentialStrategy  # noqa: E402
 from shared.parallel.thread_pool_numpy_strategy import ThreadPoolNumpyStrategy  # noqa: E402
@@ -86,7 +87,7 @@ def run_benchmark(n_students: int, n_sessions: int, intensity: int) -> None:
     dataset = generate_synthetic_data(n_students, n_sessions)
     results = []
 
-    strategies = [SequentialStrategy()]
+    strategies: list[ComputeStrategy] = [SequentialStrategy()]
     for n in (2, 4, 8):
         strategies.append(ProcessPoolStrategy(max_workers=n))
     for n in (2, 4, 8):

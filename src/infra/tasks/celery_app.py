@@ -1,3 +1,11 @@
+from pathlib import Path
+import sys
+
+# Garante que a pasta 'src' esteja no sys.path
+src_dir = str(Path(__file__).resolve().parent.parent.parent)
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import worker_process_init

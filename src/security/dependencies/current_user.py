@@ -86,3 +86,15 @@ async def get_current_user(
     ctx: AuthContext = Depends(get_auth_context),
 ) -> User:
     return ctx.user
+
+
+async def get_current_tenant_id(
+    ctx: AuthContext = Depends(get_auth_context),
+) -> UUID:
+    """Extrai o ID da tenant ativa do contexto de autenticação (JWT)."""
+    if ctx.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Nenhuma tenant selecionada. Use POST /auth/switch-tenant.",
+        )
+    return ctx.tenant_id

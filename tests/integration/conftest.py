@@ -81,3 +81,11 @@ async def session(engine, create_tables) -> AsyncGenerator[AsyncSession, None]:
         async with session_factory() as sess:
             yield sess
             await sess.rollback()
+
+
+@pytest.fixture(autouse=True)
+async def cleanup_redis() -> AsyncGenerator[None, None]:
+    """Desconecta o pool do Redis ao final de cada teste para evitar conflito de event loops."""
+    yield
+    from infra.cache.redis_client import redis_client
+    await redis_client.connection_pool.disconnect()

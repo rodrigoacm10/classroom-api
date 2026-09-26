@@ -21,10 +21,16 @@ from modules.auth.application.use_cases.reset_password import (
     ResetPasswordInput,
     ResetPasswordUseCase,
 )
+from modules.auth.application.use_cases.verify_reset_code import (
+    VerifyResetCodeInput,
+    VerifyResetCodeUseCase,
+)
 from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, SwitchTenantUseCase
 from modules.auth.interface.schemas.password_reset_schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    VerifyResetCodeRequest,
+    VerifyResetCodeResponse,
 )
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
@@ -263,6 +269,27 @@ async def forgot_password(
     )
 
 
+@router.post("/verify-reset-code", response_model=VerifyResetCodeResponse)
+@limiter.limit("10/minute")
+async def verify_reset_code(
+    request: Request,
+    body: VerifyResetCodeRequest,
+) -> VerifyResetCodeResponse:
+    """
+    Valida o código OTP de 6 dígitos no Redis e consome o código imediatamente.
+    Retorna um reset_token temporário (JWT) para autorizar a redefinição de senha (Abordagem B).
+    Taxa limite: 10 requisições por minuto por IP.
+    """
+    use_case = VerifyResetCodeUseCase()
+    result = await use_case.execute(VerifyResetCodeInput(email=body.email, code=body.code))
+
+    return VerifyResetCodeResponse(
+        reset_token=result.reset_token,
+        token_type=result.token_type,
+        expires_in=result.expires_in,
+    )
+
+
 @router.post("/reset-password", response_model=MessageResponse)
 @limiter.limit("5/minute")
 async def reset_password(
@@ -271,8 +298,8 @@ async def reset_password(
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     """
-    Confirma o código OTP de 6 dígitos e redefine a senha do usuário.
-    Invalida todas as sessões e tokens JWT anteriores do usuário no Redis.
+    Redefine a senha do usuário utilizando o reset_token temporário obtido na etapa de verificação.
+    Invalida o reset_token (single-use) e revoga todas as sessões e tokens JWT anteriores do usuário.
     Taxa limite: 5 requisições por minuto por IP.
     """
     user_repo = UserSQLAlchemyRepository(session=db)
@@ -280,8 +307,7 @@ async def reset_password(
 
     await use_case.execute(
         ResetPasswordInput(
-            email=body.email,
-            code=body.code,
+            reset_token=body.reset_token,
             new_password=body.new_password,
         )
     )

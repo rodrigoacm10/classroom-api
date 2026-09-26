@@ -45,7 +45,7 @@ class TestReportRouter:
         prof_headers = {"Authorization": f"Bearer {prof_token}"}
 
         room_res = await client.post(
-            f"/tenants/{tenant.id}/rooms",
+            "/rooms",
             json={"name": "Lab 101", "latitude": -8.0476, "longitude": -34.8770},
             headers=admin_headers,
         )
@@ -53,7 +53,7 @@ class TestReportRouter:
         room_id = room_res.json()["id"]
 
         sc_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes",
+            "/subject-classes",
             json={"room_id": room_id, "name": "POO", "discipline_name": "Programação"},
             headers=prof_headers,
         )
@@ -67,7 +67,7 @@ class TestReportRouter:
                 session, tenant_id=tenant.id, user_id=student_user.id, role=UserRole.ALUNO
             )
             enroll_res = await client.post(
-                f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+                f"/subject-classes/{sc_id}/enrollments",
                 json={"tenant_member_id": str(student_member.id)},
                 headers=admin_headers,
             )
@@ -95,7 +95,7 @@ class TestReportRouter:
         student1, student2 = students
 
         open_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 20},
             headers=prof_headers,
         )
@@ -103,7 +103,7 @@ class TestReportRouter:
         session_data = open_res.json()
 
         confirm_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_data['id']}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_data['id']}/confirm",
             json={
                 "day_code": session_data["day_code"],
                 "latitude": -8.04761,
@@ -114,7 +114,7 @@ class TestReportRouter:
         assert confirm_res.status_code == 201
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/reports/frequency",
+            f"/subject-classes/{sc_id}/reports/frequency",
             headers=prof_headers,
         )
         assert res.status_code == 200
@@ -140,7 +140,7 @@ class TestReportRouter:
         assert absent["at_risk"] is True
 
         detail = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/reports/frequency/{student1['member'].id}",
+            f"/subject-classes/{sc_id}/reports/frequency/{student1['member'].id}",
             headers=prof_headers,
         )
         assert detail.status_code == 200
@@ -152,7 +152,7 @@ class TestReportRouter:
         tenant, admin_headers, _, sc_id, _, _ = await self._setup(session, client)
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/reports/frequency",
+            f"/subject-classes/{sc_id}/reports/frequency",
             headers=admin_headers,
         )
         assert res.status_code == 200
@@ -163,7 +163,7 @@ class TestReportRouter:
         tenant, _, _, sc_id, _, students = await self._setup(session, client)
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/reports/frequency",
+            f"/subject-classes/{sc_id}/reports/frequency",
             headers=students[0]["headers"],
         )
         assert res.status_code == 403
@@ -173,7 +173,7 @@ class TestReportRouter:
         tenant, _, _, sc_id, _, students = await self._setup(session, client)
 
         res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/reports/frequency/{students[1]['member'].id}",
+            f"/subject-classes/{sc_id}/reports/frequency/{students[1]['member'].id}",
             headers=students[0]["headers"],
         )
         assert res.status_code == 403
@@ -183,7 +183,7 @@ class TestReportRouter:
         tenant, _, prof_headers, _, _, _ = await self._setup(session, client, enroll_students=0)
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{uuid4()}/reports/frequency",
+            f"/subject-classes/{uuid4()}/reports/frequency",
             headers=prof_headers,
         )
         assert res.status_code == 404
@@ -193,7 +193,7 @@ class TestReportRouter:
         tenant, _, prof_headers, sc_id, _, _ = await self._setup(session, client)
 
         res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/reports/frequency/{uuid4()}",
+            f"/subject-classes/{sc_id}/reports/frequency/{uuid4()}",
             headers=prof_headers,
         )
         assert res.status_code == 404
@@ -203,7 +203,7 @@ class TestReportRouter:
         tenant, _, prof_headers, _, _, students = await self._setup(session, client)
 
         res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{uuid4()}/reports/frequency/{students[0]['member'].id}",
+            f"/subject-classes/{uuid4()}/reports/frequency/{students[0]['member'].id}",
             headers=prof_headers,
         )
         assert res.status_code == 404
@@ -213,6 +213,6 @@ class TestReportRouter:
         tenant, _, _, sc_id, _, _ = await self._setup(session, client, enroll_students=0)
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/reports/frequency"
+            f"/subject-classes/{sc_id}/reports/frequency"
         )
         assert res.status_code in (401, 403)

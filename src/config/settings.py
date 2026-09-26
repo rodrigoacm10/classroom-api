@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     app_name: str = "Classroom API"
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     database_url: str = "postgresql+psycopg://classroom:classroom@localhost:5432/classroom"
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "change-me-super-secret-key-that-is-at-least-32-bytes-long"
@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000" # URL base do frontend para montar links de aceite
     invite_expire_hours: int = 72               # Tempo de expiração do convite em horas
     password_reset_expire_minutes: int = 15     # Tempo de expiração do código de recuperação em minutos
+    password_reset_token_expire_minutes: int = 10 # Tempo de expiração do token de redefinição (etapa 2 -> 3) em minutos
 
     # Firebase Cloud Messaging
     firebase_credentials_path: str = "credentials/firebase-service-account.json"

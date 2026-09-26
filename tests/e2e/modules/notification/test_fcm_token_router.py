@@ -28,11 +28,11 @@ class TestFCMTokenRouter:
         return tenant, student_user, student_headers
 
     async def test_register_fcm_token_e2e_success(self, client, session):
-        """Deve cadastrar um novo token FCM via POST /tenants/{tenant_id}/fcm-tokens retornando status 200 OK."""
+        """Deve cadastrar um novo token FCM via POST /fcm-tokens retornando status 200 OK."""
         tenant, _, student_headers = await self._setup_fixtures(session)
 
         res = await client.post(
-            f"/tenants/{tenant.id}/fcm-tokens",
+            "/fcm-tokens",
             json={
                 "device_id": "device-uuid-abc123",
                 "fcm_token": "fcm-token-xyz789",
@@ -49,12 +49,12 @@ class TestFCMTokenRouter:
         assert "updated_at" in data
 
     async def test_register_fcm_token_upsert_e2e(self, client, session):
-        """Deve atualizar o token FCM de um dispositivo já existente sem criar registros duplicados via POST /tenants/{tenant_id}/fcm-tokens."""
+        """Deve atualizar o token FCM de um dispositivo já existente sem criar registros duplicados via POST /fcm-tokens."""
         tenant, _, student_headers = await self._setup_fixtures(session)
 
         # Primeiro envio
         res1 = await client.post(
-            f"/tenants/{tenant.id}/fcm-tokens",
+            "/fcm-tokens",
             json={
                 "device_id": "device-uuid-abc123",
                 "fcm_token": "token-old",
@@ -66,7 +66,7 @@ class TestFCMTokenRouter:
 
         # Segundo envio com novo fcm_token
         res2 = await client.post(
-            f"/tenants/{tenant.id}/fcm-tokens",
+            "/fcm-tokens",
             json={
                 "device_id": "device-uuid-abc123",
                 "fcm_token": "token-new",
@@ -78,12 +78,12 @@ class TestFCMTokenRouter:
         assert res2.json()["device_id"] == "device-uuid-abc123"
 
     async def test_remove_fcm_token_e2e_success(self, client, session):
-        """Deve remover o token FCM do dispositivo ao fazer logout via DELETE /tenants/{tenant_id}/fcm-tokens/{device_id} retornando 204 No Content."""
+        """Deve remover o token FCM do dispositivo ao fazer logout via DELETE /fcm-tokens/{device_id} retornando 204 No Content."""
         tenant, _, student_headers = await self._setup_fixtures(session)
 
         # Registra primeiro
         reg_res = await client.post(
-            f"/tenants/{tenant.id}/fcm-tokens",
+            "/fcm-tokens",
             json={
                 "device_id": "device-to-remove",
                 "fcm_token": "fcm-token-temp",
@@ -95,17 +95,17 @@ class TestFCMTokenRouter:
 
         # Remove
         del_res = await client.delete(
-            f"/tenants/{tenant.id}/fcm-tokens/device-to-remove",
+            f"/fcm-tokens/device-to-remove",
             headers=student_headers,
         )
         assert del_res.status_code == 204
 
     async def test_remove_fcm_token_e2e_not_found(self, client, session):
-        """Deve retornar 404 Not Found ao tentar deletar o token de um dispositivo inexistente via DELETE /tenants/{tenant_id}/fcm-tokens/{device_id}."""
+        """Deve retornar 404 Not Found ao tentar deletar o token de um dispositivo inexistente via DELETE /fcm-tokens/{device_id}."""
         tenant, _, student_headers = await self._setup_fixtures(session)
 
         del_res = await client.delete(
-            f"/tenants/{tenant.id}/fcm-tokens/non-existent-device",
+            f"/fcm-tokens/non-existent-device",
             headers=student_headers,
         )
         assert del_res.status_code == 404
@@ -116,7 +116,7 @@ class TestFCMTokenRouter:
 
         # 1. Registrar dispositivo Celular (Android)
         res_mobile = await client.post(
-            f"/tenants/{tenant.id}/fcm-tokens",
+            "/fcm-tokens",
             json={
                 "device_id": "device-mobile-xyz-100",
                 "fcm_token": "fcm-token-mobile-aaa",
@@ -130,7 +130,7 @@ class TestFCMTokenRouter:
 
         # 2. Registrar dispositivo Tablet (iOS)
         res_tablet = await client.post(
-            f"/tenants/{tenant.id}/fcm-tokens",
+            "/fcm-tokens",
             json={
                 "device_id": "device-tablet-xyz-200",
                 "fcm_token": "fcm-token-tablet-bbb",
@@ -144,21 +144,21 @@ class TestFCMTokenRouter:
 
         # 3. Remover apenas o celular (logout do celular)
         del_mobile = await client.delete(
-            f"/tenants/{tenant.id}/fcm-tokens/device-mobile-xyz-100",
+            f"/fcm-tokens/device-mobile-xyz-100",
             headers=student_headers,
         )
         assert del_mobile.status_code == 204
 
         # 4. Tentar remover o celular de novo deve dar 404, mas o tablet continua existindo
         del_mobile_again = await client.delete(
-            f"/tenants/{tenant.id}/fcm-tokens/device-mobile-xyz-100",
+            f"/fcm-tokens/device-mobile-xyz-100",
             headers=student_headers,
         )
         assert del_mobile_again.status_code == 404
 
         # 5. Logout do tablet remove o tablet com sucesso
         del_tablet = await client.delete(
-            f"/tenants/{tenant.id}/fcm-tokens/device-tablet-xyz-200",
+            f"/fcm-tokens/device-tablet-xyz-200",
             headers=student_headers,
         )
         assert del_tablet.status_code == 204

@@ -46,7 +46,7 @@ class TestAttendanceRecordRouter:
 
         # Room
         room_res = await client.post(
-            f"/tenants/{tenant.id}/rooms",
+            "/rooms",
             json={"name": "Lab 101", "latitude": -8.0476, "longitude": -34.8770, "tolerance_radius_meters": 50},
             headers=admin_headers,
         )
@@ -55,7 +55,7 @@ class TestAttendanceRecordRouter:
 
         # Subject class
         sc_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes",
+            "/subject-classes",
             json={"room_id": room_id, "name": "POO", "discipline_name": "Programação"},
             headers=prof_headers,
         )
@@ -64,19 +64,19 @@ class TestAttendanceRecordRouter:
 
         # Enroll student 1 and student 2
         await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student1_member.id)},
             headers=admin_headers,
         )
         await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student2_member.id)},
             headers=admin_headers,
         )
 
         # Open session
         session_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 20},
             headers=prof_headers,
         )
@@ -109,8 +109,8 @@ class TestAttendanceRecordRouter:
 
         # Student 1 confirms (inside room radius)
         res1 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=student1_headers,
         )
         assert res1.status_code == 201
@@ -120,8 +120,8 @@ class TestAttendanceRecordRouter:
 
         # Student 2 confirms (outside room radius -> ~1km away)
         res2 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            data={"day_code": day_code, "latitude": "-8.05600", "longitude": "-34.87700"},
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.05600, "longitude": -34.87700},
             headers=student2_headers,
         )
         assert res2.status_code == 201
@@ -132,7 +132,7 @@ class TestAttendanceRecordRouter:
 
         # List all records
         list_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/records",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/records",
             headers=prof_headers,
         )
         assert list_res.status_code == 200
@@ -140,7 +140,7 @@ class TestAttendanceRecordRouter:
 
         # List irregular records only
         list_irreg = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/records?record_status=irregular",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/records?record_status=irregular",
             headers=prof_headers,
         )
         assert list_irreg.status_code == 200
@@ -161,8 +161,8 @@ class TestAttendanceRecordRouter:
 
         # Student 2 confirms outside radius -> irregular
         res2 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            data={"day_code": day_code, "latitude": "-8.05600", "longitude": "-34.87700"},
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.05600, "longitude": -34.87700},
             headers=student2_headers,
         )
         assert res2.status_code == 201
@@ -170,7 +170,7 @@ class TestAttendanceRecordRouter:
 
         # Review - Approve
         rev_res = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/records/{record_id}/review",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/records/{record_id}/review",
             json={"decision": "approved", "note": "Aluno estava na secretaria"},
             headers=prof_headers,
         )
@@ -194,15 +194,15 @@ class TestAttendanceRecordRouter:
 
         # Professor cancela a chamada
         cancel_res = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
             headers=prof_headers,
         )
         assert cancel_res.status_code == 200
 
         # Aluno tenta confirmar em chamada cancelada
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=student1_headers,
         )
         assert res.status_code == 409
@@ -321,8 +321,8 @@ class TestAttendanceRecordRouter:
         }
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=outsider_headers,
         )
         assert res.status_code == 403
@@ -343,21 +343,21 @@ class TestAttendanceRecordRouter:
         ) = await self._setup_fixtures(session, client)
 
         confirm_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            data={"day_code": day_code, "latitude": "-8.04761", "longitude": "-34.87701"},
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=student1_headers,
         )
         assert confirm_res.status_code == 201
         confirmed = confirm_res.json()
 
         student_roster = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
             headers=student1_headers,
         )
         assert student_roster.status_code == 403
 
         roster_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
             headers=prof_headers,
         )
         assert roster_res.status_code == 200
@@ -382,7 +382,7 @@ class TestAttendanceRecordRouter:
         assert absent["record_status"] is None
 
         missing = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{uuid4()}/roster",
+            f"/subject-classes/{sc_id}/attendance-sessions/{uuid4()}/roster",
             headers=prof_headers,
         )
         assert missing.status_code == 404

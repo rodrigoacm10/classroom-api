@@ -17,11 +17,11 @@ from modules.room.interface.schemas.room_schemas import (
 )
 from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
 from modules.user.domain.entities.user import User
-from security.dependencies.current_user import get_current_user
+from security.dependencies.current_user import get_current_tenant_id, get_current_user
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
 
-router = APIRouter(prefix="/tenants/{tenant_id}/rooms", tags=["rooms"])
+router = APIRouter(prefix="/rooms", tags=["rooms"])
 
 
 @router.post(
@@ -31,8 +31,8 @@ router = APIRouter(prefix="/tenants/{tenant_id}/rooms", tags=["rooms"])
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def create_room(
-    tenant_id: UUID,
     body: CreateRoomRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> RoomResponse:
@@ -70,7 +70,7 @@ async def create_room(
 
 @router.get("", response_model=list[RoomResponse])
 async def list_rooms(
-    tenant_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> list[RoomResponse]:
     """Lista todas as salas de uma Tenant/Instituição."""
@@ -97,8 +97,8 @@ async def list_rooms(
 
 @router.get("/{room_id}", response_model=RoomResponse)
 async def get_room(
-    tenant_id: UUID,
     room_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> RoomResponse:
     """Retorna os detalhes de uma sala específica."""
@@ -125,9 +125,9 @@ async def get_room(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def update_room(
-    tenant_id: UUID,
     room_id: UUID,
     body: UpdateRoomRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> RoomResponse:
     """Atualiza parcialmente os dados de uma sala. Apenas os campos enviados são modificados."""
@@ -163,8 +163,8 @@ async def update_room(
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 async def delete_room(
-    tenant_id: UUID,
     room_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Remove permanentemente uma sala da Tenant. Requer papel de ADMIN."""
