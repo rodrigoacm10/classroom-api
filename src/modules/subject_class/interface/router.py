@@ -39,12 +39,12 @@ from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository impor
 )
 from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
 from modules.user.domain.entities.user import User
-from security.dependencies.current_user import get_current_user
+from security.dependencies.current_user import get_current_tenant_id, get_current_user
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
-router = APIRouter(prefix="/tenants/{tenant_id}/subject-classes", tags=["subject-classes"])
+router = APIRouter(prefix="/subject-classes", tags=["subject-classes"])
 
 
 @router.post(
@@ -54,8 +54,8 @@ router = APIRouter(prefix="/tenants/{tenant_id}/subject-classes", tags=["subject
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def create_subject_class(
-    tenant_id: UUID,
     body: CreateSubjectClassRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SubjectClassResponse:
@@ -84,7 +84,7 @@ async def create_subject_class(
 
 @router.get("", response_model=PageResponse[SubjectClassListItemResponse])
 async def list_subject_classes(
-    tenant_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     pagination: PaginationParams = Depends(get_pagination_params),
     professor_id: UUID | None = Query(None, description="Filtrar por ID do professor responsável"),
     room_id: UUID | None = Query(None, description="Filtrar por ID da sala vinculada"),
@@ -111,8 +111,8 @@ async def list_subject_classes(
 
 @router.get("/{subject_class_id}", response_model=SubjectClassResponse)
 async def get_subject_class(
-    tenant_id: UUID,
     subject_class_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> SubjectClassResponse:
     """Retorna os detalhes de uma turma. Retorna 404 se deletada ou inexistente."""
@@ -131,9 +131,9 @@ async def get_subject_class(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def update_subject_class(
-    tenant_id: UUID,
     subject_class_id: UUID,
     body: UpdateSubjectClassRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> SubjectClassResponse:
     """Atualiza parcialmente os dados de uma turma. Retorna 404 se deletada."""
@@ -159,8 +159,8 @@ async def update_subject_class(
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 async def delete_subject_class(
-    tenant_id: UUID,
     subject_class_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Soft-delete de uma turma. Requer papel ADMIN. Retorna 404 se já deletada."""

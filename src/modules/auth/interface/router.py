@@ -21,10 +21,15 @@ from modules.auth.application.use_cases.reset_password import (
     ResetPasswordInput,
     ResetPasswordUseCase,
 )
+from modules.auth.application.use_cases.verify_reset_code import (
+    VerifyResetCodeInput,
+    VerifyResetCodeUseCase,
+)
 from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, SwitchTenantUseCase
 from modules.auth.interface.schemas.password_reset_schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    VerifyResetCodeRequest,
 )
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
@@ -261,6 +266,22 @@ async def forgot_password(
     return MessageResponse(
         message="Se o e-mail estiver cadastrado, você receberá um código de recuperação em instantes."
     )
+
+
+@router.post("/verify-reset-code", response_model=MessageResponse)
+@limiter.limit("10/minute")
+async def verify_reset_code(
+    request: Request,
+    body: VerifyResetCodeRequest,
+) -> MessageResponse:
+    """
+    Valida previamente o código OTP antes de avançar para a redefinição de senha.
+    Taxa limite: 10 requisições por minuto por IP.
+    """
+    use_case = VerifyResetCodeUseCase()
+    await use_case.execute(VerifyResetCodeInput(email=body.email, code=body.code))
+
+    return MessageResponse(message="Código de recuperação válido.")
 
 
 @router.post("/reset-password", response_model=MessageResponse)
