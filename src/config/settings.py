@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000" # URL base do frontend para montar links de aceite
     invite_expire_hours: int = 72               # Tempo de expiração do convite em horas
     password_reset_expire_minutes: int = 15     # Tempo de expiração do código de recuperação em minutos
+    password_reset_token_expire_minutes: int = 10 # Tempo de expiração do token de redefinição (etapa 2 -> 3) em minutos
 
     # Firebase Cloud Messaging
     firebase_credentials_path: str = "credentials/firebase-service-account.json"
