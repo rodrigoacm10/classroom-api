@@ -11,6 +11,10 @@ from modules.auth.application.use_cases.reset_password import (
     ResetPasswordInput,
     ResetPasswordUseCase,
 )
+from modules.auth.application.use_cases.verify_reset_code import (
+    VerifyResetCodeInput,
+    VerifyResetCodeUseCase,
+)
 from security.password import hash_password, verify_password
 from shared.exceptions import BusinessRuleException, ResourceNotFoundException
 from tests.factories.user_factory import UserFactory
@@ -205,3 +209,60 @@ class TestResetPasswordUseCase:
                     new_password="NovaSenha123",
                 )
             )
+
+
+@pytest.mark.asyncio
+class TestVerifyResetCodeUseCase:
+    """Testes unitários para VerifyResetCodeUseCase."""
+
+    def setup_method(self) -> None:
+        self.redis = FakeRedis()
+        self.use_case = VerifyResetCodeUseCase(redis=self.redis)
+
+    async def test_verify_code_success_preserves_redis_data(self) -> None:
+        """Código correto -> valida sem erro e preserva a chave no Redis para reset posterior."""
+        payload = json.dumps({"code": "847291", "user_id": "some-id", "attempts": 0})
+        await self.redis.set("password_reset:aluno@escola.com", payload, ex=900)
+
+        await self.use_case.execute(
+            VerifyResetCodeInput(email="aluno@escola.com", code="847291")
+        )
+
+        # Chave continua no Redis
+        stored = await self.redis.get("password_reset:aluno@escola.com")
+        assert stored is not None
+        assert json.loads(stored)["code"] == "847291"
+
+    async def test_verify_code_expired_or_not_found_raises_business_rule_exception(self) -> None:
+        """Chave inexistente ou expirada -> lança BusinessRuleException."""
+        with pytest.raises(BusinessRuleException, match="inválido ou expirado"):
+            await self.use_case.execute(
+                VerifyResetCodeInput(email="desconhecido@escola.com", code="123456")
+            )
+
+    async def test_verify_code_wrong_code_increments_attempts(self) -> None:
+        """Código incorreto -> incrementa attempts no Redis e lança BusinessRuleException."""
+        payload = json.dumps({"code": "123456", "user_id": "some-id", "attempts": 1})
+        await self.redis.set("password_reset:aluno@escola.com", payload, ex=900)
+
+        with pytest.raises(BusinessRuleException, match="Código de recuperação incorreto"):
+            await self.use_case.execute(
+                VerifyResetCodeInput(email="aluno@escola.com", code="999999")
+            )
+
+        stored_raw = await self.redis.get("password_reset:aluno@escola.com")
+        assert stored_raw is not None
+        stored = json.loads(stored_raw)
+        assert stored["attempts"] == 2
+
+    async def test_verify_code_exceeds_5_attempts_destroys_key(self) -> None:
+        """Ao atingir 5 tentativas -> chave é deletada do Redis (anti-brute-force)."""
+        payload = json.dumps({"code": "123456", "user_id": "some-id", "attempts": 4})
+        await self.redis.set("password_reset:aluno@escola.com", payload, ex=900)
+
+        with pytest.raises(BusinessRuleException, match="Limite de tentativas excedido"):
+            await self.use_case.execute(
+                VerifyResetCodeInput(email="aluno@escola.com", code="999999")
+            )
+
+        assert await self.redis.get("password_reset:aluno@escola.com") is None

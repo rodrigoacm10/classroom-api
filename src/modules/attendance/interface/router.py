@@ -32,7 +32,11 @@ from modules.room.infra.repositories.room_sqlalchemy_repository import RoomSQLAl
 from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import SubjectClassSQLAlchemyRepository
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import TenantMemberSQLAlchemyRepository
 from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
-from security.dependencies.current_user import AuthContext, get_auth_context
+from security.dependencies.current_user import (
+    AuthContext,
+    get_auth_context,
+    get_current_tenant_id,
+)
 from security.dependencies.require_role import require_role
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
@@ -41,7 +45,7 @@ from shared.events.event_dispatcher import EventDispatcher
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 router = APIRouter(
-    prefix="/tenants/{tenant_id}/subject-classes/{subject_class_id}/attendance-sessions",
+    prefix="/subject-classes/{subject_class_id}/attendance-sessions",
     tags=["attendance"],
 )
 
@@ -53,10 +57,10 @@ router = APIRouter(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def open_attendance_session(
-    tenant_id: UUID,
     subject_class_id: UUID,
     body: CreateAttendanceSessionRequest,
     request: Request,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceSessionResponse:
@@ -92,8 +96,8 @@ async def open_attendance_session(
 
 @router.get("", response_model=PageResponse[AttendanceSessionResponse])
 async def list_attendance_sessions(
-    tenant_id: UUID,
     subject_class_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     pagination: PaginationParams = Depends(get_pagination_params),
     session_status: SessionStatus | None = Query(
         None,
@@ -137,9 +141,9 @@ async def list_attendance_sessions(
 
 @router.get("/{session_id}", response_model=AttendanceSessionResponse)
 async def get_attendance_session(
-    tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceSessionResponse:
     """Retorna os detalhes de uma sessão de chamada específica."""
@@ -169,10 +173,10 @@ async def get_attendance_session(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def close_attendance_session(
-    tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
     request: Request,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceSessionResponse:
@@ -209,9 +213,9 @@ async def close_attendance_session(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def cancel_attendance_session(
-    tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceSessionResponse:
@@ -246,11 +250,11 @@ async def cancel_attendance_session(
     status_code=status.HTTP_201_CREATED,
 )
 async def confirm_attendance(
-    tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
     body: ConfirmAttendanceRequest,
     request: Request,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceRecordResponse:
@@ -300,9 +304,9 @@ async def confirm_attendance(
     response_model=list[AttendanceRecordResponse],
 )
 async def list_attendance_records(
-    tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     record_status: RecordStatus | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[AttendanceRecordResponse]:
@@ -336,9 +340,9 @@ async def list_attendance_records(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def list_session_roster(
-    tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> list[SessionRosterItemResponse]:
     """Lista todos os alunos ativos da turma na chamada, com horário, distância e status quando houver presença."""
@@ -368,10 +372,10 @@ async def list_session_roster(
     response_model=AttendanceRecordResponse,
 )
 async def get_attendance_record(
-    tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
     record_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceRecordResponse:
     """Retorna os detalhes de um registro de presença específico."""
@@ -404,11 +408,11 @@ async def get_attendance_record(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def review_attendance_record(
-    tenant_id: UUID,
     subject_class_id: UUID,
     session_id: UUID,
     record_id: UUID,
     body: ReviewAttendanceRecordRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceRecordResponse:

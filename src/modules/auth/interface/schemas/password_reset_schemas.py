@@ -21,3 +21,15 @@ class ResetPasswordRequest(BaseModel):
         min_length=6,
         description="Nova senha do usuário (mínimo de 6 caracteres)",
     )
+
+
+class VerifyResetCodeRequest(BaseModel):
+    """Payload para validação prévia do código de recuperação de senha."""
+    email: EmailStr
+    code: str = Field(
+        ...,
+        min_length=6,
+        max_length=6,
+        pattern=r"^\d{6}$",
+        description="Código numérico de 6 dígitos recebido por e-mail",
+    )

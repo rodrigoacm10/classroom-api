@@ -25,7 +25,7 @@ class TestEnrollmentRouterEndpoints:
 
         room_payload = {"name": "Sala 101", "latitude": -8.0, "longitude": -34.0}
         room_res = await client.post(
-            f"/tenants/{tenant.id}/rooms", json=room_payload, headers=headers
+            "/rooms", json=room_payload, headers=headers
         )
         assert room_res.status_code == 201
         room_id = room_res.json()["id"]
@@ -36,7 +36,7 @@ class TestEnrollmentRouterEndpoints:
             "discipline_name": "Cálculo 1",
         }
         sc_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes", json=sc_payload, headers=headers
+            "/subject-classes", json=sc_payload, headers=headers
         )
         assert sc_res.status_code == 201
         sc_id = sc_res.json()["id"]
@@ -55,7 +55,7 @@ class TestEnrollmentRouterEndpoints:
         )
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student_member.id)},
             headers=headers,
         )
@@ -84,7 +84,7 @@ class TestEnrollmentRouterEndpoints:
         )
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student_member.id)},
             headers=prof_headers,
         )
@@ -105,7 +105,7 @@ class TestEnrollmentRouterEndpoints:
         student_headers = {"Authorization": f"Bearer {token}"}
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student1_member.id)},
             headers=student_headers,
         )
@@ -121,7 +121,7 @@ class TestEnrollmentRouterEndpoints:
         )
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(prof2_member.id)},
             headers=headers,
         )
@@ -137,14 +137,14 @@ class TestEnrollmentRouterEndpoints:
         )
 
         res1 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student_member.id)},
             headers=headers,
         )
         assert res1.status_code == 201
 
         res2 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student_member.id)},
             headers=headers,
         )
@@ -166,12 +166,12 @@ class TestEnrollmentRouterEndpoints:
 
         # Enroll both
         await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st1_member.id)},
             headers=headers,
         )
         e2_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st2_member.id)},
             headers=headers,
         )
@@ -179,13 +179,13 @@ class TestEnrollmentRouterEndpoints:
 
         # Drop st2
         await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{e2_id}",
+            f"/subject-classes/{sc_id}/enrollments/{e2_id}",
             headers=headers,
         )
 
         # GET without filter -> includes both (active & dropped)
         res_all = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             headers=headers,
         )
         assert res_all.status_code == 200
@@ -194,7 +194,7 @@ class TestEnrollmentRouterEndpoints:
 
         # GET ?status=active -> includes only st1
         res_active = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?status=active",
+            f"/subject-classes/{sc_id}/enrollments?status=active",
             headers=headers,
         )
         assert res_active.status_code == 200
@@ -212,13 +212,13 @@ class TestEnrollmentRouterEndpoints:
                 session, tenant_id=tenant.id, user_id=st_user.id, role=UserRole.ALUNO
             )
             await client.post(
-                f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+                f"/subject-classes/{sc_id}/enrollments",
                 json={"tenant_member_id": str(st_member.id)},
                 headers=headers,
             )
 
         res_p1 = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?page=1&page_size=2",
+            f"/subject-classes/{sc_id}/enrollments?page=1&page_size=2",
             headers=headers,
         )
         assert res_p1.status_code == 200
@@ -230,7 +230,7 @@ class TestEnrollmentRouterEndpoints:
         assert p1_data["pages"] == 2
 
         res_p2 = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?page=2&page_size=2",
+            f"/subject-classes/{sc_id}/enrollments?page=2&page_size=2",
             headers=headers,
         )
         assert res_p2.status_code == 200
@@ -247,7 +247,7 @@ class TestEnrollmentRouterEndpoints:
         )
 
         res1 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st_member.id)},
             headers=headers,
         )
@@ -255,14 +255,14 @@ class TestEnrollmentRouterEndpoints:
 
         # Drop
         res_drop = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{enrollment_id}",
+            f"/subject-classes/{sc_id}/enrollments/{enrollment_id}",
             headers=headers,
         )
         assert res_drop.status_code == 204
 
         # Reactivate via POST
         res_reactivate = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st_member.id)},
             headers=headers,
         )
@@ -280,7 +280,7 @@ class TestEnrollmentRouterEndpoints:
         )
 
         res1 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st_member.id)},
             headers=headers,
         )
@@ -288,28 +288,28 @@ class TestEnrollmentRouterEndpoints:
 
         # Soft delete
         res_del = await client.delete(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{old_enrollment_id}",
+            f"/subject-classes/{sc_id}/enrollments/{old_enrollment_id}",
             headers=headers,
         )
         assert res_del.status_code == 204
 
         # Verify not in normal list
         res_list = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             headers=headers,
         )
         assert len(res_list.json()["items"]) == 0
 
         # Verify present with include_deleted=true
         res_deleted_list = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?include_deleted=true",
+            f"/subject-classes/{sc_id}/enrollments?include_deleted=true",
             headers=headers,
         )
         assert len(res_deleted_list.json()["items"]) == 1
 
         # Re-enroll creates new record
         res_re_enroll = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st_member.id)},
             headers=headers,
         )
@@ -327,7 +327,7 @@ class TestEnrollmentRouterEndpoints:
         )
 
         await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st_member.id)},
             headers=headers,
         )
@@ -343,14 +343,14 @@ class TestEnrollmentRouterEndpoints:
 
         # Check list of active enrollments -> empty
         res_active = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments?status=active",
+            f"/subject-classes/{sc_id}/enrollments?status=active",
             headers=headers,
         )
         assert len(res_active.json()["items"]) == 0
 
         # Check list of all enrollments -> contains dropped enrollment
         res_all = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             headers=headers,
         )
         assert len(res_all.json()["items"]) == 1
@@ -366,7 +366,7 @@ class TestEnrollmentRouterEndpoints:
         )
 
         res_enroll = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st_member.id)},
             headers=admin_headers,
         )
@@ -384,28 +384,28 @@ class TestEnrollmentRouterEndpoints:
 
         # Professor Tenta PATCH -> 403
         res_patch_prof = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{enrollment_id}",
+            f"/subject-classes/{sc_id}/enrollments/{enrollment_id}",
             headers=prof_headers,
         )
         assert res_patch_prof.status_code == 403
 
         # Professor Tenta DELETE -> 403
         res_del_prof = await client.delete(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{enrollment_id}",
+            f"/subject-classes/{sc_id}/enrollments/{enrollment_id}",
             headers=prof_headers,
         )
         assert res_del_prof.status_code == 403
 
         # Aluno Tenta PATCH -> 403
         res_patch_aluno = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{enrollment_id}",
+            f"/subject-classes/{sc_id}/enrollments/{enrollment_id}",
             headers=aluno_headers,
         )
         assert res_patch_aluno.status_code == 403
 
         # Aluno Tenta DELETE -> 403
         res_del_aluno = await client.delete(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{enrollment_id}",
+            f"/subject-classes/{sc_id}/enrollments/{enrollment_id}",
             headers=aluno_headers,
         )
         assert res_del_aluno.status_code == 403
@@ -420,14 +420,14 @@ class TestEnrollmentRouterEndpoints:
         )
 
         res_create = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st_member.id)},
             headers=headers,
         )
         enrollment_id = res_create.json()["id"]
 
         res_get = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments/{enrollment_id}",
+            f"/subject-classes/{sc_id}/enrollments/{enrollment_id}",
             headers=headers,
         )
         assert res_get.status_code == 200
@@ -444,13 +444,13 @@ class TestEnrollmentRouterEndpoints:
         )
 
         await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(st_member.id)},
             headers=headers,
         )
 
         res_member_enrollments = await client.get(
-            f"/tenants/{tenant.id}/members/{st_member.id}/enrollments",
+            f"/members/{st_member.id}/enrollments",
             headers=headers,
         )
         assert res_member_enrollments.status_code == 200
@@ -480,7 +480,7 @@ class TestEnrollmentRouterEndpoints:
         }
 
         room_res = await client.post(
-            f"/tenants/{tenant.id}/rooms",
+            "/rooms",
             json={"name": "Auditório", "latitude": -8.0476, "longitude": -34.8770},
             headers=admin_headers,
         )
@@ -488,7 +488,7 @@ class TestEnrollmentRouterEndpoints:
         room_id = room_res.json()["id"]
 
         sc_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes",
+            "/subject-classes",
             json={"room_id": room_id, "name": "POO", "discipline_name": "Programação"},
             headers=prof_headers,
         )
@@ -497,7 +497,7 @@ class TestEnrollmentRouterEndpoints:
         professor_id = sc_res.json()["professor_id"]
 
         empty_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes",
+            "/subject-classes",
             json={"room_id": room_id, "name": "Cálculo", "discipline_name": "Matemática"},
             headers=prof_headers,
         )
@@ -515,14 +515,14 @@ class TestEnrollmentRouterEndpoints:
 
         for class_id in (sc_id, empty_id):
             enroll_res = await client.post(
-                f"/tenants/{tenant.id}/subject-classes/{class_id}/enrollments",
+                f"/subject-classes/{class_id}/enrollments",
                 json={"tenant_member_id": str(student_member.id)},
                 headers=admin_headers,
             )
             assert enroll_res.status_code == 201
 
         open_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 20},
             headers=prof_headers,
         )
@@ -530,7 +530,7 @@ class TestEnrollmentRouterEndpoints:
         session_data = open_res.json()
 
         confirm_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_data['id']}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_data['id']}/confirm",
             json={
                 "day_code": session_data["day_code"],
                 "latitude": -8.04761,
@@ -541,7 +541,7 @@ class TestEnrollmentRouterEndpoints:
         assert confirm_res.status_code == 201
 
         list_res = await client.get(
-            f"/tenants/{tenant.id}/members/{student_member.id}/subject-classes",
+            f"/members/{student_member.id}/subject-classes",
             headers=student_headers,
         )
         assert list_res.status_code == 200
