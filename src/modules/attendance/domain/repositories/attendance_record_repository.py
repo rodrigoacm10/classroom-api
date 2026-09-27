@@ -7,7 +7,6 @@ from shared.enums.record_status import RecordStatus
 
 
 class AttendanceRecordRepository(Protocol):
-
     async def create_record(
         self,
         session_id: UUID,

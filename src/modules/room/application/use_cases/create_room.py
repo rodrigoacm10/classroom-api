@@ -18,7 +18,6 @@ class CreateRoomInput:
 
 
 class CreateRoomUseCase:
-
     def __init__(
         self,
         room_repo: RoomRepository,

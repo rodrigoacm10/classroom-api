@@ -25,7 +25,6 @@ class ListTenantMembersInput:
 
 
 class ListTenantMembersUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,

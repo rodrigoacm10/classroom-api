@@ -13,7 +13,6 @@ class GetEnrollmentInput:
 
 
 class GetEnrollmentUseCase:
-
     def __init__(self, enrollment_repo: EnrollmentRepository) -> None:
         self.enrollment_repo = enrollment_repo
 

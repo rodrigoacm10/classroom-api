@@ -91,4 +91,3 @@ uv run pytest -k "test_find_by_email" -v
 # Parar no primeiro erro que encontrar (flag -x):
 uv run pytest tests/ -x -v
 ```
-

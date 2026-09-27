@@ -37,7 +37,9 @@ from modules.subject_class.interface.schemas.subject_class_schemas import (
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
 )
-from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
+from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
+    TenantSQLAlchemyRepository,
+)
 from modules.user.domain.entities.user import User
 from security.dependencies.current_user import get_current_tenant_id, get_current_user
 from security.dependencies.require_role import require_role
@@ -94,7 +96,9 @@ async def list_subject_classes(
     """Lista turmas ativas da Tenant com paginação offset, nome do professor, alunos ativos e taxa de presença."""
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
-    use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+    use_case = ListSubjectClassesUseCase(
+        subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+    )
 
     page = await use_case.execute(
         ListSubjectClassesInput(

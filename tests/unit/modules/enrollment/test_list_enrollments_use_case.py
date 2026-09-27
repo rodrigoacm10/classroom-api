@@ -18,7 +18,6 @@ from tests.unit.fakes.fake_subject_class_repository import FakeSubjectClassRepos
 
 @pytest.mark.asyncio
 class TestListEnrollmentsUseCase:
-
     async def test_list_enrollments_paginated_success(self):
         """Deve listar matrículas da turma com paginação offset e status."""
         enrollment_repo = FakeEnrollmentRepository()
@@ -30,8 +29,12 @@ class TestListEnrollmentsUseCase:
 
         m1_id = uuid4()
         m2_id = uuid4()
-        e1 = Enrollment(subject_class_id=sc.id, tenant_member_id=m1_id, status=EnrollmentStatus.ACTIVE)
-        e2 = Enrollment(subject_class_id=sc.id, tenant_member_id=m2_id, status=EnrollmentStatus.DROPPED)
+        e1 = Enrollment(
+            subject_class_id=sc.id, tenant_member_id=m1_id, status=EnrollmentStatus.ACTIVE
+        )
+        e2 = Enrollment(
+            subject_class_id=sc.id, tenant_member_id=m2_id, status=EnrollmentStatus.DROPPED
+        )
         await enrollment_repo.save(e1)
         await enrollment_repo.save(e2)
 

@@ -46,7 +46,9 @@ class TestTenantMemberSQLAlchemyRepository:
         member_1 = TenantMember(tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
         await self.repository.save(member_1)
 
-        member_duplicate = TenantMember(tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR)
+        member_duplicate = TenantMember(
+            tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
         with pytest.raises(IntegrityError):
             await self.repository.save(member_duplicate)
 
@@ -74,7 +76,9 @@ class TestTenantMemberSQLAlchemyRepository:
         assert saved_2.deleted is False
 
         # Consulta de membro ativo deve retornar o novo membro_2
-        active_found = await self.repository.find_by_tenant_and_user(tenant.id, user.id, include_deleted=False)
+        active_found = await self.repository.find_by_tenant_and_user(
+            tenant.id, user.id, include_deleted=False
+        )
         assert active_found is not None
         assert active_found.id == saved_2.id
 

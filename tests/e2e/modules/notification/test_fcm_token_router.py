@@ -95,7 +95,7 @@ class TestFCMTokenRouter:
 
         # Remove
         del_res = await client.delete(
-            f"/fcm-tokens/device-to-remove",
+            "/fcm-tokens/device-to-remove",
             headers=student_headers,
         )
         assert del_res.status_code == 204
@@ -105,7 +105,7 @@ class TestFCMTokenRouter:
         tenant, _, student_headers = await self._setup_fixtures(session)
 
         del_res = await client.delete(
-            f"/fcm-tokens/non-existent-device",
+            "/fcm-tokens/non-existent-device",
             headers=student_headers,
         )
         assert del_res.status_code == 404
@@ -144,21 +144,21 @@ class TestFCMTokenRouter:
 
         # 3. Remover apenas o celular (logout do celular)
         del_mobile = await client.delete(
-            f"/fcm-tokens/device-mobile-xyz-100",
+            "/fcm-tokens/device-mobile-xyz-100",
             headers=student_headers,
         )
         assert del_mobile.status_code == 204
 
         # 4. Tentar remover o celular de novo deve dar 404, mas o tablet continua existindo
         del_mobile_again = await client.delete(
-            f"/fcm-tokens/device-mobile-xyz-100",
+            "/fcm-tokens/device-mobile-xyz-100",
             headers=student_headers,
         )
         assert del_mobile_again.status_code == 404
 
         # 5. Logout do tablet remove o tablet com sucesso
         del_tablet = await client.delete(
-            f"/fcm-tokens/device-tablet-xyz-200",
+            "/fcm-tokens/device-tablet-xyz-200",
             headers=student_headers,
         )
         assert del_tablet.status_code == 204

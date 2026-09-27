@@ -25,7 +25,9 @@ class TestForgotPasswordEndpoint:
             name="Aluno Recuperacao",
         )
 
-        with patch("modules.auth.application.use_cases.forgot_password.send_password_reset_email") as mock_email:
+        with patch(
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+        ) as mock_email:
             response = await client.post(
                 "/auth/forgot-password",
                 json={"email": "recuperar_sucesso@e2e.com"},
@@ -49,7 +51,9 @@ class TestForgotPasswordEndpoint:
         self, client: AsyncClient, session
     ) -> None:
         """E-mail inexistente -> retorna exatamente 200 com a mesma mensagem (anti-enumeração)."""
-        with patch("modules.auth.application.use_cases.forgot_password.send_password_reset_email") as mock_email:
+        with patch(
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+        ) as mock_email:
             response = await client.post(
                 "/auth/forgot-password",
                 json={"email": "inexistente@e2e.com"},
@@ -145,9 +149,7 @@ class TestVerifyResetCodeEndpoint:
         assert "Limite de tentativas excedido" in response.json()["detail"]
         assert await redis_client.get(f"password_reset:{email}") is None
 
-    async def test_verify_reset_code_invalid_format_returns_422(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_verify_reset_code_invalid_format_returns_422(self, client: AsyncClient) -> None:
         """Código com formato inválido (ex: letras ou tamanho diferente de 6) -> 422."""
         response = await client.post(
             "/auth/verify-reset-code",
@@ -160,9 +162,7 @@ class TestVerifyResetCodeEndpoint:
 class TestResetPasswordEndpoint:
     """Testes E2E para POST /auth/reset-password (Etapa 3 - Abordagem B)."""
 
-    async def test_reset_password_full_flow_success(
-        self, client: AsyncClient, session
-    ) -> None:
+    async def test_reset_password_full_flow_success(self, client: AsyncClient, session) -> None:
         """Fluxo completo E2E: forgot -> verify -> reset -> login com nova senha."""
         email = "fluxo_completo_b@e2e.com"
         await UserFactory.create(
@@ -275,9 +275,7 @@ class TestResetPasswordEndpoint:
         assert response.status_code == 400
         assert "Token de recuperação inválido" in response.json()["detail"]
 
-    async def test_reset_password_short_password_returns_422(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_reset_password_short_password_returns_422(self, client: AsyncClient) -> None:
         """Nova senha com menos de 6 caracteres -> 422 Unprocessable Entity."""
         response = await client.post(
             "/auth/reset-password",

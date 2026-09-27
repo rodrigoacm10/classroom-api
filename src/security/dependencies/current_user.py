@@ -19,6 +19,7 @@ bearer_scheme = HTTPBearer()
 @dataclass
 class AuthContext:
     """Contexto completo de uma requisição autenticada."""
+
     user: User
     tenant_id: UUID | None
     role: UserRole | None
@@ -68,7 +69,9 @@ async def get_auth_context(
     user = await repository.find_by_id(user_id)
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado."
+        )
 
     raw_tenant_id = payload.get("tenant_id")
     raw_role = payload.get("role")

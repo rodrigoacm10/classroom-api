@@ -19,7 +19,6 @@ class LoginOutput:
 
 
 class LoginUseCase:
-
     def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
 

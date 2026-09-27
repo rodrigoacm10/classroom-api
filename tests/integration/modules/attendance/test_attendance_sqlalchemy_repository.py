@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
@@ -7,31 +6,42 @@ from sqlalchemy.exc import DBAPIError
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
-from modules.attendance.infra.repositories.record_sqlalchemy_repository import RecordSQLAlchemyRepository
-from modules.attendance.infra.repositories.session_sqlalchemy_repository import SessionSQLAlchemyRepository
+from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
+    RecordSQLAlchemyRepository,
+)
+from modules.attendance.infra.repositories.session_sqlalchemy_repository import (
+    SessionSQLAlchemyRepository,
+)
 from modules.room.domain.entities.room import Room
 from modules.room.infra.repositories.room_sqlalchemy_repository import RoomSQLAlchemyRepository
 from modules.subject_class.domain.entities.subject_class import SubjectClass
-from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import SubjectClassSQLAlchemyRepository
+from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import (
+    SubjectClassSQLAlchemyRepository,
+)
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
-from shared.exceptions import BusinessRuleException, ResourceAlreadyExistsException
+from shared.exceptions import ResourceAlreadyExistsException
 from tests.factories.tenant_factory import TenantFactory
 from tests.factories.user_factory import UserFactory
 
 
 @pytest.mark.asyncio
 class TestAttendanceSQLAlchemyRepository:
-
     async def test_save_and_find_attendance_session(self, session):
         """Deve salvar e buscar uma sessão de chamada no banco de dados."""
         tenant = await TenantFactory.create(session)
         room_repo = RoomSQLAlchemyRepository(session)
-        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala 1", latitude=-8.0, longitude=-34.0))
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala 1", latitude=-8.0, longitude=-34.0)
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma A", discipline_name="Math", room_id=room.id))
+        sc = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id, name="Turma A", discipline_name="Math", room_id=room.id
+            )
+        )
 
         session_repo = SessionSQLAlchemyRepository(session)
         att_session = AttendanceSession(
@@ -58,15 +68,27 @@ class TestAttendanceSQLAlchemyRepository:
         """Deve criar um registro de chamada com PostGIS calculando a distância e dentro_do_raio."""
         tenant = await TenantFactory.create(session)
         user = await UserFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         room_repo = RoomSQLAlchemyRepository(session)
         room = await room_repo.save(
-            Room(tenant_id=tenant.id, name="Lab 1", latitude=-8.047600, longitude=-34.877000, tolerance_radius_meters=50)
+            Room(
+                tenant_id=tenant.id,
+                name="Lab 1",
+                latitude=-8.047600,
+                longitude=-34.877000,
+                tolerance_radius_meters=50,
+            )
         )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma B", discipline_name="Physics", room_id=room.id))
+        sc = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id, name="Turma B", discipline_name="Physics", room_id=room.id
+            )
+        )
 
         session_repo = SessionSQLAlchemyRepository(session)
         att_session = await session_repo.save(
@@ -105,13 +127,21 @@ class TestAttendanceSQLAlchemyRepository:
         """Unique constraint (session_id, tenant_member_id) deve impedir duplicidade e lançar BusinessRuleException."""
         tenant = await TenantFactory.create(session)
         user = await UserFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         room_repo = RoomSQLAlchemyRepository(session)
-        room = await room_repo.save(Room(tenant_id=tenant.id, name="Lab 1", latitude=-8.0476, longitude=-34.8770))
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Lab 1", latitude=-8.0476, longitude=-34.8770)
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma Unique", discipline_name="Test", room_id=room.id))
+        sc = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id, name="Turma Unique", discipline_name="Test", room_id=room.id
+            )
+        )
 
         session_repo = SessionSQLAlchemyRepository(session)
         att_session = await session_repo.save(
@@ -147,10 +177,16 @@ class TestAttendanceSQLAlchemyRepository:
         """Deve fechar apenas as sessões de chamada que atingiram o tempo limite de expiração (expires_at <= NOW())."""
         tenant = await TenantFactory.create(session)
         room_repo = RoomSQLAlchemyRepository(session)
-        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala Expiração", latitude=-8.0, longitude=-34.0))
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala Expiração", latitude=-8.0, longitude=-34.0)
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma Expiração", discipline_name="Math", room_id=room.id))
+        sc = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id, name="Turma Expiração", discipline_name="Math", room_id=room.id
+            )
+        )
 
         session_repo = SessionSQLAlchemyRepository(session)
 
@@ -192,18 +228,22 @@ class TestAttendanceSQLAlchemyRepository:
     async def test_session_status_pg_enum_labels_are_lowercase_values(self, session):
         """O tipo nativo session_status deve aceitar os values do enum Python, não os names."""
         labels = (
-            await session.execute(
-                text(
-                    """
+            (
+                await session.execute(
+                    text(
+                        """
                     SELECT e.enumlabel
                     FROM pg_enum e
                     JOIN pg_type t ON e.enumtypid = t.oid
                     WHERE t.typname = 'session_status'
                     ORDER BY e.enumsortorder
                     """
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         assert labels == ["open", "closed", "cancelled"]
 
@@ -225,11 +265,15 @@ class TestAttendanceSQLAlchemyRepository:
         """Abrir sessão persiste 'open' e find_open_session_by_class consegue filtrar esse valor."""
         tenant = await TenantFactory.create(session)
         room_repo = RoomSQLAlchemyRepository(session)
-        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala Enum", latitude=-8.0, longitude=-34.0))
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala Enum", latitude=-8.0, longitude=-34.0)
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
         sc = await sc_repo.save(
-            SubjectClass(tenant_id=tenant.id, name="Turma Enum", discipline_name="Math", room_id=room.id)
+            SubjectClass(
+                tenant_id=tenant.id, name="Turma Enum", discipline_name="Math", room_id=room.id
+            )
         )
 
         session_repo = SessionSQLAlchemyRepository(session)
@@ -259,11 +303,15 @@ class TestAttendanceSQLAlchemyRepository:
         """Cancelar sessão deve gravar 'cancelled', valor que a migration adiciona ao enum."""
         tenant = await TenantFactory.create(session)
         room_repo = RoomSQLAlchemyRepository(session)
-        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala Cancel", latitude=-8.0, longitude=-34.0))
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala Cancel", latitude=-8.0, longitude=-34.0)
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
         sc = await sc_repo.save(
-            SubjectClass(tenant_id=tenant.id, name="Turma Cancel", discipline_name="Math", room_id=room.id)
+            SubjectClass(
+                tenant_id=tenant.id, name="Turma Cancel", discipline_name="Math", room_id=room.id
+            )
         )
 
         att_session = AttendanceSession(
@@ -374,7 +422,9 @@ class TestAttendanceSQLAlchemyRepository:
         assert listed[0].confirmed_count == 2
         assert listed[0].irregular_count == 1
 
-    async def test_list_session_roster_includes_absent_students_and_attendance_fields(self, session):
+    async def test_list_session_roster_includes_absent_students_and_attendance_fields(
+        self, session
+    ):
         """Roster da chamada lista matriculados ativos com presença opcional; dropados ficam de fora."""
         from modules.enrollment.domain.entities.enrollment import Enrollment
         from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
@@ -465,7 +515,9 @@ class TestAttendanceSQLAlchemyRepository:
 
         tenant = await TenantFactory.create(session)
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="História", discipline_name="História"))
+        sc = await sc_repo.save(
+            SubjectClass(tenant_id=tenant.id, name="História", discipline_name="História")
+        )
 
         session_repo = SessionSQLAlchemyRepository(session)
         now = datetime.now(timezone.utc)
@@ -509,4 +561,3 @@ class TestAttendanceSQLAlchemyRepository:
         )
         assert page_period.total == 1
         assert page_period.items[0].day_code == "OPEN01"
-

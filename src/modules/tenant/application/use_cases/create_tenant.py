@@ -24,7 +24,6 @@ class CreateTenantOutput:
 
 
 class CreateTenantUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,
@@ -43,7 +42,10 @@ class CreateTenantUseCase:
 
         # O criador da tenant torna-se automaticamente ADMIN da mesma
         from uuid import UUID
-        owner_uuid = UUID(data.owner_user_id) if isinstance(data.owner_user_id, str) else data.owner_user_id
+
+        owner_uuid = (
+            UUID(data.owner_user_id) if isinstance(data.owner_user_id, str) else data.owner_user_id
+        )
 
         owner_member = TenantMember(
             tenant_id=saved_tenant.id,

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from uuid import UUID
 
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
-from datetime import datetime, timezone
 from shared.exceptions import ResourceNotFoundException
 
 

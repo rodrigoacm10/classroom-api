@@ -7,7 +7,6 @@ from shared.pagination import Page, PaginationParams
 
 
 class TenantInviteRepository(Protocol):
-
     async def find_by_id(self, invite_id: UUID) -> TenantInvite | None: ...
 
     async def find_by_token(self, token: str) -> TenantInvite | None: ...

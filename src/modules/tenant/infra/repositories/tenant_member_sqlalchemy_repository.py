@@ -10,13 +10,10 @@ from infra.database.models.user import UserModel
 from modules.tenant.domain.entities.tenant_member import TenantMember
 from modules.tenant.infra.mappers.tenant_member_mapper import TenantMemberMapper
 from shared.enums.user_role import UserRole
-
-
 from shared.pagination import Page, PaginationParams
 
 
 class TenantMemberSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -86,7 +83,9 @@ class TenantMemberSQLAlchemyRepository:
         # Query de contagem total
         count_stmt = select(func.count(func.distinct(TenantMemberModel.id))).where(*conditions)
         if search:
-            count_stmt = count_stmt.join(UserModel, UserModel.id == TenantMemberModel.user_id).where(
+            count_stmt = count_stmt.join(
+                UserModel, UserModel.id == TenantMemberModel.user_id
+            ).where(
                 or_(
                     UserModel.name.ilike(f"%{search}%"),
                     UserModel.email.ilike(f"%{search}%"),
@@ -106,7 +105,9 @@ class TenantMemberSQLAlchemyRepository:
         # Query dos itens paginados
         items_stmt = select(TenantMemberModel).where(*conditions)
         if search:
-            items_stmt = items_stmt.join(UserModel, UserModel.id == TenantMemberModel.user_id).where(
+            items_stmt = items_stmt.join(
+                UserModel, UserModel.id == TenantMemberModel.user_id
+            ).where(
                 or_(
                     UserModel.name.ilike(f"%{search}%"),
                     UserModel.email.ilike(f"%{search}%"),

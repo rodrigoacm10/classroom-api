@@ -157,6 +157,7 @@ attendance_records
 # src/shared/enums/session_status.py
 from enum import Enum
 
+
 class SessionStatus(str, Enum):
     OPEN = "open"
     CLOSED = "closed"
@@ -176,11 +177,12 @@ O `record_status` separa três responsabilidades distintas:
 # src/shared/enums/record_status.py
 from enum import Enum
 
+
 class RecordStatus(str, Enum):
-    REGULAR   = "regular"   # Tudo ok — nenhuma flag disparada. Presença conta automaticamente.
-    IRREGULAR = "irregular" # Uma ou mais flags disparadas. Presença SUSPENSA até revisão.
-    APPROVED  = "approved"  # Professor revisou e aprovou. Presença conta.
-    REJECTED  = "rejected"  # Professor revisou e rejeitou. Presença não conta.
+    REGULAR = "regular"  # Tudo ok — nenhuma flag disparada. Presença conta automaticamente.
+    IRREGULAR = "irregular"  # Uma ou mais flags disparadas. Presença SUSPENSA até revisão.
+    APPROVED = "approved"  # Professor revisou e aprovou. Presença conta.
+    REJECTED = "rejected"  # Professor revisou e rejeitou. Presença não conta.
 ```
 
 **Máquina de estados:**
@@ -686,6 +688,7 @@ import secrets
 
 # Exclui caracteres ambíguos: 0 (zero), O (letra), 1 (um), I (i maiúsculo)
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
 
 def generate_day_code(length: int = 6) -> str:
     return "".join(secrets.choice(ALPHABET) for _ in range(length))

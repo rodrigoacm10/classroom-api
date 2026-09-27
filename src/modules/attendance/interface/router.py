@@ -5,18 +5,52 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
-from modules.attendance.application.use_cases.cancel_session import CancelAttendanceSessionInput, CancelAttendanceSessionUseCase
-from modules.attendance.application.use_cases.close_session import CloseAttendanceSessionInput, CloseAttendanceSessionUseCase
-from modules.attendance.application.use_cases.confirm_attendance import ConfirmAttendanceInput, ConfirmAttendanceUseCase
-from modules.attendance.application.use_cases.get_record import GetAttendanceRecordInput, GetAttendanceRecordUseCase
-from modules.attendance.application.use_cases.get_session import GetAttendanceSessionInput, GetAttendanceSessionUseCase
-from modules.attendance.application.use_cases.list_records import ListAttendanceRecordsInput, ListAttendanceRecordsUseCase
-from modules.attendance.application.use_cases.list_session_roster import ListSessionRosterInput, ListSessionRosterUseCase
-from modules.attendance.application.use_cases.list_sessions import ListAttendanceSessionsInput, ListAttendanceSessionsUseCase
-from modules.attendance.application.use_cases.open_session import OpenAttendanceSessionInput, OpenAttendanceSessionUseCase
-from modules.attendance.application.use_cases.review_record import ReviewAttendanceRecordInput, ReviewAttendanceRecordUseCase
-from modules.attendance.infra.repositories.record_sqlalchemy_repository import RecordSQLAlchemyRepository
-from modules.attendance.infra.repositories.session_sqlalchemy_repository import SessionSQLAlchemyRepository
+from modules.attendance.application.use_cases.cancel_session import (
+    CancelAttendanceSessionInput,
+    CancelAttendanceSessionUseCase,
+)
+from modules.attendance.application.use_cases.close_session import (
+    CloseAttendanceSessionInput,
+    CloseAttendanceSessionUseCase,
+)
+from modules.attendance.application.use_cases.confirm_attendance import (
+    ConfirmAttendanceInput,
+    ConfirmAttendanceUseCase,
+)
+from modules.attendance.application.use_cases.get_record import (
+    GetAttendanceRecordInput,
+    GetAttendanceRecordUseCase,
+)
+from modules.attendance.application.use_cases.get_session import (
+    GetAttendanceSessionInput,
+    GetAttendanceSessionUseCase,
+)
+from modules.attendance.application.use_cases.list_records import (
+    ListAttendanceRecordsInput,
+    ListAttendanceRecordsUseCase,
+)
+from modules.attendance.application.use_cases.list_session_roster import (
+    ListSessionRosterInput,
+    ListSessionRosterUseCase,
+)
+from modules.attendance.application.use_cases.list_sessions import (
+    ListAttendanceSessionsInput,
+    ListAttendanceSessionsUseCase,
+)
+from modules.attendance.application.use_cases.open_session import (
+    OpenAttendanceSessionInput,
+    OpenAttendanceSessionUseCase,
+)
+from modules.attendance.application.use_cases.review_record import (
+    ReviewAttendanceRecordInput,
+    ReviewAttendanceRecordUseCase,
+)
+from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
+    RecordSQLAlchemyRepository,
+)
+from modules.attendance.infra.repositories.session_sqlalchemy_repository import (
+    SessionSQLAlchemyRepository,
+)
 from modules.attendance.interface.schemas.record_schemas import (
     AttendanceRecordResponse,
     ConfirmAttendanceRequest,
@@ -27,11 +61,19 @@ from modules.attendance.interface.schemas.session_schemas import (
     AttendanceSessionResponse,
     CreateAttendanceSessionRequest,
 )
-from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import EnrollmentSQLAlchemyRepository
+from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+    EnrollmentSQLAlchemyRepository,
+)
 from modules.room.infra.repositories.room_sqlalchemy_repository import RoomSQLAlchemyRepository
-from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import SubjectClassSQLAlchemyRepository
-from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import TenantMemberSQLAlchemyRepository
-from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
+from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import (
+    SubjectClassSQLAlchemyRepository,
+)
+from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
+    TenantMemberSQLAlchemyRepository,
+)
+from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
+    TenantSQLAlchemyRepository,
+)
 from security.dependencies.current_user import (
     AuthContext,
     get_auth_context,

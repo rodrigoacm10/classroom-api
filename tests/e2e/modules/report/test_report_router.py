@@ -23,7 +23,6 @@ class TestReportRouter:
     ADMIN e PROFESSOR podem gerar; ALUNO recebe 403.
     """
 
-
     async def _setup(self, session, client, enroll_students: int = 2):
         admin_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
@@ -89,9 +88,7 @@ class TestReportRouter:
 
     async def test_gerar_relatorio_e2e(self, client, session):
         """Deve permitir que o PROFESSOR gere o relatório da turma (200) e consulte o detalhe de um aluno."""
-        tenant, _, prof_headers, sc_id, room_id, students = await self._setup(
-            session, client
-        )
+        tenant, _, prof_headers, sc_id, room_id, students = await self._setup(session, client)
         student1, student2 = students
 
         open_res = await client.post(
@@ -212,7 +209,5 @@ class TestReportRouter:
         """Deve recusar POST /frequency sem Authorization (401 ou 403 do HTTPBearer)."""
         tenant, _, _, sc_id, _, _ = await self._setup(session, client, enroll_students=0)
 
-        res = await client.post(
-            f"/subject-classes/{sc_id}/reports/frequency"
-        )
+        res = await client.post(f"/subject-classes/{sc_id}/reports/frequency")
         assert res.status_code in (401, 403)

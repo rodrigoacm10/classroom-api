@@ -253,8 +253,8 @@ Construído uma única vez e reaproveitado por qualquer módulo futuro que preci
 # src/shared/parallel/compute_strategy.py
 from typing import Protocol, TypeVar
 
-T = TypeVar("T")   # tipo do item de entrada (ex: StudentAttendanceData)
-R = TypeVar("R")   # tipo do resultado (ex: StudentReport)
+T = TypeVar("T")  # tipo do item de entrada (ex: StudentAttendanceData)
+R = TypeVar("R")  # tipo do resultado (ex: StudentReport)
 
 
 class ComputeStrategy(Protocol[T, R]):
@@ -264,8 +264,7 @@ class ComputeStrategy(Protocol[T, R]):
     COMO distribuir o trabalho (sequencial, múltiplos processos, múltiplas threads).
     """
 
-    def compute(self, items: list[T], fn) -> list[R]:
-        ...
+    def compute(self, items: list[T], fn) -> list[R]: ...
 
     @property
     def name(self) -> str:
@@ -435,6 +434,7 @@ NOTA DE DÍVIDA TÉCNICA: esta lógica é conceitualmente do domínio `attendanc
 deliberadamente para manter os módulos desacoplados dentro do prazo do TCC.
 Mover para shared/ em uma refatoração futura.
 """
+
 import math
 
 import numpy as np
@@ -471,9 +471,7 @@ def haversine_distance_vectorized(
     return EARTH_RADIUS_METERS * c
 
 
-def compute_student_geo_metrics(
-    distances: list[float], tolerance_radius_meters: float
-) -> dict:
+def compute_student_geo_metrics(distances: list[float], tolerance_radius_meters: float) -> dict:
     """Agrega as distâncias recalculadas de um aluno em métricas de auditoria."""
     if not distances:
         return {"avg_distance_meters": 0.0, "confirmations_near_limit": 0}
@@ -503,6 +501,7 @@ from uuid import UUID
 @dataclass
 class RawConfirmation:
     """Dado mínimo de uma confirmação — só o necessário para o cálculo."""
+
     latitude: float
     longitude: float
     record_status: str  # "regular" | "irregular" | "approved" | "rejected"
@@ -515,6 +514,7 @@ class StudentAttendanceData:
     simples — obrigatório para ser serializável entre processos (pickle).
     NUNCA deve conter uma sessão SQLAlchemy ou qualquer objeto de infraestrutura.
     """
+
     tenant_member_id: UUID
     student_name: str
     total_sessions: int
@@ -539,9 +539,9 @@ class StudentReport:
     total_present: int
     total_absent: int
     total_irregular: int
-    frequency_rate: float          # 0.0 a 1.0
-    at_risk: bool                  # frequency_rate < limite institucional (padrão 0.75)
-    avg_distance_meters: float     # métrica geoespacial recalculada
+    frequency_rate: float  # 0.0 a 1.0
+    at_risk: bool  # frequency_rate < limite institucional (padrão 0.75)
+    avg_distance_meters: float  # métrica geoespacial recalculada
     confirmations_near_limit: int  # nº de confirmações a ≥90% do raio de tolerância
 ```
 
@@ -654,9 +654,8 @@ class ReportDataRepository:
         A partir daqui, NENHUMA outra query é feita — o cálculo (Fase 2) opera
         inteiramente sobre os dados já carregados.
         """
-        total_sessions_stmt = (
-            select(AttendanceSessionModel.id)
-            .where(AttendanceSessionModel.subject_class_id == subject_class_id)
+        total_sessions_stmt = select(AttendanceSessionModel.id).where(
+            AttendanceSessionModel.subject_class_id == subject_class_id
         )
         session_ids = (await self.session.execute(total_sessions_stmt)).scalars().all()
         total_sessions = len(session_ids)
@@ -672,9 +671,8 @@ class ReportDataRepository:
         )
         enrollment_rows = (await self.session.execute(enrollments_stmt)).all()
 
-        records_stmt = (
-            select(AttendanceRecordModel)
-            .where(AttendanceRecordModel.session_id.in_(session_ids))
+        records_stmt = select(AttendanceRecordModel).where(
+            AttendanceRecordModel.session_id.in_(session_ids)
         )
         all_records = (await self.session.execute(records_stmt)).scalars().all()
         records_by_member: dict[UUID, list[AttendanceRecordModel]] = {}
@@ -732,7 +730,9 @@ from infra.database.base import Base
 class ReportGenerationLogModel(Base):
     __tablename__ = "report_generation_logs"
 
-    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
@@ -769,7 +769,9 @@ from uuid import UUID
 from modules.report.domain.entities.class_report import ClassReport
 from modules.report.domain.services.student_calculator import calculate_student_report
 from modules.report.infra.repositories.report_data_repository import ReportDataRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.exceptions import ResourceNotFoundException
 from shared.parallel.compute_strategy import ComputeStrategy
@@ -859,8 +861,8 @@ class Settings(BaseSettings):
     # ... campos existentes sem alteração ...
 
     # Módulo de relatórios — estratégia de paralelismo
-    report_strategy: str = "process_pool"   # "sequential" | "process_pool" | "thread_pool_numpy"
-    report_max_workers: int = 0             # 0 = usar cpu_budget() automaticamente
+    report_strategy: str = "process_pool"  # "sequential" | "process_pool" | "thread_pool_numpy"
+    report_max_workers: int = 0  # 0 = usar cpu_budget() automaticamente
 ```
 
 > **Por que isso é uma env var e não uma constante fixa?** Permite trocar a estratégia sem
@@ -957,6 +959,7 @@ Gera alunos e confirmações sintéticas em memória (sem tocar no banco) e mede
 o tempo da Fase 2 (cálculo) com SequentialStrategy, ProcessPoolStrategy(1,2,4,8)
 e ThreadPoolNumpyStrategy(1,2,4,8). Imprime tabela e salva CSV para o gráfico.
 """
+
 import argparse
 import csv
 import random
@@ -1159,15 +1162,19 @@ def test_versao_vetorizada_bate_com_versao_pura():
 async def test_relatorio_calcula_frequencia_correta():
     """Aluno com 8 de 10 sessões presentes -> frequency_rate = 0.8."""
 
+
 async def test_relatorio_marca_at_risk_abaixo_do_limite():
     """Aluno com frequência < 75% deve ter at_risk=True."""
+
 
 async def test_relatorio_registra_log_de_execucao():
     """Após gerar o relatório, deve existir 1 registro em report_generation_logs
     com strategy, workers_used e duration_ms preenchidos."""
 
+
 async def test_relatorio_falha_404_se_turma_nao_encontrada():
     """Turma inexistente ou deletada -> ResourceNotFoundException."""
+
 
 async def test_resultado_e_identico_entre_estrategias():
     """Gerar o mesmo relatório com SequentialStrategy e ProcessPoolStrategy
@@ -1181,6 +1188,7 @@ async def test_load_class_data_agrupa_confirmacoes_por_aluno():
     """Popula sessões/registros reais no banco de teste e verifica que
     StudentAttendanceData.confirmations contém exatamente os registros do aluno."""
 
+
 async def test_load_class_data_aluno_sem_confirmacoes_retorna_lista_vazia():
     """Aluno matriculado que nunca confirmou presença aparece com confirmations=[]."""
 ```
@@ -1191,8 +1199,10 @@ async def test_load_class_data_aluno_sem_confirmacoes_retorna_lista_vazia():
 async def test_gerar_relatorio_e2e(client, session):
     """POST /reports/frequency retorna 200 com estrutura completa do relatório."""
 
+
 async def test_gerar_relatorio_403_para_aluno(client, session):
     """Aluno (não professor/admin) não pode gerar relatório da turma."""
+
 
 async def test_gerar_relatorio_404_turma_inexistente(client, session):
     """Turma inexistente retorna 404."""

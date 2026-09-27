@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Garante que a pasta 'src' esteja no sys.path
 src_dir = str(Path(__file__).resolve().parent.parent.parent)
@@ -28,7 +28,6 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=4,
@@ -39,7 +38,6 @@ celery_app.conf.update(
         },
     },
 )
-
 
 
 @worker_process_init.connect

@@ -18,7 +18,6 @@ class RemoveTenantMemberInput:
 
 
 class RemoveTenantMemberUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,
@@ -48,7 +47,9 @@ class RemoveTenantMemberUseCase:
         if member.role == UserRole.ADMIN:
             active_admins = await self.member_repo.count_active_admins(data.tenant_id)
             if active_admins <= 1:
-                raise BusinessRuleException("Não é possível remover o único administrador da instituição.")
+                raise BusinessRuleException(
+                    "Não é possível remover o único administrador da instituição."
+                )
 
         # 4. Soft Delete
         member.deleted = True
@@ -63,4 +64,3 @@ class RemoveTenantMemberUseCase:
                 await self.fcm_token_repo.remove_by_user(data.user_id_to_remove)
 
         return saved_member
-

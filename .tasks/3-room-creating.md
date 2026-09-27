@@ -127,9 +127,7 @@ from infra.database.base import Base
 class RoomModel(Base):
     __tablename__ = "rooms"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
@@ -145,13 +143,9 @@ class RoomModel(Base):
     )
 
     # Raio de tolerância em metros — define a circunferência de presença válida
-    tolerance_radius_meters: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=50
-    )
+    tolerance_radius_meters: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -226,8 +220,8 @@ from uuid import UUID, uuid4
 class Room:
     tenant_id: UUID
     name: str
-    latitude: float          # eixo Y — ex: -8.0476  (intervalo: -90.0 a 90.0)
-    longitude: float         # eixo X — ex: -34.8770 (intervalo: -180.0 a 180.0)
+    latitude: float  # eixo Y — ex: -8.0476  (intervalo: -90.0 a 90.0)
+    longitude: float  # eixo X — ex: -34.8770 (intervalo: -180.0 a 180.0)
     tolerance_radius_meters: int = 50
     created_by: UUID | None = None
     id: UUID = field(default_factory=uuid4)
@@ -275,14 +269,11 @@ from modules.room.domain.entities.room import Room
 
 
 class RoomRepository(Protocol):
-
     async def save(self, room: Room) -> Room: ...
 
     async def find_by_id(self, room_id: UUID) -> Room | None: ...
 
-    async def find_by_id_and_tenant(
-        self, room_id: UUID, tenant_id: UUID
-    ) -> Room | None: ...
+    async def find_by_id_and_tenant(self, room_id: UUID, tenant_id: UUID) -> Room | None: ...
 
     async def list_by_tenant(self, tenant_id: UUID) -> list[Room]: ...
 
@@ -308,7 +299,6 @@ from modules.room.domain.entities.room import Room
 
 
 class RoomMapper:
-
     @staticmethod
     def to_domain(model: RoomModel) -> Room:
         # Converte GEOGRAPHY (WKB) → shapely Point → lat/lon
@@ -318,7 +308,7 @@ class RoomMapper:
             tenant_id=model.tenant_id,
             created_by=model.created_by,
             name=model.name,
-            latitude=point.y,   # shapely: y = latitude
+            latitude=point.y,  # shapely: y = latitude
             longitude=point.x,  # shapely: x = longitude
             tolerance_radius_meters=model.tolerance_radius_meters,
             created_at=model.created_at,
@@ -361,7 +351,6 @@ from modules.room.infra.mappers.room_mapper import RoomMapper
 
 
 class RoomSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -378,9 +367,7 @@ class RoomSQLAlchemyRepository:
         model = result.scalar_one_or_none()
         return RoomMapper.to_domain(model) if model else None
 
-    async def find_by_id_and_tenant(
-        self, room_id: UUID, tenant_id: UUID
-    ) -> Room | None:
+    async def find_by_id_and_tenant(self, room_id: UUID, tenant_id: UUID) -> Room | None:
         stmt = select(RoomModel).where(
             RoomModel.id == room_id,
             RoomModel.tenant_id == tenant_id,
@@ -427,7 +414,6 @@ class CreateRoomInput:
 
 
 class CreateRoomUseCase:
-
     def __init__(
         self,
         room_repo: RoomRepository,
@@ -480,7 +466,6 @@ class GetRoomInput:
 
 
 class GetRoomUseCase:
-
     def __init__(self, room_repo: RoomRepository) -> None:
         self.room_repo = room_repo
 
@@ -515,7 +500,6 @@ class ListRoomsInput:
 
 
 class ListRoomsUseCase:
-
     def __init__(
         self,
         room_repo: RoomRepository,
@@ -557,7 +541,6 @@ class UpdateRoomInput:
 
 
 class UpdateRoomUseCase:
-
     def __init__(self, room_repo: RoomRepository) -> None:
         self.room_repo = room_repo
 
@@ -609,7 +592,6 @@ class DeleteRoomInput:
 
 
 class DeleteRoomUseCase:
-
     def __init__(self, room_repo: RoomRepository) -> None:
         self.room_repo = room_repo
 
@@ -715,7 +697,9 @@ from modules.room.interface.schemas.room_schemas import (
     RoomResponse,
     UpdateRoomRequest,
 )
-from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
+from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
+    TenantSQLAlchemyRepository,
+)
 from modules.user.domain.entities.user import User
 from security.dependencies.current_user import get_current_user
 from security.dependencies.require_role import require_role
@@ -914,9 +898,7 @@ class FakeRoomRepository:
     async def find_by_id(self, room_id: UUID) -> Room | None:
         return self._rooms.get(room_id)
 
-    async def find_by_id_and_tenant(
-        self, room_id: UUID, tenant_id: UUID
-    ) -> Room | None:
+    async def find_by_id_and_tenant(self, room_id: UUID, tenant_id: UUID) -> Room | None:
         room = self._rooms.get(room_id)
         if room and room.tenant_id == tenant_id:
             return room

@@ -8,7 +8,6 @@ from shared.pagination import Page, PaginationParams
 
 
 class AttendanceSessionRepository(Protocol):
-
     async def save(self, session: AttendanceSession) -> AttendanceSession: ...
 
     async def find_by_id(self, session_id: UUID) -> AttendanceSession | None: ...
@@ -21,9 +20,7 @@ class AttendanceSessionRepository(Protocol):
         self, subject_class_id: UUID
     ) -> AttendanceSession | None: ...
 
-    async def list_by_class(
-        self, subject_class_id: UUID
-    ) -> list[AttendanceSession]: ...
+    async def list_by_class(self, subject_class_id: UUID) -> list[AttendanceSession]: ...
 
     async def find_by_class_paginated(
         self,
@@ -35,4 +32,3 @@ class AttendanceSessionRepository(Protocol):
     ) -> Page[AttendanceSession]: ...
 
     async def close_expired_sessions(self) -> list[AttendanceSession]: ...
-

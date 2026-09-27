@@ -78,8 +78,7 @@ async def find_by_id(
     self,
     appointment_id: str,
     tenant_id: str,
-) -> Appointment | None:
-    ...
+) -> Appointment | None: ...
 ```
 
 ```python
@@ -87,19 +86,15 @@ async def find_many(
     self,
     filters: AppointmentFilters,
     tenant_id: str,
-) -> list[Appointment]:
-    ...
+) -> list[Appointment]: ...
 ```
 
 The repository implementation must always apply the tenant filter.
 
 ```python
-stmt = (
-    select(AppointmentModel)
-    .where(
-        AppointmentModel.id == appointment_id,
-        AppointmentModel.tenant_id == tenant_id,
-    )
+stmt = select(AppointmentModel).where(
+    AppointmentModel.id == appointment_id,
+    AppointmentModel.tenant_id == tenant_id,
 )
 ```
 
@@ -408,8 +403,7 @@ appointment/
 Represent domain objects and their business behavior.
 
 ```python
-class Appointment:
-    ...
+class Appointment: ...
 ```
 
 The entity is **not** a SQLAlchemy model.
@@ -427,19 +421,16 @@ from typing import Protocol
 
 
 class AppointmentRepository(Protocol):
-
     async def find_by_id(
         self,
         appointment_id: str,
         tenant_id: str,
-    ) -> Appointment | None:
-        ...
+    ) -> Appointment | None: ...
 
     async def save(
         self,
         appointment: Appointment,
-    ) -> Appointment:
-        ...
+    ) -> Appointment: ...
 ```
 
 The domain knows **what** it needs, not **how** it is implemented.
@@ -464,15 +455,13 @@ Example:
 
 ```python
 class CreateAppointmentUseCase:
-
     def __init__(
         self,
         repository: AppointmentRepository,
     ):
         self.repository = repository
 
-    async def execute(self, data):
-        ...
+    async def execute(self, data): ...
 ```
 
 One use case per operation:
@@ -506,7 +495,6 @@ The repository implementation uses SQLAlchemy:
 
 ```python
 class AppointmentSQLAlchemyRepository:
-
     def __init__(self, session):
         self.session = session
 
@@ -514,8 +502,7 @@ class AppointmentSQLAlchemyRepository:
         self,
         appointment_id: str,
         tenant_id: str,
-    ):
-        ...
+    ): ...
 ```
 
 The dependency direction remains:
@@ -560,9 +547,7 @@ The router should be thin:
 @router.post("/")
 async def create_appointment(
     data: CreateAppointmentRequest,
-    use_case: CreateAppointmentUseCase = Depends(
-        get_create_appointment_use_case
-    ),
+    use_case: CreateAppointmentUseCase = Depends(get_create_appointment_use_case),
 ):
     return await use_case.execute(data)
 ```
@@ -815,11 +800,8 @@ Then:
 @router.post("/")
 async def create_appointment(
     data: CreateAppointmentRequest,
-    repository: AppointmentRepository = Depends(
-        get_appointment_repository
-    ),
-):
-    ...
+    repository: AppointmentRepository = Depends(get_appointment_repository),
+): ...
 ```
 
 The important rule remains:
@@ -909,9 +891,7 @@ Worker
 For example:
 
 ```python
-send_booking_confirmation.delay(
-    appointment_id
-)
+send_booking_confirmation.delay(appointment_id)
 ```
 
 The API returns without waiting for the email provider.
@@ -956,7 +936,6 @@ domain ❌→ Celery
 
 ```python
 class CreateAppointmentUseCase:
-
     async def execute(self):
         await session.execute(...)
 ```
@@ -965,7 +944,6 @@ class CreateAppointmentUseCase:
 
 ```python
 class CreateAppointmentUseCase:
-
     def __init__(
         self,
         repository: AppointmentRepository,

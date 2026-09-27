@@ -27,7 +27,9 @@ class TestAttendancePushNotificationHandler:
         return FakeEnrollmentRepository()
 
     @pytest.fixture
-    def handler(self, enrollment_repo: FakeEnrollmentRepository) -> AttendancePushNotificationHandler:
+    def handler(
+        self, enrollment_repo: FakeEnrollmentRepository
+    ) -> AttendancePushNotificationHandler:
         return AttendancePushNotificationHandler(enrollment_repo=enrollment_repo)
 
     async def test_on_session_opened_dispatches_push_when_tokens_exist(

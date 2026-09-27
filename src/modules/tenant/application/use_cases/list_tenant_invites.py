@@ -19,7 +19,6 @@ class ListTenantInvitesInput:
 
 
 class ListTenantInvitesUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,

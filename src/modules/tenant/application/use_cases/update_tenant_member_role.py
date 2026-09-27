@@ -19,7 +19,6 @@ class UpdateTenantMemberRoleInput:
 
 
 class UpdateTenantMemberRoleUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,

@@ -2,8 +2,12 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.exceptions import ResourceNotFoundException
 
@@ -16,7 +20,6 @@ class GetAttendanceSessionInput:
 
 
 class GetAttendanceSessionUseCase:
-
     def __init__(
         self,
         session_repo: AttendanceSessionRepository,
@@ -38,7 +41,9 @@ class GetAttendanceSessionUseCase:
         if not subject_class or getattr(subject_class, "deleted", False):
             raise ResourceNotFoundException("Turma não encontrada.")
 
-        session = await self.session_repo.find_by_id_and_class(data.session_id, data.subject_class_id)
+        session = await self.session_repo.find_by_id_and_class(
+            data.session_id, data.subject_class_id
+        )
         if not session:
             raise ResourceNotFoundException("Sessão de chamada não encontrada.")
 

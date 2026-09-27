@@ -2,10 +2,19 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
-from modules.attendance.domain.repositories.attendance_record_repository import AttendanceRecordRepository
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
-from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository, TenantRepository
+from modules.attendance.domain.repositories.attendance_record_repository import (
+    AttendanceRecordRepository,
+)
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
+from modules.tenant.domain.repositories.tenant_repository import (
+    TenantMemberRepository,
+    TenantRepository,
+)
 from shared.enums.record_status import RecordStatus
 from shared.enums.user_role import UserRole
 from shared.exceptions import BusinessRuleException, ForbiddenException, ResourceNotFoundException
@@ -24,7 +33,6 @@ class ReviewAttendanceRecordInput:
 
 
 class ReviewAttendanceRecordUseCase:
-
     def __init__(
         self,
         record_repo: AttendanceRecordRepository,
@@ -50,7 +58,9 @@ class ReviewAttendanceRecordUseCase:
         if not subject_class or getattr(subject_class, "deleted", False):
             raise ResourceNotFoundException("Turma não encontrada.")
 
-        session = await self.session_repo.find_by_id_and_class(data.session_id, data.subject_class_id)
+        session = await self.session_repo.find_by_id_and_class(
+            data.session_id, data.subject_class_id
+        )
         if not session:
             raise ResourceNotFoundException("Sessão de chamada não encontrada.")
 
@@ -66,13 +76,19 @@ class ReviewAttendanceRecordUseCase:
         is_professor = subject_class.professor_id == member.id
 
         if not (is_admin or is_professor):
-            raise ForbiddenException("Apenas o professor da turma ou um administrador podem revisar registros.")
+            raise ForbiddenException(
+                "Apenas o professor da turma ou um administrador podem revisar registros."
+            )
 
         if record.record_status == RecordStatus.REGULAR:
-            raise BusinessRuleException("Apenas registros marcados como irregulares podem ser revisados.")
+            raise BusinessRuleException(
+                "Apenas registros marcados como irregulares podem ser revisados."
+            )
 
         if data.decision not in (RecordStatus.APPROVED, RecordStatus.REJECTED):
-            raise BusinessRuleException("Decisão inválida para revisão. Escolha 'approved' ou 'rejected'.")
+            raise BusinessRuleException(
+                "Decisão inválida para revisão. Escolha 'approved' ou 'rejected'."
+            )
 
         if data.decision == RecordStatus.APPROVED:
             record.approve(reviewed_by=member.id, note=data.note)

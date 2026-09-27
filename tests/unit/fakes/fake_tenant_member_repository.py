@@ -73,7 +73,10 @@ class FakeTenantMemberRepository:
                 continue
             if created_before is not None and m.created_at > created_before:
                 continue
-            if subject_class_id is not None and getattr(m, "_subject_class_id", None) != subject_class_id:
+            if (
+                subject_class_id is not None
+                and getattr(m, "_subject_class_id", None) != subject_class_id
+            ):
                 continue
             if search is not None:
                 search_lower = search.lower()
@@ -89,9 +92,7 @@ class FakeTenantMemberRepository:
             [
                 m
                 for m in self._store.values()
-                if m.tenant_id == tenant_id
-                and m.role == UserRole.ADMIN
-                and not m.deleted
+                if m.tenant_id == tenant_id and m.role == UserRole.ADMIN and not m.deleted
             ]
         )
 

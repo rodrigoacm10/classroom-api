@@ -11,7 +11,6 @@ from shared.pagination import Page, PaginationParams
 
 
 class TenantInviteSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -27,9 +26,7 @@ class TenantInviteSQLAlchemyRepository:
         model = result.scalar_one_or_none()
         return TenantInviteMapper.to_domain(model) if model else None
 
-    async def find_by_email_and_tenant(
-        self, email: str, tenant_id: UUID
-    ) -> TenantInvite | None:
+    async def find_by_email_and_tenant(self, email: str, tenant_id: UUID) -> TenantInvite | None:
         stmt = select(TenantInviteModel).where(
             TenantInviteModel.email == email,
             TenantInviteModel.tenant_id == tenant_id,
@@ -60,21 +57,25 @@ class TenantInviteSQLAlchemyRepository:
             st = status.lower()
             now_expr = func.now()
             if st == "pending":
-                conditions.extend([
-                    TenantInviteModel.accepted_at.is_(None),
-                    TenantInviteModel.revoked_at.is_(None),
-                    TenantInviteModel.expires_at > now_expr,
-                ])
+                conditions.extend(
+                    [
+                        TenantInviteModel.accepted_at.is_(None),
+                        TenantInviteModel.revoked_at.is_(None),
+                        TenantInviteModel.expires_at > now_expr,
+                    ]
+                )
             elif st == "accepted":
                 conditions.append(TenantInviteModel.accepted_at.is_not(None))
             elif st == "revoked":
                 conditions.append(TenantInviteModel.revoked_at.is_not(None))
             elif st == "expired":
-                conditions.extend([
-                    TenantInviteModel.accepted_at.is_(None),
-                    TenantInviteModel.revoked_at.is_(None),
-                    TenantInviteModel.expires_at <= now_expr,
-                ])
+                conditions.extend(
+                    [
+                        TenantInviteModel.accepted_at.is_(None),
+                        TenantInviteModel.revoked_at.is_(None),
+                        TenantInviteModel.expires_at <= now_expr,
+                    ]
+                )
 
         count_stmt = select(func.count(TenantInviteModel.id)).where(*conditions)
         total = (await self.session.execute(count_stmt)).scalar_one() or 0

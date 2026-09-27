@@ -187,8 +187,12 @@ class TestListRoomsUseCase:
         tenant = TenantFactory.make()
         tenant_repo.seed(tenant)
 
-        room_active = Room(tenant_id=tenant.id, name="Sala Ativa", latitude=0.0, longitude=0.0, deleted=False)
-        room_deleted = Room(tenant_id=tenant.id, name="Sala Deletada", latitude=0.0, longitude=0.0, deleted=True)
+        room_active = Room(
+            tenant_id=tenant.id, name="Sala Ativa", latitude=0.0, longitude=0.0, deleted=False
+        )
+        room_deleted = Room(
+            tenant_id=tenant.id, name="Sala Deletada", latitude=0.0, longitude=0.0, deleted=True
+        )
         await room_repo.save(room_active)
         await room_repo.save(room_deleted)
 

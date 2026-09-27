@@ -19,7 +19,6 @@ class ListStudentSubjectClassesInput:
 
 
 class ListStudentSubjectClassesUseCase:
-
     def __init__(
         self,
         enrollment_repo: EnrollmentRepository,

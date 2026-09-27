@@ -12,7 +12,6 @@ from modules.notification.infra.mappers.fcm_token_mapper import FCMTokenMapper
 
 
 class FCMTokenSQLAlchemyRepository(FCMTokenRepository):
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -45,9 +44,7 @@ class FCMTokenSQLAlchemyRepository(FCMTokenRepository):
         await self.session.flush()
         return FCMTokenMapper.to_domain(model)
 
-    async def find_by_user_and_device(
-        self, user_id: UUID, device_id: str
-    ) -> FCMToken | None:
+    async def find_by_user_and_device(self, user_id: UUID, device_id: str) -> FCMToken | None:
         stmt = select(UserFCMTokenModel).where(
             UserFCMTokenModel.user_id == user_id,
             UserFCMTokenModel.device_id == device_id,
@@ -85,5 +82,3 @@ class FCMTokenSQLAlchemyRepository(FCMTokenRepository):
         result = await self.session.execute(stmt)
         await self.session.flush()
         return int(getattr(result, "rowcount", 0))
-
-
