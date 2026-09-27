@@ -27,7 +27,6 @@ from tests.unit.fakes.fake_user_repository import FakeUserRepository
 
 @pytest.mark.asyncio
 class TestSendInviteUseCase:
-
     async def test_send_invite_success(self):
         """Deve criar e retornar um convite com sucesso quando os dados forem válidos."""
         tenant_repo = FakeTenantRepository()
@@ -157,7 +156,6 @@ class TestSendInviteUseCase:
 
 @pytest.mark.asyncio
 class TestGetInviteUseCase:
-
     async def test_get_invite_success_pending(self):
         """Deve retornar os detalhes do convite quando o convite estiver com status pendente."""
         invite_repo = FakeTenantInviteRepository()
@@ -214,7 +212,6 @@ class TestGetInviteUseCase:
 
 @pytest.mark.asyncio
 class TestAcceptInviteUseCase:
-
     async def test_accept_invite_success(self):
         """Deve aceitar o convite, criar o vinculo de membro e marcar o convite como aceito."""
         invite_repo = FakeTenantInviteRepository()
@@ -285,7 +282,6 @@ class TestAcceptInviteUseCase:
 
 @pytest.mark.asyncio
 class TestRevokeInviteUseCase:
-
     async def test_revoke_invite_success(self):
         """Deve revogar um convite pendente com sucesso."""
         from modules.tenant.application.use_cases.revoke_invite import (

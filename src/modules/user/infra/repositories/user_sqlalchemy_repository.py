@@ -9,7 +9,6 @@ from modules.user.infra.mappers.user_mapper import UserMapper
 
 
 class UserSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 

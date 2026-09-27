@@ -1,5 +1,6 @@
 import json
 from unittest.mock import patch
+
 import pytest
 
 from infra.cache.redis_client import redis_client
@@ -54,7 +55,9 @@ class TestPasswordResetIntegrationFlow:
         )
 
         # ── Etapa 1: Solicitar código ──
-        with patch("modules.auth.application.use_cases.forgot_password.send_password_reset_email") as mock_email:
+        with patch(
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+        ) as mock_email:
             await self.forgot_use_case.execute(ForgotPasswordInput(email=email))
 
         mock_email.assert_called_once()

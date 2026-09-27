@@ -2,7 +2,9 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from modules.subject_class.domain.entities.subject_class_summary import SubjectClassSummary
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.exceptions import ResourceNotFoundException
 from shared.pagination import Page, PaginationParams
@@ -18,7 +20,6 @@ class ListSubjectClassesInput:
 
 
 class ListSubjectClassesUseCase:
-
     def __init__(
         self,
         subject_class_repo: SubjectClassRepository,

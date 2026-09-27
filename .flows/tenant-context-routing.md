@@ -139,6 +139,7 @@ Localizado em [`src/security/dependencies/require_role.py`](file:///home/rodrigo
 ```python
 def require_role(*roles: UserRole):
     """Exige contexto de tenant E que a role do usuário seja uma das permitidas."""
+
     async def dependency(ctx: AuthContext = Depends(get_auth_context)) -> AuthContext:
         if ctx.tenant_id is None:
             raise HTTPException(
@@ -161,8 +162,7 @@ Antes:
 ```python
 # ❌ Modelo antigo (acoplado à rota)
 @router.post("/tenants/{tenant_id}/rooms")
-async def create_room(tenant_id: UUID, body: CreateRoomRequest):
-    ...
+async def create_room(tenant_id: UUID, body: CreateRoomRequest): ...
 ```
 
 Depois:
@@ -179,8 +179,7 @@ async def create_room(
     tenant_id: UUID = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> RoomResponse:
-    ...
+) -> RoomResponse: ...
 ```
 
 ---

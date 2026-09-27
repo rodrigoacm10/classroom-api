@@ -36,12 +36,14 @@ Desenvolvedor (Local)
 O arquivo [`.pre-commit-config.yaml`](file:///home/rodrigo/projects/classroom/classroom-api/.pre-commit-config.yaml) orquestra os hooks executados pelo Git antes de qualquer commit ser persistido.
 
 ### Hooks Configurados:
+
 * **Higiene básica**: Remoção de espaços em branco ao final das linhas (`trailing-whitespace`), garantia de quebra de linha no final do arquivo (`end-of-file-fixer`), sintaxe de arquivos YAML (`check-yaml`) e bloqueio de arquivos binários acidentais (`check-added-large-files`).
 * **Linter (Ruff)**: Roda `uv run ruff check --fix` corrigindo automaticamente problemas de importação (`isort`), variáveis sem uso e más práticas.
 * **Formatador (Ruff)**: Roda `uv run ruff format` padronizando a indentação e largura de linha (100 colunas).
 * **Verificador de Tipos (Pyrefly)**: Roda `uv run pyrefly check src` garantindo que nenhuma alteração quebre contratos de tipos estáticos.
 
 ### Instalação e Ativação dos Hooks
+
 Após clonar o repositório ou instalar as dependências, os hooks do git são ativados com:
 
 ```bash
@@ -49,6 +51,7 @@ uv run pre-commit install
 ```
 
 ### Executar Manualmente
+
 Você pode rodar os hooks a qualquer momento sem precisar fazer um commit:
 
 ```bash
@@ -68,12 +71,14 @@ O workflow [`.github/workflows/ci.yml`](file:///home/rodrigo/projects/classroom/
 Ele divide a execução em dois jobs paralelos:
 
 ### Job 1: `lint-and-typecheck` (Rápido: ~15 segundos)
+
 * Configura Python 3.12 com cache `uv`.
 * Roda:
   1. `uv run ruff check src` (valida regras de lint)
   2. `uv run pyrefly check src` (valida integridade de tipos com o Pyrefly)
 
 ### Job 2: `tests` (Completo: ~40 segundos)
+
 * Sobe contêineres de serviço oficiais idênticos aos do `docker-compose`:
   * **PostgreSQL + PostGIS**: `postgis/postgis:16-3.4` (banco `classroom_test` pronto para receber extensões espaciais).
   * **Redis**: `redis:7-alpine`.
@@ -81,6 +86,7 @@ Ele divide a execução em dois jobs paralelos:
   ```bash
   uv run pytest
   ```
+
   Isso executa todos os testes **Unitários**, de **Integração** e **E2E** (end-to-end com endpoints HTTP reais).
 
 ---

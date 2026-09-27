@@ -13,7 +13,6 @@ class ListRoomsInput:
 
 
 class ListRoomsUseCase:
-
     def __init__(
         self,
         room_repo: RoomRepository,

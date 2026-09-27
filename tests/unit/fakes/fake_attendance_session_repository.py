@@ -2,13 +2,14 @@ from datetime import datetime
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
 from shared.enums.session_status import SessionStatus
 from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeAttendanceSessionRepository(AttendanceSessionRepository):
-
     def __init__(self) -> None:
         self.sessions: dict[UUID, AttendanceSession] = {}
 
@@ -27,17 +28,13 @@ class FakeAttendanceSessionRepository(AttendanceSessionRepository):
             return s
         return None
 
-    async def find_open_session_by_class(
-        self, subject_class_id: UUID
-    ) -> AttendanceSession | None:
+    async def find_open_session_by_class(self, subject_class_id: UUID) -> AttendanceSession | None:
         for s in self.sessions.values():
             if s.subject_class_id == subject_class_id and s.status == SessionStatus.OPEN:
                 return s
         return None
 
-    async def list_by_class(
-        self, subject_class_id: UUID
-    ) -> list[AttendanceSession]:
+    async def list_by_class(self, subject_class_id: UUID) -> list[AttendanceSession]:
         return [s for s in self.sessions.values() if s.subject_class_id == subject_class_id]
 
     async def find_by_class_paginated(
@@ -64,6 +61,7 @@ class FakeAttendanceSessionRepository(AttendanceSessionRepository):
 
     async def close_expired_sessions(self) -> list[AttendanceSession]:
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc)
         closed: list[AttendanceSession] = []
         for session in self.sessions.values():
@@ -71,4 +69,3 @@ class FakeAttendanceSessionRepository(AttendanceSessionRepository):
                 session.close()
                 closed.append(session)
         return closed
-

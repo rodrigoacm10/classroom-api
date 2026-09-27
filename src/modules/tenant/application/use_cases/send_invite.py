@@ -25,7 +25,6 @@ class SendInviteInput:
 
 
 class SendInviteUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,
@@ -64,7 +63,9 @@ class SendInviteUseCase:
             email=data.email, tenant_id=data.tenant_id
         )
         if existing_invite and existing_invite.is_pending:
-            raise BusinessRuleException("Já existe um convite pendente para este e-mail nesta instituição.")
+            raise BusinessRuleException(
+                "Já existe um convite pendente para este e-mail nesta instituição."
+            )
 
         # 4. Cria o convite
         expires_at = datetime.now(timezone.utc) + timedelta(hours=self.expire_hours)

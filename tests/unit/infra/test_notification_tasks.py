@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from infra.tasks.notification_tasks import send_push_notification, _chunk
+from infra.tasks.notification_tasks import _chunk, send_push_notification
 
 
 class TestNotificationTasks:
@@ -37,7 +37,9 @@ class TestNotificationTasks:
         mock_response.failure_count = 0
         mock_response.responses = []
 
-        with patch("firebase_admin.messaging.send_each_for_multicast", return_value=mock_response) as mock_send:
+        with patch(
+            "firebase_admin.messaging.send_each_for_multicast", return_value=mock_response
+        ) as mock_send:
             res = send_push_notification(
                 title="📋 Chamada Aberta",
                 body="Entre no app",
@@ -65,7 +67,10 @@ class TestNotificationTasks:
         mock_resp_1 = MagicMock(success_count=500, failure_count=0, responses=[])
         mock_resp_2 = MagicMock(success_count=50, failure_count=0, responses=[])
 
-        with patch("firebase_admin.messaging.send_each_for_multicast", side_effect=[mock_resp_1, mock_resp_2]) as mock_send:
+        with patch(
+            "firebase_admin.messaging.send_each_for_multicast",
+            side_effect=[mock_resp_1, mock_resp_2],
+        ) as mock_send:
             res = send_push_notification(
                 title="Aviso Geral",
                 body="Notificação em massa",
@@ -110,4 +115,3 @@ class TestNotificationTasks:
                 assert res["success_count"] == 1
                 assert res["failure_count"] == 1
                 mock_remove.assert_called_once_with(["token_stale"])
-

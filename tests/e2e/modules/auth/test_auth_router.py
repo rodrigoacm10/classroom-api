@@ -10,9 +10,8 @@ Cada teste:
 3. Valida status code, body JSON e cookies de resposta.
 4. Os dados são desfeitos automaticamente via rollback ao final do teste.
 """
-import uuid
 
-import pytest
+import uuid
 
 from security.password import hash_password
 from tests.factories.tenant_factory import TenantFactory
@@ -24,6 +23,7 @@ _PLAIN_PASSWORD = "Test@e2e2024"
 
 # ─── Helper ──────────────────────────────────────────────────────────────────
 
+
 async def _login_mobile(client, email: str, password: str) -> dict:
     """
     Realiza login com client_type=mobile e retorna o dict de tokens.
@@ -33,11 +33,14 @@ async def _login_mobile(client, email: str, password: str) -> dict:
         "/auth/login",
         json={"email": email, "password": password, "client_type": "mobile"},
     )
-    assert response.status_code == 200, f"Login helper falhou ({response.status_code}): {response.text}"
+    assert response.status_code == 200, (
+        f"Login helper falhou ({response.status_code}): {response.text}"
+    )
     return response.json()
 
 
 # ─── Login ───────────────────────────────────────────────────────────────────
+
 
 class TestLoginEndpoint:
     """POST /auth/login"""
@@ -87,7 +90,7 @@ class TestLoginEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert "refresh_token" not in data       # refresh NÃO deve estar no body
+        assert "refresh_token" not in data  # refresh NÃO deve estar no body
         assert "refresh_token" in response.cookies  # refresh deve estar no cookie
 
     async def test_login_returns_401_when_user_not_found(self, client, session) -> None:
@@ -126,12 +129,11 @@ class TestLoginEndpoint:
 
 # ─── Refresh ─────────────────────────────────────────────────────────────────
 
+
 class TestRefreshEndpoint:
     """POST /auth/refresh"""
 
-    async def test_refresh_mobile_returns_new_tokens_in_body(
-        self, client, session
-    ) -> None:
+    async def test_refresh_mobile_returns_new_tokens_in_body(self, client, session) -> None:
         """refresh_token no body (mobile) → 200 com novos access_token e refresh_token."""
         await UserFactory.create(
             session,
@@ -179,20 +181,16 @@ class TestRefreshEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert "refresh_token" not in data           # web: refresh fica no cookie
-        assert "refresh_token" in response.cookies   # cookie renovado na resposta
+        assert "refresh_token" not in data  # web: refresh fica no cookie
+        assert "refresh_token" in response.cookies  # cookie renovado na resposta
 
-    async def test_refresh_returns_401_when_no_token_provided(
-        self, client, session
-    ) -> None:
+    async def test_refresh_returns_401_when_no_token_provided(self, client, session) -> None:
         """Sem body e sem cookie → 401 Unauthorized."""
         response = await client.post("/auth/refresh", json={})
 
         assert response.status_code == 401
 
-    async def test_refresh_returns_401_with_invalid_token(
-        self, client, session
-    ) -> None:
+    async def test_refresh_returns_401_with_invalid_token(self, client, session) -> None:
         """Token inválido no body → 401 Unauthorized."""
         response = await client.post(
             "/auth/refresh",
@@ -204,12 +202,11 @@ class TestRefreshEndpoint:
 
 # ─── Switch Tenant ───────────────────────────────────────────────────────────
 
+
 class TestSwitchTenantEndpoint:
     """POST /auth/switch-tenant"""
 
-    async def test_switch_tenant_returns_enriched_token(
-        self, client, session
-    ) -> None:
+    async def test_switch_tenant_returns_enriched_token(self, client, session) -> None:
         """Usuário é membro da tenant → 200 com access_token enriquecido (tenant_id + role)."""
         user = await UserFactory.create(
             session,
@@ -217,9 +214,7 @@ class TestSwitchTenantEndpoint:
             password_hash=hash_password(_PLAIN_PASSWORD),
         )
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(
-            session, tenant_id=tenant.id, user_id=user.id
-        )
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id)
 
         tokens = await _login_mobile(client, "switch_member@e2e.com", _PLAIN_PASSWORD)
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
@@ -233,9 +228,7 @@ class TestSwitchTenantEndpoint:
         assert response.status_code == 200
         assert "access_token" in response.json()
 
-    async def test_switch_tenant_returns_403_when_not_member(
-        self, client, session
-    ) -> None:
+    async def test_switch_tenant_returns_403_when_not_member(self, client, session) -> None:
         """Usuário NÃO é membro da tenant → 403 Forbidden."""
         user = await UserFactory.create(
             session,
@@ -256,9 +249,7 @@ class TestSwitchTenantEndpoint:
 
         assert response.status_code == 403
 
-    async def test_switch_tenant_returns_401_without_auth(
-        self, client, session
-    ) -> None:
+    async def test_switch_tenant_returns_401_without_auth(self, client, session) -> None:
         """Sem header Authorization → 401 Unauthorized."""
         response = await client.post(
             "/auth/switch-tenant",
@@ -270,12 +261,11 @@ class TestSwitchTenantEndpoint:
 
 # ─── Logout ──────────────────────────────────────────────────────────────────
 
+
 class TestLogoutEndpoint:
     """POST /auth/logout"""
 
-    async def test_logout_returns_200_and_revokes_token(
-        self, client, session
-    ) -> None:
+    async def test_logout_returns_200_and_revokes_token(self, client, session) -> None:
         """
         Login → Logout → tentar usar o mesmo access_token novamente.
         O token revogado deve retornar 401 (JTI na blacklist do Redis).

@@ -109,9 +109,7 @@ from infra.database.base import Base
 class SubjectClassModel(Base):
     __tablename__ = "subject_classes"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
@@ -126,9 +124,7 @@ class SubjectClassModel(Base):
     deleted: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -217,7 +213,6 @@ from modules.subject_class.domain.entities.subject_class import SubjectClass
 
 
 class SubjectClassRepository(Protocol):
-
     async def save(self, subject_class: SubjectClass) -> SubjectClass: ...
 
     async def find_by_id(
@@ -250,7 +245,6 @@ from modules.subject_class.domain.entities.subject_class import SubjectClass
 
 
 class SubjectClassMapper:
-
     @staticmethod
     def to_domain(model: SubjectClassModel) -> SubjectClass:
         return SubjectClass(
@@ -297,7 +291,6 @@ from modules.subject_class.infra.mappers.subject_class_mapper import SubjectClas
 
 
 class SubjectClassSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -358,7 +351,9 @@ from uuid import UUID
 
 from modules.room.domain.repositories.room_repository import RoomRepository
 from modules.subject_class.domain.entities.subject_class import SubjectClass
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.exceptions import ResourceNotFoundException
 
@@ -373,7 +368,6 @@ class CreateSubjectClassInput:
 
 
 class CreateSubjectClassUseCase:
-
     def __init__(
         self,
         subject_class_repo: SubjectClassRepository,
@@ -420,7 +414,9 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from modules.subject_class.domain.entities.subject_class import SubjectClass
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from shared.exceptions import ResourceNotFoundException
 
 
@@ -431,7 +427,6 @@ class GetSubjectClassInput:
 
 
 class GetSubjectClassUseCase:
-
     def __init__(self, subject_class_repo: SubjectClassRepository) -> None:
         self.subject_class_repo = subject_class_repo
 
@@ -453,7 +448,9 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from modules.subject_class.domain.entities.subject_class import SubjectClass
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.exceptions import ResourceNotFoundException
 
@@ -464,7 +461,6 @@ class ListSubjectClassesInput:
 
 
 class ListSubjectClassesUseCase:
-
     def __init__(
         self,
         subject_class_repo: SubjectClassRepository,
@@ -491,7 +487,9 @@ from uuid import UUID
 
 from modules.room.domain.repositories.room_repository import RoomRepository
 from modules.subject_class.domain.entities.subject_class import SubjectClass
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from shared.exceptions import ResourceNotFoundException
 
 
@@ -505,7 +503,6 @@ class UpdateSubjectClassInput:
 
 
 class UpdateSubjectClassUseCase:
-
     def __init__(
         self,
         subject_class_repo: SubjectClassRepository,
@@ -548,7 +545,9 @@ class UpdateSubjectClassUseCase:
 from dataclasses import dataclass
 from uuid import UUID
 
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from shared.exceptions import ResourceNotFoundException
 
 
@@ -559,7 +558,6 @@ class DeleteSubjectClassInput:
 
 
 class DeleteSubjectClassUseCase:
-
     def __init__(self, subject_class_repo: SubjectClassRepository) -> None:
         self.subject_class_repo = subject_class_repo
 
@@ -655,7 +653,9 @@ from modules.subject_class.interface.schemas.subject_class_schemas import (
     SubjectClassResponse,
     UpdateSubjectClassRequest,
 )
-from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
+from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
+    TenantSQLAlchemyRepository,
+)
 from modules.user.domain.entities.user import User
 from security.dependencies.current_user import get_current_user
 from security.dependencies.require_role import require_role
@@ -705,7 +705,9 @@ async def list_subject_classes(
     """Lista todas as turmas ativas (não deletadas) de uma Tenant."""
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
-    use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+    use_case = ListSubjectClassesUseCase(
+        subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+    )
 
     classes = await use_case.execute(ListSubjectClassesInput(tenant_id=tenant_id))
     return [SubjectClassResponse.model_validate(c) for c in classes]
@@ -821,7 +823,6 @@ from modules.subject_class.domain.entities.subject_class import SubjectClass
 
 
 class FakeSubjectClassRepository:
-
     def __init__(self) -> None:
         self._classes: dict[UUID, SubjectClass] = {}
 
@@ -849,7 +850,8 @@ class FakeSubjectClassRepository:
         self, tenant_id: UUID, include_deleted: bool = False
     ) -> list[SubjectClass]:
         return [
-            c for c in self._classes.values()
+            c
+            for c in self._classes.values()
             if c.tenant_id == tenant_id and (include_deleted or not c.deleted)
         ]
 

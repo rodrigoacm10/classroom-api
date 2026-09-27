@@ -19,7 +19,6 @@ class RemoveFCMTokenInput:
 
 
 class RemoveFCMTokenUseCase:
-
     def __init__(
         self,
         fcm_token_repo: FCMTokenRepository,

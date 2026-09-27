@@ -14,7 +14,9 @@ class TestSubjectClassRouterEndpoints:
         """POST /subject-classes -> ADMIN deve conseguir criar uma turma com sucesso."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -43,9 +45,13 @@ class TestSubjectClassRouterEndpoints:
         """POST /subject-classes -> PROFESSOR deve conseguir criar uma turma com sucesso."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
 
-        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        token = create_access_token(
+            user_id=user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         room_payload = {"name": "Lab 3", "latitude": -8.0, "longitude": -34.0}
@@ -66,7 +72,9 @@ class TestSubjectClassRouterEndpoints:
         """POST /subject-classes -> Papel ALUNO deve receber 403 Forbidden."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -84,12 +92,20 @@ class TestSubjectClassRouterEndpoints:
         """POST /subject-classes -> Criar turma apontando para sala com soft delete deve retornar 404 Not Found."""
         admin_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
+        )
 
-        token = create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        room_res = await client.post("/rooms", json={"name": "Sala Para Deletar", "latitude": -8.0, "longitude": -34.0}, headers=headers)
+        room_res = await client.post(
+            "/rooms",
+            json={"name": "Sala Para Deletar", "latitude": -8.0, "longitude": -34.0},
+            headers=headers,
+        )
         room_id = room_res.json()["id"]
 
         await client.delete(f"/rooms/{room_id}", headers=headers)
@@ -106,12 +122,16 @@ class TestSubjectClassRouterEndpoints:
         """GET /subject-classes e GET /subject-classes/{id} -> Deve listar turmas e obter turma por ID."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
         headers = {"Authorization": f"Bearer {token}"}
 
-        room_res = await client.post("/rooms", json={"name": "Lab 1", "latitude": -8.0, "longitude": -34.0}, headers=headers)
+        room_res = await client.post(
+            "/rooms", json={"name": "Lab 1", "latitude": -8.0, "longitude": -34.0}, headers=headers
+        )
         room_id = room_res.json()["id"]
 
         create_res = await client.post(
@@ -139,12 +159,18 @@ class TestSubjectClassRouterEndpoints:
         """PATCH /subject-classes/{id} -> Atualização parcial de dados da turma com sucesso."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
 
-        token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        token = create_access_token(
+            user_id=user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        room_res = await client.post("/rooms", json={"name": "Lab 2", "latitude": -8.0, "longitude": -34.0}, headers=headers)
+        room_res = await client.post(
+            "/rooms", json={"name": "Lab 2", "latitude": -8.0, "longitude": -34.0}, headers=headers
+        )
         room_id = room_res.json()["id"]
 
         create_res = await client.post(
@@ -167,12 +193,18 @@ class TestSubjectClassRouterEndpoints:
         """DELETE /subject-classes/{id} -> Soft delete com 204 e chamadas subsequentes (GET/PATCH/DELETE) retornando 404."""
         admin_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
+        )
 
-        token = create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        room_res = await client.post("/rooms", json={"name": "Lab 5", "latitude": -8.0, "longitude": -34.0}, headers=headers)
+        room_res = await client.post(
+            "/rooms", json={"name": "Lab 5", "latitude": -8.0, "longitude": -34.0}, headers=headers
+        )
         room_id = room_res.json()["id"]
 
         create_res = await client.post(
@@ -192,13 +224,17 @@ class TestSubjectClassRouterEndpoints:
         ids = [item["id"] for item in list_res.json()["items"]]
         assert sc_id not in ids
 
-        patch_res = await client.patch(f"/subject-classes/{sc_id}", json={"name": "Novo"}, headers=headers)
+        patch_res = await client.patch(
+            f"/subject-classes/{sc_id}", json={"name": "Novo"}, headers=headers
+        )
         assert patch_res.status_code == 404
 
         del_again_res = await client.delete(f"/subject-classes/{sc_id}", headers=headers)
         assert del_again_res.status_code == 404
 
-    async def test_list_subject_classes_includes_professor_students_and_attendance(self, client, session):
+    async def test_list_subject_classes_includes_professor_students_and_attendance(
+        self, client, session
+    ):
         """GET /subject-classes deve devolver nome do professor, alunos ativos e taxa de presença."""
         admin_user = await UserFactory.create(session, name="Admin List")
         tenant = await TenantFactory.create(session)

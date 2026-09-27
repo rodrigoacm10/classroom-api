@@ -23,7 +23,6 @@ class ListSessionRosterInput:
 
 
 class ListSessionRosterUseCase:
-
     def __init__(
         self,
         record_repo: AttendanceRecordRepository,

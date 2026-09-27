@@ -20,7 +20,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestListAttendanceSessionsUseCase:
-
     async def test_list_attendance_sessions_paginated_success(self):
         """Deve listar sessões de chamada paginadas com sucesso."""
         session_repo = FakeAttendanceSessionRepository()
@@ -34,8 +33,18 @@ class TestListAttendanceSessionsUseCase:
         await subject_class_repo.save(sc)
 
         now = datetime.now(timezone.utc)
-        s1 = AttendanceSession(subject_class_id=sc.id, day_code="1111", expires_at=now + timedelta(minutes=30), opened_at=now - timedelta(hours=2))
-        s2 = AttendanceSession(subject_class_id=sc.id, day_code="2222", expires_at=now + timedelta(minutes=30), opened_at=now - timedelta(hours=1))
+        s1 = AttendanceSession(
+            subject_class_id=sc.id,
+            day_code="1111",
+            expires_at=now + timedelta(minutes=30),
+            opened_at=now - timedelta(hours=2),
+        )
+        s2 = AttendanceSession(
+            subject_class_id=sc.id,
+            day_code="2222",
+            expires_at=now + timedelta(minutes=30),
+            opened_at=now - timedelta(hours=1),
+        )
         await session_repo.save(s1)
         await session_repo.save(s2)
 

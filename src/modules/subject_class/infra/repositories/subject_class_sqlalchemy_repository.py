@@ -19,7 +19,6 @@ from shared.pagination import Page, PaginationParams
 
 
 class SubjectClassSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 

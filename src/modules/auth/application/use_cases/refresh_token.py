@@ -21,7 +21,6 @@ class RefreshTokenOutput:
 
 
 class RefreshTokenUseCase:
-
     def __init__(self, user_repo: UserRepository) -> None:
         self.user_repo = user_repo
 

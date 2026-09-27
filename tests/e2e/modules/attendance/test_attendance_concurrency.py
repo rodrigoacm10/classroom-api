@@ -1,6 +1,4 @@
-import asyncio
 import pytest
-from httpx import Response
 
 from security.jwt import create_access_token
 from shared.enums.user_role import UserRole
@@ -10,7 +8,6 @@ from tests.factories.user_factory import UserFactory
 
 @pytest.mark.asyncio
 class TestAttendanceConcurrency:
-
     async def test_simultaneous_confirmations_same_student_race_condition(self, client, session):
         """
         Dispara 5 requisições simultâneas de confirmação de presença do MESMO aluno.
@@ -21,21 +18,27 @@ class TestAttendanceConcurrency:
         admin_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
         )
-        admin_token = create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        admin_token = create_access_token(
+            user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         prof_user = await UserFactory.create(session)
         prof_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=prof_user.id, role=UserRole.PROFESSOR
         )
-        prof_token = create_access_token(user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        prof_token = create_access_token(
+            user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         prof_headers = {"Authorization": f"Bearer {prof_token}"}
 
         student_user = await UserFactory.create(session)
         student_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=student_user.id, role=UserRole.ALUNO
         )
-        student_token = create_access_token(user_id=student_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
+        student_token = create_access_token(
+            user_id=student_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value
+        )
         student_headers = {"Authorization": f"Bearer {student_token}", "User-Agent": "okhttp/4.9.0"}
 
         room_res = await client.post(
@@ -76,7 +79,9 @@ class TestAttendanceConcurrency:
         payload = {"day_code": day_code, "latitude": -8.0476, "longitude": -34.8770}
 
         # Executa N requisições de confirmação do mesmo aluno
-        responses = [await client.post(url, json=payload, headers=student_headers) for _ in range(5)]
+        responses = [
+            await client.post(url, json=payload, headers=student_headers) for _ in range(5)
+        ]
 
         status_codes = [r.status_code for r in responses]
 

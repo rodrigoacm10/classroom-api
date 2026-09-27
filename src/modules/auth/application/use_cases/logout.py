@@ -5,7 +5,6 @@ from security.dependencies.current_user import AuthContext
 
 
 class LogoutUseCase:
-
     async def execute(self, auth_context: AuthContext) -> None:
         if not auth_context.jti or not auth_context.token_exp:
             return

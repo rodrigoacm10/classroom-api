@@ -51,4 +51,3 @@ def downgrade() -> None:
     op.drop_index('idx_rooms_location', table_name='rooms', postgresql_using='gist')
     op.drop_table('rooms')
     # ### end Alembic commands ###
-

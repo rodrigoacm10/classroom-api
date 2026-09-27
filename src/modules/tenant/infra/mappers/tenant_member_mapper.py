@@ -3,7 +3,6 @@ from modules.tenant.domain.entities.tenant_member import TenantMember
 
 
 class TenantMemberMapper:
-
     @staticmethod
     def to_domain(model: TenantMemberModel) -> TenantMember:
         return TenantMember(

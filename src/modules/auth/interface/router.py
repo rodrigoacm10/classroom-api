@@ -21,11 +21,11 @@ from modules.auth.application.use_cases.reset_password import (
     ResetPasswordInput,
     ResetPasswordUseCase,
 )
+from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, SwitchTenantUseCase
 from modules.auth.application.use_cases.verify_reset_code import (
     VerifyResetCodeInput,
     VerifyResetCodeUseCase,
 )
-from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, SwitchTenantUseCase
 from modules.auth.interface.schemas.password_reset_schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
@@ -53,6 +53,7 @@ REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * settings.refresh_token_expire_days
 # Schemas
 # ─────────────────────────────────────────
 
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -78,6 +79,7 @@ class RefreshTokenRequest(BaseModel):
 
 class LoginMobileResponse(BaseModel):
     """Resposta para clientes mobile: ambos os tokens no body."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -85,6 +87,7 @@ class LoginMobileResponse(BaseModel):
 
 class LoginWebResponse(BaseModel):
     """Resposta para clientes web: apenas o access_token no body; refresh_token vai no Cookie HttpOnly."""
+
     access_token: str
     token_type: str = "bearer"
 
@@ -102,16 +105,17 @@ class MessageResponse(BaseModel):
 # Helpers
 # ─────────────────────────────────────────
 
+
 def _set_refresh_cookie(response: Response, token: str) -> None:
     """Define o Cookie HttpOnly com o Refresh Token para clientes web."""
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=token,
-        httponly=True,                       # ✅ JS não consegue ler este cookie
-        secure=settings.cookie_secure,       # True em produção (HTTPS)
-        samesite=settings.cookie_samesite,   # "lax" dev / "strict" prod (proteção CSRF)
-        max_age=REFRESH_COOKIE_MAX_AGE,      # TTL = 7 dias (em segundos)
-        path="/auth",                        # Cookie visível apenas nas rotas /auth/*
+        httponly=True,  # ✅ JS não consegue ler este cookie
+        secure=settings.cookie_secure,  # True em produção (HTTPS)
+        samesite=settings.cookie_samesite,  # "lax" dev / "strict" prod (proteção CSRF)
+        max_age=REFRESH_COOKIE_MAX_AGE,  # TTL = 7 dias (em segundos)
+        path="/auth",  # Cookie visível apenas nas rotas /auth/*
     )
 
 
@@ -123,6 +127,7 @@ def _clear_refresh_cookie(response: Response) -> None:
 # ─────────────────────────────────────────
 # Endpoints
 # ─────────────────────────────────────────
+
 
 @router.post("/login")
 @limiter.limit("5/minute")

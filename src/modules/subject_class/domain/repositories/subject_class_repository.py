@@ -7,7 +7,6 @@ from shared.pagination import Page, PaginationParams
 
 
 class SubjectClassRepository(Protocol):
-
     async def save(self, subject_class: SubjectClass) -> SubjectClass: ...
 
     async def find_by_id(

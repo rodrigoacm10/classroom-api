@@ -78,6 +78,7 @@ UNIQUE (subject_class_id, tenant_member_id) WHERE deleted = false  ← partial u
 # src/shared/enums/enrollment_status.py
 from enum import Enum
 
+
 class EnrollmentStatus(str, Enum):
     ACTIVE = "active"
     DROPPED = "dropped"
@@ -238,9 +239,7 @@ class EnrollmentModel(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     subject_class_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("subject_classes.id", ondelete="CASCADE"),
@@ -359,7 +358,6 @@ from shared.enums.enrollment_status import EnrollmentStatus
 
 
 class EnrollmentRepository(Protocol):
-
     async def save(self, enrollment: Enrollment) -> Enrollment: ...
 
     async def find_by_id(
@@ -400,7 +398,6 @@ from modules.enrollment.domain.entities.enrollment import Enrollment
 
 
 class EnrollmentMapper:
-
     @staticmethod
     def to_domain(model: EnrollmentModel) -> Enrollment:
         return Enrollment(
@@ -442,7 +439,6 @@ from shared.enums.enrollment_status import EnrollmentStatus
 
 
 class EnrollmentSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -485,9 +481,7 @@ class EnrollmentSQLAlchemyRepository:
         status: EnrollmentStatus | None = None,
         include_deleted: bool = False,
     ) -> list[Enrollment]:
-        stmt = select(EnrollmentModel).where(
-            EnrollmentModel.subject_class_id == subject_class_id
-        )
+        stmt = select(EnrollmentModel).where(EnrollmentModel.subject_class_id == subject_class_id)
         if not include_deleted:
             stmt = stmt.where(EnrollmentModel.deleted.is_(False))
         if status is not None:
@@ -529,7 +523,9 @@ from uuid import UUID
 
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.user_role import UserRole
@@ -544,7 +540,6 @@ class EnrollStudentInput:
 
 
 class EnrollStudentUseCase:
-
     def __init__(
         self,
         enrollment_repo: EnrollmentRepository,
@@ -634,7 +629,9 @@ class DropEnrollmentUseCase:
         self.enrollment_repo = enrollment_repo
 
     async def execute(self, data: DropEnrollmentInput) -> None:
-        enrollment = await self.enrollment_repo.find_by_id(data.enrollment_id, include_deleted=False)
+        enrollment = await self.enrollment_repo.find_by_id(
+            data.enrollment_id, include_deleted=False
+        )
         if not enrollment or enrollment.subject_class_id != data.subject_class_id:
             raise ResourceNotFoundException("Matrícula não encontrada.")
 
@@ -692,7 +689,9 @@ from uuid import UUID
 
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.exceptions import ResourceNotFoundException
 
@@ -702,11 +701,10 @@ class ListEnrollmentsInput:
     subject_class_id: UUID
     tenant_id: UUID
     status: EnrollmentStatus | None = None  # None = todos os status não deletados
-    include_deleted: bool = False           # True = apenas ADMIN, para auditoria
+    include_deleted: bool = False  # True = apenas ADMIN, para auditoria
 
 
 class ListEnrollmentsUseCase:
-
     def __init__(
         self,
         enrollment_repo: EnrollmentRepository,
@@ -742,8 +740,8 @@ e chamar `drop_all_active_for_member` quando a role sai de `ALUNO`:
 
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
 
-class UpdateTenantMemberRoleUseCase:
 
+class UpdateTenantMemberRoleUseCase:
     def __init__(
         self,
         tenant_repo: TenantRepository,
@@ -752,7 +750,7 @@ class UpdateTenantMemberRoleUseCase:
     ) -> None:
         self.tenant_repo = tenant_repo
         self.member_repo = member_repo
-        self.enrollment_repo = enrollment_repo   # ← NOVO
+        self.enrollment_repo = enrollment_repo  # ← NOVO
 
     async def execute(self, data: UpdateTenantMemberRoleInput) -> TenantMember:
         # ... (lógica existente dos passos 1-4) ...
@@ -939,7 +937,11 @@ async def get_enrollment(tenant_id, subject_class_id, enrollment_id, ...):
 
 **Repositório** — adicionar método:
 ```python
-async def find_by_id(self, enrollment_id: UUID, include_deleted: bool = False) -> Enrollment | None: ...
+async def find_by_id(
+    self, enrollment_id: UUID, include_deleted: bool = False
+) -> Enrollment | None: ...
+
+
 # (já existente no protocolo — apenas garantir que o router expõe via GET)
 ```
 
@@ -1038,9 +1040,10 @@ Distinguir cancelamentos manuais (admin) de automáticos (mudança de role) sem 
 # src/shared/enums/drop_reason.py
 from enum import Enum
 
+
 class DropReason(str, Enum):
     ADMIN_CANCELLATION = "admin_cancellation"  # ADMIN cancelou manualmente via PATCH
-    ROLE_CHANGE = "role_change"                # Cancelamento automático por mudança de role
+    ROLE_CHANGE = "role_change"  # Cancelamento automático por mudança de role
 ```
 
 **Alteração no model:**

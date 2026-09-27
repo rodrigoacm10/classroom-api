@@ -7,8 +7,16 @@ from shared.enums.session_status import SessionStatus
 
 
 class CreateAttendanceSessionRequest(BaseModel):
-    room_id: UUID | None = Field(default=None, description="ID da sala para a chamada (opcional, utiliza a sala padrão da turma se omitido)")
-    duration_minutes: int = Field(default=15, gt=0, le=1440, description="Duração da chamada em minutos (de 1 a 1440 - máximo 24 horas)")
+    room_id: UUID | None = Field(
+        default=None,
+        description="ID da sala para a chamada (opcional, utiliza a sala padrão da turma se omitido)",
+    )
+    duration_minutes: int = Field(
+        default=15,
+        gt=0,
+        le=1440,
+        description="Duração da chamada em minutos (de 1 a 1440 - máximo 24 horas)",
+    )
 
 
 class SubjectClassSummaryResponse(BaseModel):

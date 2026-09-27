@@ -152,9 +152,7 @@ class TestRemoveTenantMemberUseCase:
         admin = UserFactory.make()
         member_user = UserFactory.make()
 
-        member_repo.seed(
-            TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
-        )
+        member_repo.seed(TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN))
         member_to_remove = TenantMember(
             tenant_id=tenant.id, user_id=member_user.id, role=UserRole.PROFESSOR
         )
@@ -188,9 +186,7 @@ class TestRemoveTenantMemberUseCase:
         tenant_repo.seed(tenant)
 
         admin = UserFactory.make()
-        member_repo.seed(
-            TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
-        )
+        member_repo.seed(TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN))
 
         use_case = RemoveTenantMemberUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
 
@@ -222,7 +218,9 @@ class TestRemoveTenantMemberUseCase:
         member_user = UserFactory.make()
 
         member_repo.seed(TenantMember(tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN))
-        member_to_remove = TenantMember(tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+        member_to_remove = TenantMember(
+            tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO
+        )
 
         member_repo.seed(member_to_remove)
 
@@ -253,7 +251,6 @@ class TestRemoveTenantMemberUseCase:
         # Como o usuário não tem mais nenhuma tenant ativa, seus tokens devem ser removidos
         remaining_tokens = await fcm_token_repo.find_by_user_and_device(member_user.id, "device_1")
         assert remaining_tokens is None
-
 
 
 @pytest.mark.asyncio
@@ -334,9 +331,7 @@ class TestUpdateTenantMemberRoleUseCase:
         tenant_repo.seed(tenant)
 
         user = UserFactory.make()
-        member_repo.seed(
-            TenantMember(tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
-        )
+        member_repo.seed(TenantMember(tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO))
 
         use_case = UpdateTenantMemberRoleUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
         updated = await use_case.execute(
@@ -466,6 +461,7 @@ class TestListTenantMembersUseCase:
     async def test_list_tenant_members_tenant_not_found(self):
         """Deve lançar ResourceNotFoundException se a tenant não existir."""
         from uuid import uuid4
+
         from modules.tenant.application.use_cases.list_tenant_members import (
             ListTenantMembersInput,
             ListTenantMembersUseCase,
@@ -482,6 +478,7 @@ class TestListTenantMembersUseCase:
         """Deve passar os filtros de search, subject_class_id e período de datas para o repositório."""
         from datetime import datetime, timezone
         from uuid import uuid4
+
         from modules.tenant.application.use_cases.list_tenant_members import (
             ListTenantMembersInput,
             ListTenantMembersUseCase,
@@ -504,7 +501,9 @@ class TestListTenantMembersUseCase:
         setattr(m1, "_user_email", u1.email)
         setattr(m1, "_subject_class_id", sc_id)
 
-        m2 = TenantMember(tenant_id=tenant.id, user_id=u2.id, role=UserRole.PROFESSOR, created_at=now)
+        m2 = TenantMember(
+            tenant_id=tenant.id, user_id=u2.id, role=UserRole.PROFESSOR, created_at=now
+        )
         setattr(m2, "_user_name", u2.name)
         setattr(m2, "_user_email", u2.email)
 
@@ -528,6 +527,3 @@ class TestListTenantMembersUseCase:
         assert res_class.total == 1
         assert len(res_class.items) == 1
         assert res_class.items[0].user_id == u1.id
-
-
-

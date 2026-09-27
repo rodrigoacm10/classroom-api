@@ -12,7 +12,6 @@ from shared.exceptions import (
 
 
 class AcceptInviteUseCase:
-
     def __init__(
         self,
         invite_repo: TenantInviteRepository,

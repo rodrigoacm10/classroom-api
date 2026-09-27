@@ -36,7 +36,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestSubjectClassUseCases:
-
     async def test_create_subject_class_success(self):
         """Deve criar uma turma de disciplina com sucesso vinculando a sala e o TenantMember do professor."""
         subject_class_repo = FakeSubjectClassRepository()
@@ -51,7 +50,9 @@ class TestSubjectClassUseCases:
         await room_repo.save(room)
 
         prof_user_id = uuid4()
-        prof_member = TenantMember(tenant_id=tenant.id, user_id=prof_user_id, role=UserRole.PROFESSOR)
+        prof_member = TenantMember(
+            tenant_id=tenant.id, user_id=prof_user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(prof_member)
 
         use_case = CreateSubjectClassUseCase(
@@ -159,7 +160,9 @@ class TestSubjectClassUseCases:
             discipline_name="Algoritmos",
         )
 
-        with pytest.raises(ResourceNotFoundException, match="Professor não encontrado nesta instituição."):
+        with pytest.raises(
+            ResourceNotFoundException, match="Professor não encontrado nesta instituição."
+        ):
             await use_case.execute(input_data)
 
     async def test_create_subject_class_with_student_role_fails(self):
@@ -176,7 +179,9 @@ class TestSubjectClassUseCases:
         await room_repo.save(room)
 
         student_user_id = uuid4()
-        student_member = TenantMember(tenant_id=tenant.id, user_id=student_user_id, role=UserRole.ALUNO)
+        student_member = TenantMember(
+            tenant_id=tenant.id, user_id=student_user_id, role=UserRole.ALUNO
+        )
         await member_repo.save(student_member)
 
         use_case = CreateSubjectClassUseCase(
@@ -194,7 +199,10 @@ class TestSubjectClassUseCases:
             discipline_name="Algoritmos",
         )
 
-        with pytest.raises(BusinessRuleException, match="Apenas professores ou administradores podem ministrar turmas."):
+        with pytest.raises(
+            BusinessRuleException,
+            match="Apenas professores ou administradores podem ministrar turmas.",
+        ):
             await use_case.execute(input_data)
 
     async def test_get_subject_class_success(self):
@@ -211,7 +219,9 @@ class TestSubjectClassUseCases:
         await subject_class_repo.save(sc)
 
         use_case = GetSubjectClassUseCase(subject_class_repo=subject_class_repo)
-        result = await use_case.execute(GetSubjectClassInput(subject_class_id=sc.id, tenant_id=tenant_id))
+        result = await use_case.execute(
+            GetSubjectClassInput(subject_class_id=sc.id, tenant_id=tenant_id)
+        )
 
         assert result.id == sc.id
         assert result.name == "Turma 101"
@@ -232,7 +242,9 @@ class TestSubjectClassUseCases:
 
         use_case = GetSubjectClassUseCase(subject_class_repo=subject_class_repo)
         with pytest.raises(ResourceNotFoundException, match="Turma não encontrada."):
-            await use_case.execute(GetSubjectClassInput(subject_class_id=sc.id, tenant_id=tenant_id))
+            await use_case.execute(
+                GetSubjectClassInput(subject_class_id=sc.id, tenant_id=tenant_id)
+            )
 
     async def test_list_subject_classes_excludes_soft_deleted(self):
         """Deve listar apenas as turmas ativas de uma instituição, omitindo registros com soft delete."""
@@ -241,14 +253,35 @@ class TestSubjectClassUseCases:
         tenant = Tenant(name="UPE", slug="upe")
         await tenant_repo.save(tenant)
 
-        sc1 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Ativa 1", discipline_name="D1")
-        sc2 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Deletada", discipline_name="D2", deleted=True)
-        sc3 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Ativa 2", discipline_name="D3")
+        sc1 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Ativa 1",
+            discipline_name="D1",
+        )
+        sc2 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Deletada",
+            discipline_name="D2",
+            deleted=True,
+        )
+        sc3 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Ativa 2",
+            discipline_name="D3",
+        )
         await subject_class_repo.save(sc1)
         await subject_class_repo.save(sc2)
         await subject_class_repo.save(sc3)
 
-        use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+        use_case = ListSubjectClassesUseCase(
+            subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+        )
         result = await use_case.execute(ListSubjectClassesInput(tenant_id=tenant.id))
 
         assert len(result.items) == 2
@@ -269,12 +302,26 @@ class TestSubjectClassUseCases:
 
         professor_a = uuid4()
         professor_b = uuid4()
-        sc1 = SubjectClass(tenant_id=tenant.id, professor_id=professor_a, room_id=uuid4(), name="Do A", discipline_name="D1")
-        sc2 = SubjectClass(tenant_id=tenant.id, professor_id=professor_b, room_id=uuid4(), name="Do B", discipline_name="D2")
+        sc1 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=professor_a,
+            room_id=uuid4(),
+            name="Do A",
+            discipline_name="D1",
+        )
+        sc2 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=professor_b,
+            room_id=uuid4(),
+            name="Do B",
+            discipline_name="D2",
+        )
         await subject_class_repo.save(sc1)
         await subject_class_repo.save(sc2)
 
-        use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+        use_case = ListSubjectClassesUseCase(
+            subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+        )
         result = await use_case.execute(
             ListSubjectClassesInput(tenant_id=tenant.id, professor_id=professor_a)
         )
@@ -292,12 +339,26 @@ class TestSubjectClassUseCases:
 
         room_a = uuid4()
         room_b = uuid4()
-        sc1 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=room_a, name="Na sala A", discipline_name="D1")
-        sc2 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=room_b, name="Na sala B", discipline_name="D2")
+        sc1 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=room_a,
+            name="Na sala A",
+            discipline_name="D1",
+        )
+        sc2 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=room_b,
+            name="Na sala B",
+            discipline_name="D2",
+        )
         await subject_class_repo.save(sc1)
         await subject_class_repo.save(sc2)
 
-        use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+        use_case = ListSubjectClassesUseCase(
+            subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+        )
         result = await use_case.execute(
             ListSubjectClassesInput(tenant_id=tenant.id, room_id=room_a)
         )
@@ -315,14 +376,34 @@ class TestSubjectClassUseCases:
         tenant = Tenant(name="UPE", slug="upe")
         await tenant_repo.save(tenant)
 
-        sc1 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Turma P1", discipline_name="Cálculo 1")
-        sc2 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Turma P2", discipline_name="Cálculo 2")
-        sc3 = SubjectClass(tenant_id=tenant.id, professor_id=uuid4(), room_id=uuid4(), name="Turma P3", discipline_name="Física 1")
+        sc1 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Turma P1",
+            discipline_name="Cálculo 1",
+        )
+        sc2 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Turma P2",
+            discipline_name="Cálculo 2",
+        )
+        sc3 = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Turma P3",
+            discipline_name="Física 1",
+        )
         await subject_class_repo.save(sc1)
         await subject_class_repo.save(sc2)
         await subject_class_repo.save(sc3)
 
-        use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+        use_case = ListSubjectClassesUseCase(
+            subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+        )
         res_search = await use_case.execute(
             ListSubjectClassesInput(tenant_id=tenant.id, search="Cálculo")
         )
@@ -358,7 +439,9 @@ class TestSubjectClassUseCases:
         )
         await subject_class_repo.save(sc)
 
-        use_case = UpdateSubjectClassUseCase(subject_class_repo=subject_class_repo, room_repo=room_repo)
+        use_case = UpdateSubjectClassUseCase(
+            subject_class_repo=subject_class_repo, room_repo=room_repo
+        )
         updated = await use_case.execute(
             UpdateSubjectClassInput(
                 subject_class_id=sc.id,
@@ -389,7 +472,9 @@ class TestSubjectClassUseCases:
         )
         await subject_class_repo.save(sc)
 
-        use_case = UpdateSubjectClassUseCase(subject_class_repo=subject_class_repo, room_repo=room_repo)
+        use_case = UpdateSubjectClassUseCase(
+            subject_class_repo=subject_class_repo, room_repo=room_repo
+        )
         with pytest.raises(ResourceNotFoundException, match="Turma não encontrada."):
             await use_case.execute(
                 UpdateSubjectClassInput(

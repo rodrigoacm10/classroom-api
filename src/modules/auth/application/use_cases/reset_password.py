@@ -70,7 +70,9 @@ class ResetPasswordUseCase:
 
         # Adiciona o JTI na blacklist até o término do tempo de vida do token (single-use)
         now_ts = int(datetime.now(timezone.utc).timestamp())
-        remaining_ttl = max(int(exp - now_ts), 1) if exp else settings.password_reset_token_expire_minutes * 60
+        remaining_ttl = (
+            max(int(exp - now_ts), 1) if exp else settings.password_reset_token_expire_minutes * 60
+        )
         await self.redis.set(f"blacklist:{jti}", "revoked", ex=remaining_ttl)
 
         # Invalida todas as sessões e tokens JWT anteriores do usuário

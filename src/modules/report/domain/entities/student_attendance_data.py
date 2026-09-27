@@ -5,6 +5,7 @@ from uuid import UUID
 @dataclass
 class RawConfirmation:
     """Dado mínimo de uma confirmação — só o necessário para o cálculo."""
+
     latitude: float
     longitude: float
     record_status: str  # "regular" | "irregular" | "approved" | "rejected"
@@ -17,6 +18,7 @@ class StudentAttendanceData:
     simples — obrigatório para ser serializável entre processos (pickle).
     NUNCA deve conter uma sessão SQLAlchemy ou qualquer objeto de infraestrutura.
     """
+
     tenant_member_id: UUID
     student_name: str
     total_sessions: int

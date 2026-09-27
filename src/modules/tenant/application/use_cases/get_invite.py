@@ -15,7 +15,6 @@ class GetInviteOutput:
 
 
 class GetInviteUseCase:
-
     def __init__(
         self,
         invite_repo: TenantInviteRepository,

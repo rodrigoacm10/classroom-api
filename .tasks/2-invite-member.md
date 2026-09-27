@@ -78,9 +78,7 @@ from shared.enums.user_role import UserRole
 class TenantInviteModel(Base):
     __tablename__ = "tenant_invites"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
@@ -88,9 +86,7 @@ class TenantInviteModel(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role"), nullable=False
-    )
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), nullable=False)
     token: Mapped[str] = mapped_column(
         String(64), unique=True, nullable=False, default=lambda: secrets.token_urlsafe(32)
     )
@@ -98,9 +94,7 @@ class TenantInviteModel(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 ```
 
 > **Notas de design:**
@@ -254,7 +248,6 @@ from modules.tenant.domain.entities.tenant_invite import TenantInvite
 
 
 class TenantInviteRepository(Protocol):
-
     async def find_by_token(self, token: str) -> TenantInvite | None: ...
 
     async def find_by_email_and_tenant(
@@ -275,7 +268,6 @@ from modules.tenant.domain.entities.tenant_invite import TenantInvite
 
 
 class TenantInviteMapper:
-
     @staticmethod
     def to_domain(model: TenantInviteModel) -> TenantInvite:
         return TenantInvite(
@@ -321,7 +313,6 @@ from modules.tenant.infra.mappers.tenant_invite_mapper import TenantInviteMapper
 
 
 class TenantInviteSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -331,9 +322,7 @@ class TenantInviteSQLAlchemyRepository:
         model = result.scalar_one_or_none()
         return TenantInviteMapper.to_domain(model) if model else None
 
-    async def find_by_email_and_tenant(
-        self, email: str, tenant_id: UUID
-    ) -> TenantInvite | None:
+    async def find_by_email_and_tenant(self, email: str, tenant_id: UUID) -> TenantInvite | None:
         stmt = select(TenantInviteModel).where(
             TenantInviteModel.email == email,
             TenantInviteModel.tenant_id == tenant_id,
@@ -364,7 +353,10 @@ from uuid import UUID
 from infra.email.resend_client import send_invite_email
 from modules.tenant.domain.entities.tenant_invite import TenantInvite
 from modules.tenant.domain.repositories.tenant_invite_repository import TenantInviteRepository
-from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository, TenantRepository
+from modules.tenant.domain.repositories.tenant_repository import (
+    TenantMemberRepository,
+    TenantRepository,
+)
 from modules.user.domain.entities.user import User
 from shared.enums.user_role import UserRole
 from shared.exceptions import BusinessRuleException, ResourceNotFoundException
@@ -379,7 +371,6 @@ class SendInviteInput:
 
 
 class SendInviteUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,
@@ -387,8 +378,7 @@ class SendInviteUseCase:
         invite_repo: TenantInviteRepository,
         expire_hours: int = 72,
         frontend_url: str = "http://localhost:3000",
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def execute(self, data: SendInviteInput) -> TenantInvite:
         # 1. Verifica se a tenant existe e não está deletada
@@ -448,9 +438,11 @@ Responsável por retornar os detalhes de um invite pelo token, para o frontend e
 ```python
 # Adicionar em: src/modules/tenant/interface/schemas/tenant_schemas.py
 
+
 class SendInviteRequest(BaseModel):
     email: EmailStr
     role: UserRole
+
 
 class InviteStatusResponse(BaseModel):
     id: UUID

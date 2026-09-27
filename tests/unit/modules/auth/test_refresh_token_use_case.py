@@ -69,9 +69,7 @@ class TestRefreshTokenUseCase:
             side_effect=jwt.ExpiredSignatureError,
         ):
             with pytest.raises(ValueError, match="expirado"):
-                await self.use_case.execute(
-                    RefreshTokenInput(refresh_token="expired.token")
-                )
+                await self.use_case.execute(RefreshTokenInput(refresh_token="expired.token"))
 
     async def test_refresh_raises_when_token_is_invalid(self) -> None:
         """decode_access_token lança InvalidTokenError → ValueError com mensagem de inválido."""
@@ -80,9 +78,7 @@ class TestRefreshTokenUseCase:
             side_effect=jwt.InvalidTokenError,
         ):
             with pytest.raises(ValueError, match="inválido"):
-                await self.use_case.execute(
-                    RefreshTokenInput(refresh_token="garbage.token")
-                )
+                await self.use_case.execute(RefreshTokenInput(refresh_token="garbage.token"))
 
     async def test_refresh_raises_when_token_type_is_not_refresh(self) -> None:
         """Payload com type='access' passado como refresh → ValueError."""
@@ -115,9 +111,7 @@ class TestRefreshTokenUseCase:
             ),
         ):
             with pytest.raises(ValueError, match="revogado"):
-                await self.use_case.execute(
-                    RefreshTokenInput(refresh_token="blacklisted.token")
-                )
+                await self.use_case.execute(RefreshTokenInput(refresh_token="blacklisted.token"))
 
     async def test_refresh_raises_when_user_not_found(self) -> None:
         """Token válido mas user_id não existe no repositório → ValueError."""

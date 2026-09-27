@@ -64,7 +64,9 @@ class TestForgotPasswordUseCase:
         user = UserFactory.make(email="aluno@escola.com", name="Aluno Teste")
         self.user_repo.seed(user)
 
-        with patch("modules.auth.application.use_cases.forgot_password.send_password_reset_email") as mock_email:
+        with patch(
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+        ) as mock_email:
             await self.use_case.execute(ForgotPasswordInput(email="aluno@escola.com"))
 
         stored_raw = await self.redis.get("password_reset:aluno@escola.com")
@@ -84,7 +86,9 @@ class TestForgotPasswordUseCase:
 
     async def test_forgot_password_unknown_email_silently_returns_without_error(self) -> None:
         """E-mail não cadastrado -> não lança exceção, não armazena no Redis e não dispara e-mail."""
-        with patch("modules.auth.application.use_cases.forgot_password.send_password_reset_email") as mock_email:
+        with patch(
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+        ) as mock_email:
             await self.use_case.execute(ForgotPasswordInput(email="fantasma@escola.com"))
 
         stored = await self.redis.get("password_reset:fantasma@escola.com")
@@ -182,7 +186,9 @@ class TestResetPasswordUseCase:
         decoded = decode_reset_password_token(reset_token)
         jti = decoded["jti"]
 
-        with patch("modules.auth.application.use_cases.reset_password.revoke_user_sessions") as mock_revoke:
+        with patch(
+            "modules.auth.application.use_cases.reset_password.revoke_user_sessions"
+        ) as mock_revoke:
             await self.use_case.execute(
                 ResetPasswordInput(
                     reset_token=reset_token,
@@ -241,7 +247,9 @@ class TestResetPasswordUseCase:
                 )
             )
 
-    async def test_reset_password_invalid_token_signature_raises_business_rule_exception(self) -> None:
+    async def test_reset_password_invalid_token_signature_raises_business_rule_exception(
+        self,
+    ) -> None:
         """Token malformado ou com assinatura inválida -> lança BusinessRuleException."""
         with pytest.raises(BusinessRuleException, match="Token de recuperação inválido"):
             await self.use_case.execute(

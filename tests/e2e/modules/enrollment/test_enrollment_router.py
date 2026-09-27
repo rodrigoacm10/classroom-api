@@ -24,9 +24,7 @@ class TestEnrollmentRouterEndpoints:
         headers = {"Authorization": f"Bearer {token}"}
 
         room_payload = {"name": "Sala 101", "latitude": -8.0, "longitude": -34.0}
-        room_res = await client.post(
-            "/rooms", json=room_payload, headers=headers
-        )
+        room_res = await client.post("/rooms", json=room_payload, headers=headers)
         assert room_res.status_code == 201
         room_id = room_res.json()["id"]
 
@@ -35,9 +33,7 @@ class TestEnrollmentRouterEndpoints:
             "name": "Turma A",
             "discipline_name": "Cálculo 1",
         }
-        sc_res = await client.post(
-            "/subject-classes", json=sc_payload, headers=headers
-        )
+        sc_res = await client.post("/subject-classes", json=sc_payload, headers=headers)
         assert sc_res.status_code == 201
         sc_id = sc_res.json()["id"]
 
@@ -356,7 +352,9 @@ class TestEnrollmentRouterEndpoints:
         assert len(res_all.json()["items"]) == 1
         assert res_all.json()["items"][0]["status"] == EnrollmentStatus.DROPPED.value
 
-    async def test_drop_and_delete_enrollment_forbidden_for_professor_and_aluno(self, client, session):
+    async def test_drop_and_delete_enrollment_forbidden_for_professor_and_aluno(
+        self, client, session
+    ):
         """PATCH e DELETE /enrollments/{id} por PROFESSOR ou ALUNO deve retornar 403 Forbidden."""
         tenant, _, _, admin_headers, sc_id = await self._setup_tenant_class(session, client)
 
@@ -374,12 +372,18 @@ class TestEnrollmentRouterEndpoints:
 
         # Setup Professor headers
         prof_user = await UserFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=prof_user.id, role=UserRole.PROFESSOR)
-        prof_token = create_access_token(user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=prof_user.id, role=UserRole.PROFESSOR
+        )
+        prof_token = create_access_token(
+            user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         prof_headers = {"Authorization": f"Bearer {prof_token}"}
 
         # Setup Aluno headers
-        aluno_token = create_access_token(user_id=st_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
+        aluno_token = create_access_token(
+            user_id=st_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value
+        )
         aluno_headers = {"Authorization": f"Bearer {aluno_token}"}
 
         # Professor Tenta PATCH -> 403
@@ -564,5 +568,3 @@ class TestEnrollmentRouterEndpoints:
         assert calc["room_name"] == "Auditório"
         assert calc["professor_name"] == "Prof Carla"
         assert calc["attendance_rate"] == 0.0
-
-

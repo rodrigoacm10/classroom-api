@@ -23,9 +23,7 @@ from shared.enums.session_status import SessionStatus
 from shared.pagination import Page, PaginationParams
 
 
-
 class EnrollmentSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -68,9 +66,7 @@ class EnrollmentSQLAlchemyRepository:
         status: EnrollmentStatus | None = None,
         include_deleted: bool = False,
     ) -> list[Enrollment]:
-        stmt = select(EnrollmentModel).where(
-            EnrollmentModel.subject_class_id == subject_class_id
-        )
+        stmt = select(EnrollmentModel).where(EnrollmentModel.subject_class_id == subject_class_id)
         if not include_deleted:
             stmt = stmt.where(EnrollmentModel.deleted == False)  # noqa: E712
         if status is not None:
@@ -115,9 +111,7 @@ class EnrollmentSQLAlchemyRepository:
         status: EnrollmentStatus | None = None,
         include_deleted: bool = False,
     ) -> list[Enrollment]:
-        stmt = select(EnrollmentModel).where(
-            EnrollmentModel.tenant_member_id == tenant_member_id
-        )
+        stmt = select(EnrollmentModel).where(EnrollmentModel.tenant_member_id == tenant_member_id)
         if not include_deleted:
             stmt = stmt.where(EnrollmentModel.deleted == False)  # noqa: E712
         if status is not None:
@@ -272,4 +266,3 @@ class EnrollmentSQLAlchemyRepository:
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-

@@ -3,7 +3,10 @@ from uuid import uuid4
 
 import pytest
 
-from modules.attendance.application.use_cases.open_session import OpenAttendanceSessionInput, OpenAttendanceSessionUseCase
+from modules.attendance.application.use_cases.open_session import (
+    OpenAttendanceSessionInput,
+    OpenAttendanceSessionUseCase,
+)
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.events.attendance_events import AttendanceSessionOpenedEvent
 from modules.room.domain.entities.room import Room
@@ -12,7 +15,11 @@ from modules.tenant.domain.entities.tenant_member import TenantMember
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.events.event_dispatcher import EventDispatcher
-from shared.exceptions import ForbiddenException, ResourceAlreadyExistsException, ResourceNotFoundException
+from shared.exceptions import (
+    ForbiddenException,
+    ResourceAlreadyExistsException,
+    ResourceNotFoundException,
+)
 from tests.factories.tenant_factory import TenantFactory
 from tests.unit.fakes.fake_attendance_session_repository import FakeAttendanceSessionRepository
 from tests.unit.fakes.fake_room_repository import FakeRoomRepository
@@ -21,7 +28,9 @@ from tests.unit.fakes.fake_tenant_member_repository import FakeTenantMemberRepos
 from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 
-def make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, room_repo, event_dispatcher=None):
+def make_use_case(
+    session_repo, subject_class_repo, tenant_repo, member_repo, room_repo, event_dispatcher=None
+):
     """Helper para instanciar o use case com um dispatcher (real ou no-op)."""
     return OpenAttendanceSessionUseCase(
         session_repo=session_repo,
@@ -35,7 +44,6 @@ def make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, ro
 
 @pytest.mark.asyncio
 class TestOpenAttendanceSessionUseCase:
-
     async def test_open_session_success(self):
         """Deve abrir uma nova sessão de chamada com day_code de 6 caracteres e status OPEN."""
         session_repo = FakeAttendanceSessionRepository()
@@ -48,7 +56,9 @@ class TestOpenAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         room = Room(tenant_id=tenant.id, name="Sala 101", latitude=-8.0, longitude=-34.0)
@@ -63,7 +73,9 @@ class TestOpenAttendanceSessionUseCase:
         )
         await subject_class_repo.save(subject_class)
 
-        use_case = make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, room_repo)
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo
+        )
 
         session = await use_case.execute(
             OpenAttendanceSessionInput(
@@ -94,7 +106,9 @@ class TestOpenAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         room = Room(tenant_id=tenant.id, name="Sala 101", latitude=-8.0, longitude=-34.0)
@@ -118,7 +132,9 @@ class TestOpenAttendanceSessionUseCase:
         dispatcher = EventDispatcher()
         dispatcher.register(AttendanceSessionOpenedEvent, spy_handler)
 
-        use_case = make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, room_repo, dispatcher)
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo, dispatcher
+        )
 
         session = await use_case.execute(
             OpenAttendanceSessionInput(
@@ -151,7 +167,9 @@ class TestOpenAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         room = Room(tenant_id=tenant.id, name="Sala 101", latitude=-8.0, longitude=-34.0)
@@ -176,7 +194,9 @@ class TestOpenAttendanceSessionUseCase:
         existing_session.expires_at = datetime.now(timezone.utc).replace(year=2030)
         await session_repo.save(existing_session)
 
-        use_case = make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, room_repo)
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo
+        )
 
         with pytest.raises(ResourceAlreadyExistsException, match="Já existe uma chamada aberta"):
             await use_case.execute(
@@ -215,7 +235,9 @@ class TestOpenAttendanceSessionUseCase:
         )
         await subject_class_repo.save(subject_class)
 
-        use_case = make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, room_repo)
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo
+        )
 
         with pytest.raises(ForbiddenException):
             await use_case.execute(
@@ -239,7 +261,9 @@ class TestOpenAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         diff_prof_user_id = uuid4()
-        diff_prof_member = TenantMember(tenant_id=tenant.id, user_id=diff_prof_user_id, role=UserRole.PROFESSOR)
+        diff_prof_member = TenantMember(
+            tenant_id=tenant.id, user_id=diff_prof_user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(diff_prof_member)
 
         room = Room(tenant_id=tenant.id, name="Sala 101", latitude=-8.0, longitude=-34.0)
@@ -254,9 +278,13 @@ class TestOpenAttendanceSessionUseCase:
         )
         await subject_class_repo.save(subject_class)
 
-        use_case = make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, room_repo)
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo
+        )
 
-        with pytest.raises(ForbiddenException, match="Apenas o professor da turma ou um administrador"):
+        with pytest.raises(
+            ForbiddenException, match="Apenas o professor da turma ou um administrador"
+        ):
             await use_case.execute(
                 OpenAttendanceSessionInput(
                     tenant_id=tenant.id,
@@ -278,7 +306,9 @@ class TestOpenAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -290,7 +320,9 @@ class TestOpenAttendanceSessionUseCase:
         )
         await subject_class_repo.save(subject_class)
 
-        use_case = make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, room_repo)
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo
+        )
 
         with pytest.raises(ResourceNotFoundException):
             await use_case.execute(

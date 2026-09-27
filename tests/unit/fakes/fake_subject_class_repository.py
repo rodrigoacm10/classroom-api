@@ -6,7 +6,6 @@ from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeSubjectClassRepository:
-
     def __init__(self) -> None:
         self._classes: dict[UUID, SubjectClass] = {}
 
@@ -34,7 +33,8 @@ class FakeSubjectClassRepository:
         self, tenant_id: UUID, include_deleted: bool = False
     ) -> list[SubjectClass]:
         return [
-            c for c in self._classes.values()
+            c
+            for c in self._classes.values()
             if c.tenant_id == tenant_id and (include_deleted or not c.deleted)
         ]
 
@@ -85,8 +85,7 @@ class FakeSubjectClassRepository:
         if search:
             s = search.lower()
             summaries = [
-                sm for sm in summaries
-                if s in sm.name.lower() or s in sm.discipline_name.lower()
+                sm for sm in summaries if s in sm.name.lower() or s in sm.discipline_name.lower()
             ]
         summaries.sort(key=lambda sm: sm.created_at, reverse=True)
         return paginate_list(summaries, pagination)

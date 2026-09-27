@@ -1,7 +1,7 @@
-from contextlib import asynccontextmanager
 import asyncio
-from pathlib import Path
 import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -21,8 +21,10 @@ from modules.attendance.interface.router import router as attendance_router
 from modules.auth.interface.router import router as auth_router
 from modules.enrollment.interface.router import (
     member_enrollments_router,
-    router as enrollment_router,
     student_subject_classes_router,
+)
+from modules.enrollment.interface.router import (
+    router as enrollment_router,
 )
 from modules.notification.interface.router import router as notification_router
 from modules.report.interface.router import router as report_router

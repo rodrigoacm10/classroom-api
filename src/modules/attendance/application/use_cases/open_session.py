@@ -1,16 +1,23 @@
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import secrets
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.events.attendance_events import AttendanceSessionOpenedEvent
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
 from modules.room.domain.repositories.room_repository import RoomRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
-from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository, TenantRepository
-from shared.events.event_dispatcher import EventDispatcher
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
+from modules.tenant.domain.repositories.tenant_repository import (
+    TenantMemberRepository,
+    TenantRepository,
+)
 from shared.enums.user_role import UserRole
+from shared.events.event_dispatcher import EventDispatcher
 from shared.exceptions import (
     BusinessRuleException,
     ForbiddenException,
@@ -36,7 +43,6 @@ class OpenAttendanceSessionInput:
 
 
 class OpenAttendanceSessionUseCase:
-
     def __init__(
         self,
         session_repo: AttendanceSessionRepository,
@@ -73,11 +79,15 @@ class OpenAttendanceSessionUseCase:
         is_professor = subject_class.professor_id == member.id
 
         if not (is_admin or is_professor):
-            raise ForbiddenException("Apenas o professor da turma ou um administrador podem abrir chamadas.")
+            raise ForbiddenException(
+                "Apenas o professor da turma ou um administrador podem abrir chamadas."
+            )
 
         target_room_id = data.room_id or subject_class.room_id
         if not target_room_id:
-            raise BusinessRuleException("A turma não tem sala cadastrada e nenhuma sala foi especificada.")
+            raise BusinessRuleException(
+                "A turma não tem sala cadastrada e nenhuma sala foi especificada."
+            )
 
         room = await self.room_repo.find_by_id_and_tenant(target_room_id, data.tenant_id)
         if not room or room.deleted:

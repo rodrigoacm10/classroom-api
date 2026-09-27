@@ -1,10 +1,9 @@
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
-from security.dependencies.current_user import AuthContext
 from modules.auth.application.use_cases.logout import LogoutUseCase
+from security.dependencies.current_user import AuthContext
 from tests.factories.user_factory import UserFactory
-
 
 _UNSET = object()  # sentinela para diferenciar "não passado" de "passado como None"
 

@@ -11,7 +11,6 @@ from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository impo
 from modules.notification.infra.repositories.fcm_token_sqlalchemy_repository import (
     FCMTokenSQLAlchemyRepository,
 )
-
 from modules.tenant.application.use_cases.activate_tenant import ActivateTenantUseCase
 from modules.tenant.application.use_cases.add_tenant_member import (
     AddTenantMemberInput,
@@ -272,7 +271,6 @@ async def remove_tenant_member(
         member_repo=member_repo,
         fcm_token_repo=fcm_token_repo,
     )
-
 
     member = await use_case.execute(
         RemoveTenantMemberInput(

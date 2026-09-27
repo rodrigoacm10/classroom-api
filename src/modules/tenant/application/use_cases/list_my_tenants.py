@@ -16,7 +16,6 @@ class MyTenantItem:
 
 
 class ListMyTenantsUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,

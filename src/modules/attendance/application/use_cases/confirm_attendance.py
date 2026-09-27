@@ -3,12 +3,21 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
-from modules.attendance.domain.repositories.attendance_record_repository import AttendanceRecordRepository
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
+from modules.attendance.domain.repositories.attendance_record_repository import (
+    AttendanceRecordRepository,
+)
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
 from modules.room.domain.repositories.room_repository import RoomRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
-from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository, TenantRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
+from modules.tenant.domain.repositories.tenant_repository import (
+    TenantMemberRepository,
+    TenantRepository,
+)
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.session_status import SessionStatus
 from shared.exceptions import (
@@ -23,7 +32,10 @@ def is_mobile_user_agent(ua: str | None) -> bool:
     if not ua:
         return False
     ua_lower = ua.lower()
-    return any(k in ua_lower for k in ["okhttp", "dart", "cfnetwork", "android", "iphone", "ipad", "mobile"])
+    return any(
+        k in ua_lower
+        for k in ["okhttp", "dart", "cfnetwork", "android", "iphone", "ipad", "mobile"]
+    )
 
 
 @dataclass
@@ -43,7 +55,6 @@ class ConfirmAttendanceInput:
 
 
 class ConfirmAttendanceUseCase:
-
     def __init__(
         self,
         session_repo: AttendanceSessionRepository,
@@ -76,7 +87,9 @@ class ConfirmAttendanceUseCase:
             raise ResourceNotFoundException("Turma não encontrada.")
 
         # 3. Session
-        session = await self.session_repo.find_by_id_and_class(data.session_id, data.subject_class_id)
+        session = await self.session_repo.find_by_id_and_class(
+            data.session_id, data.subject_class_id
+        )
         if not session:
             raise ResourceNotFoundException("Sessão de chamada não encontrada.")
 
@@ -89,7 +102,9 @@ class ConfirmAttendanceUseCase:
         # 5. Expiração
         now = datetime.now(timezone.utc)
         expires_at_utc = (
-            session.expires_at if session.expires_at.tzinfo else session.expires_at.replace(tzinfo=timezone.utc)
+            session.expires_at
+            if session.expires_at.tzinfo
+            else session.expires_at.replace(tzinfo=timezone.utc)
         )
         if now >= expires_at_utc:
             raise ResourceAlreadyExistsException("A chamada está expirada.")
@@ -107,11 +122,17 @@ class ConfirmAttendanceUseCase:
         enrollment = await self.enrollment_repo.find_by_class_and_member(
             data.subject_class_id, member.id
         )
-        if not enrollment or enrollment.status != EnrollmentStatus.ACTIVE or getattr(enrollment, "deleted", False):
+        if (
+            not enrollment
+            or enrollment.status != EnrollmentStatus.ACTIVE
+            or getattr(enrollment, "deleted", False)
+        ):
             raise ForbiddenException("Aluno não possui matrícula ativa nesta turma.")
 
         # 9. Já confirmou
-        existing_record = await self.record_repo.find_by_session_and_member(data.session_id, member.id)
+        existing_record = await self.record_repo.find_by_session_and_member(
+            data.session_id, member.id
+        )
         if existing_record:
             raise ResourceAlreadyExistsException("Presença já confirmada nesta sessão.")
 
@@ -143,7 +164,9 @@ class ConfirmAttendanceUseCase:
 
         # Dispositivo compartilhado
         if data.device_id:
-            shared_rec = await self.record_repo.find_by_device_id_in_session(data.session_id, data.device_id)
+            shared_rec = await self.record_repo.find_by_device_id_in_session(
+                data.session_id, data.device_id
+            )
             if shared_rec and shared_rec.tenant_member_id != member.id:
                 flags.append("shared_device")
 

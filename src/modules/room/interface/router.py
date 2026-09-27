@@ -15,7 +15,9 @@ from modules.room.interface.schemas.room_schemas import (
     RoomResponse,
     UpdateRoomRequest,
 )
-from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
+from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
+    TenantSQLAlchemyRepository,
+)
 from modules.user.domain.entities.user import User
 from security.dependencies.current_user import get_current_tenant_id, get_current_user
 from security.dependencies.require_role import require_role
