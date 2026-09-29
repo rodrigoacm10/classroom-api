@@ -258,6 +258,38 @@ class TestSwitchTenantEndpoint:
 
         assert response.status_code == 401
 
+    async def test_switch_tenant_updates_refresh_cookie_for_web_client(
+        self, client, session
+    ) -> None:
+        """Cliente web com cookie HttpOnly tem o refresh token renovado com o escopo da tenant."""
+        user = await UserFactory.create(
+            session,
+            email="switch_web@e2e.com",
+            password_hash=hash_password(_PLAIN_PASSWORD),
+        )
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id)
+
+        login_res = await client.post(
+            "/auth/login",
+            json={
+                "email": "switch_web@e2e.com",
+                "password": _PLAIN_PASSWORD,
+                "client_type": "web",
+            },
+        )
+        assert login_res.status_code == 200
+        access_token = login_res.json()["access_token"]
+
+        response = await client.post(
+            "/auth/switch-tenant",
+            json={"tenant_id": str(tenant.id)},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        assert response.status_code == 200
+        assert "refresh_token" in response.cookies
+
 
 # ─── Logout ──────────────────────────────────────────────────────────────────
 

@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import jwt
@@ -134,3 +135,85 @@ class TestRefreshTokenUseCase:
                 await self.use_case.execute(
                     RefreshTokenInput(refresh_token="valid.token.unknown.user")
                 )
+
+    async def test_refresh_rotates_old_token_and_preserves_tenant_scope(self) -> None:
+        """RTR: invalida refresh token anterior no Redis e preserva tenant_id e role."""
+        user = UserFactory.make()
+        self.repo.seed(user)
+        tenant_id = uuid.uuid4()
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        payload = {
+            "jti": str(uuid.uuid4()),
+            "sub": str(user.id),
+            "tenant_id": str(tenant_id),
+            "role": "admin",
+            "type": "refresh",
+            "exp": now_ts + 3600,
+        }
+
+        with (
+            patch(
+                "modules.auth.application.use_cases.refresh_token.decode_access_token",
+                return_value=payload,
+            ),
+            patch(
+                "modules.auth.application.use_cases.refresh_token.is_token_blacklisted",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+            patch(
+                "modules.auth.application.use_cases.refresh_token.add_token_to_blacklist",
+                new_callable=AsyncMock,
+            ) as mock_blacklist,
+            patch(
+                "modules.auth.application.use_cases.refresh_token.create_access_token",
+                return_value="new.access.token",
+            ) as mock_create_access,
+            patch(
+                "modules.auth.application.use_cases.refresh_token.create_refresh_token",
+                return_value="new.refresh.token",
+            ) as mock_create_refresh,
+        ):
+            result = await self.use_case.execute(
+                RefreshTokenInput(refresh_token="old.refresh.token")
+            )
+
+        assert result.access_token == "new.access.token"
+        assert result.refresh_token == "new.refresh.token"
+        mock_blacklist.assert_called_once()
+        assert mock_blacklist.call_args.kwargs["jti"] == payload["jti"]
+        mock_create_access.assert_called_once_with(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            role="admin",
+        )
+        mock_create_refresh.assert_called_once_with(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            role="admin",
+        )
+
+    async def test_refresh_detects_reuse_and_revokes_user_sessions(self) -> None:
+        """Detecção de reúso: token já revogado apresentado aciona revoke_user_sessions."""
+        user = UserFactory.make()
+        payload = _make_valid_payload(user.id, token_type="refresh")
+
+        with (
+            patch(
+                "modules.auth.application.use_cases.refresh_token.decode_access_token",
+                return_value=payload,
+            ),
+            patch(
+                "modules.auth.application.use_cases.refresh_token.is_token_blacklisted",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "modules.auth.application.use_cases.refresh_token.revoke_user_sessions",
+                new_callable=AsyncMock,
+            ) as mock_revoke_sessions,
+        ):
+            with pytest.raises(ValueError, match="revogado"):
+                await self.use_case.execute(RefreshTokenInput(refresh_token="reused.token"))
+
+        mock_revoke_sessions.assert_called_once_with(user.id)
