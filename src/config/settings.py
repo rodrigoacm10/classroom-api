@@ -16,12 +16,22 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://localhost:8000",
     ]
-    access_token_expire_minutes: int = 30  # 30 minutos para o Access Token
+    access_token_expire_minutes: int = 15  # Reduzido para 15 min (minimiza a janela de exposição)
     refresh_token_expire_days: int = 7  # 7 dias para o Refresh Token
     cookie_secure: bool = False  # True em produção (HTTPS apenas)
     cookie_samesite: Literal["lax", "none", "strict"] = (
         "lax"  # "strict" em produção, "lax" em desenvolvimento
     )
+
+    @property
+    def refresh_cookie_name(self) -> str:
+        """
+        RFC 6265bis: Em produção segura (HTTPS), utiliza o prefixo restritivo '__Host-'.
+        Isso bloqueia sobrescritas por subdomínios e força o motor do navegador a exigir Secure=True.
+        Em ambiente de desenvolvimento sem SSL, utiliza 'refresh_token'.
+        """
+        return "__Host-refresh_token" if self.cookie_secure else "refresh_token"
+
     resend_api_key: str = ""  # Chave de API do Resend (ex: re_123456789)
     email_from: str = (
         "onboarding@resend.dev"  # Remetente oficial de testes do Resend (ou seu domínio verificado)
