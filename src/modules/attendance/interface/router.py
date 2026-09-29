@@ -1,11 +1,12 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, Depends, Query, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
 from infra.storage.r2_storage_service import R2StorageService
+from modules.attendance.application.use_cases.upload_evidence_photo import UploadEvidencePhotoInput, UploadEvidencePhotoUseCase
 from modules.attendance.application.use_cases.cancel_session import CancelAttendanceSessionInput, CancelAttendanceSessionUseCase
 from modules.attendance.application.use_cases.close_session import CloseAttendanceSessionInput, CloseAttendanceSessionUseCase
 from modules.attendance.application.use_cases.confirm_attendance import ConfirmAttendanceInput, ConfirmAttendanceUseCase
@@ -20,6 +21,7 @@ from modules.attendance.infra.repositories.record_sqlalchemy_repository import R
 from modules.attendance.infra.repositories.session_sqlalchemy_repository import SessionSQLAlchemyRepository
 from modules.attendance.interface.schemas.record_schemas import (
     AttendanceRecordResponse,
+    ConfirmAttendanceRequest,
     ReviewAttendanceRecordRequest,
     SessionRosterItemResponse,
 )
@@ -246,6 +248,40 @@ async def cancel_attendance_session(
 
 
 @router.post(
+    "/{session_id}/evidence-photo",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_session_evidence_photo(
+    subject_class_id: UUID,
+    session_id: UUID,
+    photo: UploadFile,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Faz upload de uma foto de evidência para uma sessão de chamada aberta, retornando a URL pública."""
+    file_bytes = await photo.read()
+
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    storage_service = R2StorageService()
+
+    use_case = UploadEvidencePhotoUseCase(
+        session_repo=session_repo,
+        storage_service=storage_service,
+    )
+
+    result = await use_case.execute(
+        UploadEvidencePhotoInput(
+            tenant_id=tenant_id,
+            subject_class_id=subject_class_id,
+            session_id=session_id,
+            file_bytes=file_bytes,
+            content_type=photo.content_type,
+        )
+    )
+    return {"url": result.url}
+
+
+@router.post(
     "/{session_id}/confirm",
     response_model=AttendanceRecordResponse,
     status_code=status.HTTP_201_CREATED,
@@ -253,26 +289,13 @@ async def cancel_attendance_session(
 async def confirm_attendance(
     subject_class_id: UUID,
     session_id: UUID,
+    body: ConfirmAttendanceRequest,
     request: Request,
     tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
-    day_code: str = Form(..., min_length=1, max_length=10, description="Código de 6 caracteres alfanuméricos exibido pelo professor"),
-    latitude: float = Form(..., ge=-90.0, le=90.0, description="Latitude do dispositivo (WGS84)"),
-    longitude: float = Form(..., ge=-180.0, le=180.0, description="Longitude do dispositivo (WGS84)"),
-    gps_accuracy_meters: float | None = Form(default=None, ge=0.0, description="Precisão do GPS em metros relatada pelo dispositivo"),
-    device_id: str | None = Form(default=None, max_length=64, description="Identificador único do dispositivo"),
-    device_info: str | None = Form(default=None, description="Metadados do dispositivo em formato JSON (string, processado pelo use case)"),
-    photo: UploadFile | None = File(default=None, description="Foto de evidência opcional (JPEG, PNG ou WebP, até 5MB)"),
 ) -> AttendanceRecordResponse:
-    """Confirma presença de um aluno matriculado validando código e geolocalização, com foto de evidência opcional."""
-
-    photo_bytes: bytes | None = None
-    photo_content_type: str | None = None
-    if photo is not None:
-        photo_bytes = await photo.read()
-        photo_content_type = photo.content_type
-
+    """Confirma presença de um aluno matriculado validando código e geolocalização."""
     session_repo = SessionSQLAlchemyRepository(session=db)
     record_repo = RecordSQLAlchemyRepository(session=db)
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
@@ -280,7 +303,6 @@ async def confirm_attendance(
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     room_repo = RoomSQLAlchemyRepository(session=db)
-    storage_service = R2StorageService()
 
     use_case = ConfirmAttendanceUseCase(
         session_repo=session_repo,
@@ -290,7 +312,6 @@ async def confirm_attendance(
         member_repo=member_repo,
         enrollment_repo=enrollment_repo,
         room_repo=room_repo,
-        storage_service=storage_service,
     )
 
     ip_address = request.client.host if request.client else None
@@ -302,16 +323,15 @@ async def confirm_attendance(
             subject_class_id=subject_class_id,
             session_id=session_id,
             user_id=auth.user.id,
-            day_code=day_code,
-            latitude=latitude,
-            longitude=longitude,
-            gps_accuracy_meters=gps_accuracy_meters,
-            device_id=device_id,
+            day_code=body.day_code,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            gps_accuracy_meters=body.gps_accuracy_meters,
+            device_id=body.device_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            device_info=device_info,
-            evidence_photo_bytes=photo_bytes,
-            evidence_photo_content_type=photo_content_type,
+            device_info=body.device_info,
+            evidence_photo_url=body.evidence_photo_url,
         )
     )
     return AttendanceRecordResponse.model_validate(record)

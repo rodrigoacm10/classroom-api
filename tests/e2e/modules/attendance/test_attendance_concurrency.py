@@ -77,11 +77,7 @@ class TestAttendanceConcurrency:
 
         # Executa N requisições de confirmação do mesmo aluno
         responses = [
-            await client.post(
-                url,
-                data={"day_code": day_code, "latitude": str(-8.0476), "longitude": str(-34.8770)},
-                headers=student_headers,
-            )
+            await client.post(url, json=payload, headers=student_headers)
             for _ in range(5)
         ]
 
