@@ -23,7 +23,6 @@ class RegisterFCMTokenInput:
 
 
 class RegisterFCMTokenUseCase:
-
     def __init__(
         self,
         fcm_token_repo: FCMTokenRepository,

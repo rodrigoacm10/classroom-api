@@ -11,6 +11,7 @@ real (dezenas de Haversine) é leve demais frente ao custo de criar processos;
 a repetição faz o trabalho de CPU dominar, que é o que o gráfico do TCC precisa
 mostrar.
 """
+
 import argparse
 import csv
 import random
@@ -93,9 +94,7 @@ def run_benchmark(n_students: int, n_sessions: int, intensity: int) -> None:
     for n in (2, 4, 8):
         strategies.append(ThreadPoolNumpyStrategy(max_workers=n))
 
-    print(
-        f"dataset: {n_students} alunos × ~{n_sessions} sessões × intensity={INTENSITY}\n"
-    )
+    print(f"dataset: {n_students} alunos × ~{n_sessions} sessões × intensity={INTENSITY}\n")
 
     for strategy in strategies:
         compute_fn = _bench_numpy if strategy.name == "thread_pool_numpy" else _bench_pure

@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 
 from modules.room.domain.entities.room import Room
@@ -69,7 +67,13 @@ class TestRoomSQLAlchemyRepository:
     async def test_soft_delete_room_and_filtering(self) -> None:
         """delete deve realizar soft delete (deleted=True) e ocultar a sala de buscas normais."""
         tenant = await TenantFactory.create(self.session)
-        room = Room(tenant_id=tenant.id, name="Sala Excluível", latitude=-8.0, longitude=-34.0, deleted=False)
+        room = Room(
+            tenant_id=tenant.id,
+            name="Sala Excluível",
+            latitude=-8.0,
+            longitude=-34.0,
+            deleted=False,
+        )
 
         await self.repository.save(room)
         await self.repository.delete(room)
@@ -86,4 +90,3 @@ class TestRoomSQLAlchemyRepository:
         found_deleted = await self.repository.find_by_id(room.id, include_deleted=True)
         assert found_deleted is not None
         assert found_deleted.deleted is True
-

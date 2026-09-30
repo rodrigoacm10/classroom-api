@@ -42,18 +42,14 @@ async def resource_already_exists_handler(
     )
 
 
-async def business_rule_handler(
-    request: Request, exc: BusinessRuleException
-) -> JSONResponse:
+async def business_rule_handler(request: Request, exc: BusinessRuleException) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={"detail": str(exc)},
     )
 
 
-async def forbidden_handler(
-    request: Request, exc: ForbiddenException
-) -> JSONResponse:
+async def forbidden_handler(request: Request, exc: ForbiddenException) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
         content={"detail": str(exc)},
@@ -75,9 +71,7 @@ async def plan_limit_exceeded_handler(
     )
 
 
-async def generic_domain_exception_handler(
-    request: Request, exc: DomainException
-) -> JSONResponse:
+async def generic_domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:
     """Fallback para exceções de domínio não tratadas especificamente."""
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -104,9 +98,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         ResourceAlreadyExistsException, cast(ExceptionHandler, resource_already_exists_handler)
     )
-    app.add_exception_handler(
-        BusinessRuleException, cast(ExceptionHandler, business_rule_handler)
-    )
+    app.add_exception_handler(BusinessRuleException, cast(ExceptionHandler, business_rule_handler))
     app.add_exception_handler(ForbiddenException, cast(ExceptionHandler, forbidden_handler))
     app.add_exception_handler(
         PlanLimitExceededException, cast(ExceptionHandler, plan_limit_exceeded_handler)
@@ -115,5 +107,3 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         DomainException, cast(ExceptionHandler, generic_domain_exception_handler)
     )
-
-

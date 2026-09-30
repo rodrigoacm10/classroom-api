@@ -44,3 +44,21 @@ uv run python scripts/benchmark_report.py --students 5000 --sessions 40 --intens
 ```bash
 uv run pytest
 ```
+
+## 9. Rodar Verificação de Lint e Tipos
+```bash
+# Linter (Ruff)
+uv run ruff check src
+
+# Type Checker (Pyrefly)
+uv run pyrefly check src
+```
+
+## 10. Rodar o Pre-commit Manualmente
+```bash
+# Rodar nos arquivos modificados (staged)
+uv run pre-commit run
+
+# Rodar em todo o repositório
+uv run pre-commit run --all-files
+```

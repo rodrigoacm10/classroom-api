@@ -9,7 +9,6 @@ from modules.room.infra.mappers.room_mapper import RoomMapper
 
 
 class RoomSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -20,9 +19,7 @@ class RoomSQLAlchemyRepository:
         await self.session.refresh(merged)
         return RoomMapper.to_domain(merged)
 
-    async def find_by_id(
-        self, room_id: UUID, include_deleted: bool = False
-    ) -> Room | None:
+    async def find_by_id(self, room_id: UUID, include_deleted: bool = False) -> Room | None:
         stmt = select(RoomModel).where(RoomModel.id == room_id)
         if not include_deleted:
             stmt = stmt.where(RoomModel.deleted == False)  # noqa: E712
@@ -43,9 +40,7 @@ class RoomSQLAlchemyRepository:
         model = result.scalar_one_or_none()
         return RoomMapper.to_domain(model) if model else None
 
-    async def list_by_tenant(
-        self, tenant_id: UUID, include_deleted: bool = False
-    ) -> list[Room]:
+    async def list_by_tenant(self, tenant_id: UUID, include_deleted: bool = False) -> list[Room]:
         stmt = select(RoomModel).where(RoomModel.tenant_id == tenant_id)
         if not include_deleted:
             stmt = stmt.where(RoomModel.deleted == False)  # noqa: E712

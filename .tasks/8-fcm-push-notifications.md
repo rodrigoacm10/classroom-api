@@ -293,10 +293,10 @@ celery_app.conf.update(
     timezone="America/Sao_Paulo",
     enable_utc=True,
     # Confiabilidade
-    task_acks_late=True,             # Confirma a mensagem só após execução com sucesso
-    task_reject_on_worker_lost=True, # Re-enfileira se o worker morrer no meio
+    task_acks_late=True,  # Confirma a mensagem só após execução com sucesso
+    task_reject_on_worker_lost=True,  # Re-enfileira se o worker morrer no meio
     # Performance
-    worker_prefetch_multiplier=4,    # Pré-carrega 4 tasks por worker (ajuste conforme carga)
+    worker_prefetch_multiplier=4,  # Pré-carrega 4 tasks por worker (ajuste conforme carga)
 )
 
 
@@ -307,6 +307,7 @@ def init_worker(**kwargs: object) -> None:
     Garante que o Firebase SDK esteja inicializado ANTES de qualquer task rodar.
     """
     from infra.firebase.client import init_firebase
+
     init_firebase()
 ```
 
@@ -344,11 +345,11 @@ def _chunk(lst: list, size: int) -> list[list]:
     name="notification.send_attendance_opened",
     bind=True,
     max_retries=3,
-    default_retry_delay=30,      # 30 segundos entre retries
+    default_retry_delay=30,  # 30 segundos entre retries
     autoretry_for=(FirebaseError, ConnectionError, TimeoutError),
-    retry_backoff=True,          # Espera exponencial: 30s, 60s, 120s
-    retry_backoff_max=300,       # Máximo de 5 minutos entre retries
-    retry_jitter=True,           # Adiciona aleatoriedade para evitar thundering herd
+    retry_backoff=True,  # Espera exponencial: 30s, 60s, 120s
+    retry_backoff_max=300,  # Máximo de 5 minutos entre retries
+    retry_jitter=True,  # Adiciona aleatoriedade para evitar thundering herd
 )
 def send_attendance_opened_notification(
     self: Task,
@@ -393,8 +394,8 @@ def send_attendance_opened_notification(
                 "duration_minutes": str(duration_minutes),
             },
             android=messaging.AndroidConfig(
-                priority="high",          # Alta prioridade — acorda o dispositivo
-                ttl=duration_minutes * 60, # Expira junto com a chamada (TTL em segundos)
+                priority="high",  # Alta prioridade — acorda o dispositivo
+                ttl=duration_minutes * 60,  # Expira junto com a chamada (TTL em segundos)
             ),
             apns=messaging.APNSConfig(
                 headers={"apns-priority": "10"},
@@ -426,13 +427,20 @@ def send_attendance_opened_notification(
                 if not result.success:
                     error_code = getattr(result.exception, "code", "unknown")
                     logger.warning("FCM delivery failed for token index %d: %s", idx, error_code)
-                    if error_code in ("registration-token-not-registered", "invalid-argument", "UNREGISTERED"):
+                    if error_code in (
+                        "registration-token-not-registered",
+                        "invalid-argument",
+                        "UNREGISTERED",
+                    ):
                         stale_tokens.append(batch[idx])
 
             # Deletar do banco os tokens desinstalados/inválidos identificados
             if stale_tokens:
                 # Exemplo: delete_stale_fcm_tokens_task.delay(stale_tokens)
-                logger.info("Identificados %d tokens inativos/desinstalados para remoção.", len(stale_tokens))
+                logger.info(
+                    "Identificados %d tokens inativos/desinstalados para remoção.",
+                    len(stale_tokens),
+                )
 
         except FirebaseError as exc:
             logger.error("Firebase batch error: %s. Retrying...", exc)
@@ -440,7 +448,9 @@ def send_attendance_opened_notification(
 
     logger.info(
         "Attendance opened notification: %d success, %d failure (total: %d tokens)",
-        total_success, total_failure, len(fcm_tokens),
+        total_success,
+        total_failure,
+        len(fcm_tokens),
     )
     return {"success_count": total_success, "failure_count": total_failure}
 ```
@@ -460,7 +470,6 @@ logger = logging.getLogger(__name__)
 
 
 class OpenAttendanceSessionUseCase:
-
     async def execute(self, data: OpenAttendanceSessionInput) -> AttendanceSession:
         # ... todas as validações e criação de sessão sem alteração ...
 
@@ -468,9 +477,7 @@ class OpenAttendanceSessionUseCase:
 
         # Despachar notificação de forma assíncrona (best-effort)
         try:
-            fcm_tokens = await self.enrollment_repo.find_active_fcm_tokens(
-                data.subject_class_id
-            )
+            fcm_tokens = await self.enrollment_repo.find_active_fcm_tokens(data.subject_class_id)
             if fcm_tokens:
                 send_attendance_opened_notification.delay(
                     subject_class_name=subject_class.name,
@@ -480,9 +487,7 @@ class OpenAttendanceSessionUseCase:
                 )
         except Exception:
             # Notificações são best-effort: falhar aqui NÃO deve cancelar a abertura da chamada.
-            logger.exception(
-                "Failed to enqueue attendance notification for session %s", session.id
-            )
+            logger.exception("Failed to enqueue attendance notification for session %s", session.id)
 
         return session
 ```
@@ -672,6 +677,7 @@ async def test_register_fcm_token_upsert_e2e(client, session):
 **`test_attendance_session_router.py`** — adicionar ao arquivo existente:
 ```python
 from unittest.mock import patch
+
 
 async def test_open_session_dispatches_notification_task(client, session):
     """Abertura de chamada deve despachar a task de notificação FCM."""

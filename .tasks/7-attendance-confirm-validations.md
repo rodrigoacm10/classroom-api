@@ -120,7 +120,7 @@ O formato JSONB foi escolhido por ser flexível (o app pode adicionar novos camp
 | **Armazenamento** | Coluna `ip_address INET` na tabela `attendance_records`. O tipo `INET` do PostgreSQL suporta nativamente IPv4 e IPv6. |
 | **Validação Ativa?** | **NÃO** — apenas armazenamento para auditoria. **Nenhuma flag é gerada a partir do IP.** |
 
-**Motivo para não validar:**  
+**Motivo para não validar:**
 Em um ambiente universitário, todos os alunos na mesma rede Wi-Fi da instituição compartilham o mesmo IP público de saída. Uma validação baseada em IP geraria um número inaceitável de falsos positivos, bloqueando alunos legítimos.
 
 O IP é mantido como dado de auditoria para investigações manuais pelo professor ou administrador.
@@ -143,10 +143,12 @@ O sistema verifica se o `User-Agent` da requisição corresponde ao padrão de u
 # confirm_attendance.py
 MOBILE_UA_KEYWORDS = ["okhttp", "dart", "cfnetwork", "android", "iphone", "ipad", "mobile"]
 
+
 def is_mobile_user_agent(ua: str | None) -> bool:
     if not ua:
         return False
     return any(k in ua.lower() for k in MOBILE_UA_KEYWORDS)
+
 
 # ...
 if data.user_agent and not is_mobile_user_agent(data.user_agent):

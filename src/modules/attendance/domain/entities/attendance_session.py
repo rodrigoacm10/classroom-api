@@ -55,7 +55,9 @@ class AttendanceSession:
     def is_expired(self) -> bool:
         now = datetime.now(timezone.utc)
         expires_at_utc = (
-            self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
+            self.expires_at
+            if self.expires_at.tzinfo
+            else self.expires_at.replace(tzinfo=timezone.utc)
         )
         return now >= expires_at_utc
 

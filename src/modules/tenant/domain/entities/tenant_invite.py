@@ -24,7 +24,11 @@ class TenantInvite:
     def is_expired(self) -> bool:
         # Garante comparação segura com fuso horário
         now = datetime.now(timezone.utc)
-        exp = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
+        exp = (
+            self.expires_at
+            if self.expires_at.tzinfo
+            else self.expires_at.replace(tzinfo=timezone.utc)
+        )
         return now > exp
 
     @property

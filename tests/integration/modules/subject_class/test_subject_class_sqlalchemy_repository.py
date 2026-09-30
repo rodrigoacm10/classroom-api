@@ -1,6 +1,6 @@
-import pytest
-
 from datetime import datetime, timedelta, timezone
+
+import pytest
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
@@ -30,15 +30,18 @@ from tests.factories.user_factory import UserFactory
 
 @pytest.mark.asyncio
 class TestSubjectClassSQLAlchemyRepository:
-
     async def test_save_and_find_by_id(self, session):
         """Deve persistir uma turma no banco de dados e recuperá-la por ID com sucesso."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
 
         room_repo = RoomSQLAlchemyRepository(session)
-        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala 101", latitude=-8.0, longitude=-34.0))
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala 101", latitude=-8.0, longitude=-34.0)
+        )
 
         repo = SubjectClassSQLAlchemyRepository(session)
         sc = SubjectClass(
@@ -64,14 +67,35 @@ class TestSubjectClassSQLAlchemyRepository:
         """Deve listar apenas turmas ativas da instituição no repositório SQLAlchemy, excluindo as marcadas com soft delete."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
         room_repo = RoomSQLAlchemyRepository(session)
-        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala 102", latitude=-8.0, longitude=-34.0))
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala 102", latitude=-8.0, longitude=-34.0)
+        )
 
         repo = SubjectClassSQLAlchemyRepository(session)
 
-        sc1 = await repo.save(SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Turma A", discipline_name="D1"))
-        sc2 = await repo.save(SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Turma B", discipline_name="D2", deleted=True))
+        sc1 = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma A",
+                discipline_name="D1",
+            )
+        )
+        sc2 = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma B",
+                discipline_name="D2",
+                deleted=True,
+            )
+        )
 
         active_list = await repo.list_by_tenant(tenant.id)
         assert len(active_list) == 1
@@ -84,12 +108,24 @@ class TestSubjectClassSQLAlchemyRepository:
         """Deve atualizar a flag deleted=True no banco de dados e ocultar o registro nas buscas normais."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
         room_repo = RoomSQLAlchemyRepository(session)
-        room = await room_repo.save(Room(tenant_id=tenant.id, name="Sala 103", latitude=-8.0, longitude=-34.0))
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala 103", latitude=-8.0, longitude=-34.0)
+        )
 
         repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await repo.save(SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Para Soft Delete", discipline_name="D1"))
+        sc = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Para Soft Delete",
+                discipline_name="D1",
+            )
+        )
 
         await repo.delete(sc)
 
@@ -326,13 +362,31 @@ class TestSubjectClassSQLAlchemyRepository:
         )
         repo = SubjectClassSQLAlchemyRepository(session)
         await repo.save(
-            SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Turma Alfa", discipline_name="Matemática 1")
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Alfa",
+                discipline_name="Matemática 1",
+            )
         )
         await repo.save(
-            SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Turma Beta", discipline_name="Matemática 2")
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Beta",
+                discipline_name="Matemática 2",
+            )
         )
         await repo.save(
-            SubjectClass(tenant_id=tenant.id, professor_id=member.id, room_id=room.id, name="Turma Gama", discipline_name="Física 1")
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Gama",
+                discipline_name="Física 1",
+            )
         )
 
         # Pagination page 1

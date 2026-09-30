@@ -5,12 +5,9 @@ from modules.room.domain.entities.room import Room
 
 
 class RoomRepository(Protocol):
-
     async def save(self, room: Room) -> Room: ...
 
-    async def find_by_id(
-        self, room_id: UUID, include_deleted: bool = False
-    ) -> Room | None: ...
+    async def find_by_id(self, room_id: UUID, include_deleted: bool = False) -> Room | None: ...
 
     async def find_by_id_and_tenant(
         self, room_id: UUID, tenant_id: UUID, include_deleted: bool = False

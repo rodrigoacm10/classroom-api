@@ -18,7 +18,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestListTenantInvitesUseCase:
-
     async def test_list_tenant_invites_success(self):
         """Deve listar convites da tenant com suporte a paginação."""
         tenant_repo = FakeTenantRepository()
@@ -29,8 +28,18 @@ class TestListTenantInvitesUseCase:
         tenant_repo.seed(tenant)
 
         now = datetime.now(timezone.utc)
-        inv1 = TenantInvite(tenant_id=tenant.id, email="a@teste.com", role=UserRole.ALUNO, expires_at=now + timedelta(hours=24))
-        inv2 = TenantInvite(tenant_id=tenant.id, email="b@teste.com", role=UserRole.PROFESSOR, expires_at=now + timedelta(hours=24))
+        inv1 = TenantInvite(
+            tenant_id=tenant.id,
+            email="a@teste.com",
+            role=UserRole.ALUNO,
+            expires_at=now + timedelta(hours=24),
+        )
+        inv2 = TenantInvite(
+            tenant_id=tenant.id,
+            email="b@teste.com",
+            role=UserRole.PROFESSOR,
+            expires_at=now + timedelta(hours=24),
+        )
         invite_repo.seed(inv1)
         invite_repo.seed(inv2)
 
@@ -66,27 +75,57 @@ class TestListTenantInvitesUseCase:
         tenant_repo.seed(tenant)
 
         now = datetime.now(timezone.utc)
-        pending_inv = TenantInvite(tenant_id=tenant.id, email="pending@teste.com", role=UserRole.ALUNO, expires_at=now + timedelta(hours=24))
-        accepted_inv = TenantInvite(tenant_id=tenant.id, email="accepted@teste.com", role=UserRole.ALUNO, expires_at=now + timedelta(hours=24), accepted_at=now)
-        revoked_inv = TenantInvite(tenant_id=tenant.id, email="revoked@teste.com", role=UserRole.ALUNO, expires_at=now + timedelta(hours=24), revoked_at=now)
-        expired_inv = TenantInvite(tenant_id=tenant.id, email="expired@teste.com", role=UserRole.ALUNO, expires_at=now - timedelta(hours=1))
+        pending_inv = TenantInvite(
+            tenant_id=tenant.id,
+            email="pending@teste.com",
+            role=UserRole.ALUNO,
+            expires_at=now + timedelta(hours=24),
+        )
+        accepted_inv = TenantInvite(
+            tenant_id=tenant.id,
+            email="accepted@teste.com",
+            role=UserRole.ALUNO,
+            expires_at=now + timedelta(hours=24),
+            accepted_at=now,
+        )
+        revoked_inv = TenantInvite(
+            tenant_id=tenant.id,
+            email="revoked@teste.com",
+            role=UserRole.ALUNO,
+            expires_at=now + timedelta(hours=24),
+            revoked_at=now,
+        )
+        expired_inv = TenantInvite(
+            tenant_id=tenant.id,
+            email="expired@teste.com",
+            role=UserRole.ALUNO,
+            expires_at=now - timedelta(hours=1),
+        )
 
         for inv in [pending_inv, accepted_inv, revoked_inv, expired_inv]:
             invite_repo.seed(inv)
 
-        page_pending = await use_case.execute(ListTenantInvitesInput(tenant_id=tenant.id, status="pending"))
+        page_pending = await use_case.execute(
+            ListTenantInvitesInput(tenant_id=tenant.id, status="pending")
+        )
         assert page_pending.total == 1
         assert page_pending.items[0].email == "pending@teste.com"
 
-        page_accepted = await use_case.execute(ListTenantInvitesInput(tenant_id=tenant.id, status="accepted"))
+        page_accepted = await use_case.execute(
+            ListTenantInvitesInput(tenant_id=tenant.id, status="accepted")
+        )
         assert page_accepted.total == 1
         assert page_accepted.items[0].email == "accepted@teste.com"
 
-        page_revoked = await use_case.execute(ListTenantInvitesInput(tenant_id=tenant.id, status="revoked"))
+        page_revoked = await use_case.execute(
+            ListTenantInvitesInput(tenant_id=tenant.id, status="revoked")
+        )
         assert page_revoked.total == 1
         assert page_revoked.items[0].email == "revoked@teste.com"
 
-        page_expired = await use_case.execute(ListTenantInvitesInput(tenant_id=tenant.id, status="expired"))
+        page_expired = await use_case.execute(
+            ListTenantInvitesInput(tenant_id=tenant.id, status="expired")
+        )
         assert page_expired.total == 1
         assert page_expired.items[0].email == "expired@teste.com"
 
@@ -100,15 +139,29 @@ class TestListTenantInvitesUseCase:
         tenant_repo.seed(tenant)
 
         now = datetime.now(timezone.utc)
-        inv1 = TenantInvite(tenant_id=tenant.id, email="aluno_carlos@escola.com", role=UserRole.ALUNO, expires_at=now + timedelta(hours=24))
-        inv2 = TenantInvite(tenant_id=tenant.id, email="prof_ana@escola.com", role=UserRole.PROFESSOR, expires_at=now + timedelta(hours=24))
+        inv1 = TenantInvite(
+            tenant_id=tenant.id,
+            email="aluno_carlos@escola.com",
+            role=UserRole.ALUNO,
+            expires_at=now + timedelta(hours=24),
+        )
+        inv2 = TenantInvite(
+            tenant_id=tenant.id,
+            email="prof_ana@escola.com",
+            role=UserRole.PROFESSOR,
+            expires_at=now + timedelta(hours=24),
+        )
         invite_repo.seed(inv1)
         invite_repo.seed(inv2)
 
-        res_role = await use_case.execute(ListTenantInvitesInput(tenant_id=tenant.id, role=UserRole.PROFESSOR))
+        res_role = await use_case.execute(
+            ListTenantInvitesInput(tenant_id=tenant.id, role=UserRole.PROFESSOR)
+        )
         assert res_role.total == 1
         assert res_role.items[0].email == "prof_ana@escola.com"
 
-        res_search = await use_case.execute(ListTenantInvitesInput(tenant_id=tenant.id, search="carlos"))
+        res_search = await use_case.execute(
+            ListTenantInvitesInput(tenant_id=tenant.id, search="carlos")
+        )
         assert res_search.total == 1
         assert res_search.items[0].email == "aluno_carlos@escola.com"

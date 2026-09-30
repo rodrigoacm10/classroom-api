@@ -34,9 +34,7 @@ class PaginationParams:
         if self.page < 1:
             raise ValueError("page deve ser maior ou igual a 1.")
         if self.page_size < 1 or self.page_size > MAX_PAGE_SIZE:
-            raise ValueError(
-                f"page_size deve estar entre 1 e {MAX_PAGE_SIZE}."
-            )
+            raise ValueError(f"page_size deve estar entre 1 e {MAX_PAGE_SIZE}.")
 
     @property
     def offset(self) -> int:
@@ -59,9 +57,7 @@ class Page[T]:
         return (self.total + self.page_size - 1) // self.page_size
 
     @classmethod
-    def from_params(
-        cls, items: list[T], total: int, pagination: PaginationParams
-    ) -> Page[T]:
+    def from_params(cls, items: list[T], total: int, pagination: PaginationParams) -> Page[T]:
         return cls(
             items=items,
             total=total,

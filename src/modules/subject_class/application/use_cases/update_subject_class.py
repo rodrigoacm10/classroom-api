@@ -3,7 +3,9 @@ from uuid import UUID
 
 from modules.room.domain.repositories.room_repository import RoomRepository
 from modules.subject_class.domain.entities.subject_class import SubjectClass
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from shared.exceptions import ResourceNotFoundException
 
 
@@ -17,7 +19,6 @@ class UpdateSubjectClassInput:
 
 
 class UpdateSubjectClassUseCase:
-
     def __init__(
         self,
         subject_class_repo: SubjectClassRepository,

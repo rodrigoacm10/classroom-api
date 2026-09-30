@@ -3,7 +3,6 @@ from modules.tenant.domain.entities.tenant_invite import TenantInvite
 
 
 class TenantInviteMapper:
-
     @staticmethod
     def to_domain(model: TenantInviteModel) -> TenantInvite:
         return TenantInvite(

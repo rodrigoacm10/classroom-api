@@ -12,7 +12,6 @@ from tests.factories.user_factory import UserFactory
 
 @pytest.mark.asyncio
 class TestAttendanceRecordRouter:
-
     async def _setup_fixtures(self, session, client):
         admin_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
@@ -20,34 +19,53 @@ class TestAttendanceRecordRouter:
             session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
         )
 
-        admin_token = create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        admin_token = create_access_token(
+            user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         prof_user = await UserFactory.create(session)
         prof_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=prof_user.id, role=UserRole.PROFESSOR
         )
-        prof_token = create_access_token(user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        prof_token = create_access_token(
+            user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         prof_headers = {"Authorization": f"Bearer {prof_token}"}
 
         student1_user = await UserFactory.create(session)
         student1_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=student1_user.id, role=UserRole.ALUNO
         )
-        student1_token = create_access_token(user_id=student1_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
-        student1_headers = {"Authorization": f"Bearer {student1_token}", "User-Agent": "okhttp/4.9.0"}
+        student1_token = create_access_token(
+            user_id=student1_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value
+        )
+        student1_headers = {
+            "Authorization": f"Bearer {student1_token}",
+            "User-Agent": "okhttp/4.9.0",
+        }
 
         student2_user = await UserFactory.create(session)
         student2_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=student2_user.id, role=UserRole.ALUNO
         )
-        student2_token = create_access_token(user_id=student2_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
-        student2_headers = {"Authorization": f"Bearer {student2_token}", "User-Agent": "okhttp/4.9.0"}
+        student2_token = create_access_token(
+            user_id=student2_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value
+        )
+        student2_headers = {
+            "Authorization": f"Bearer {student2_token}",
+            "User-Agent": "okhttp/4.9.0",
+        }
 
         # Room
         room_res = await client.post(
             "/rooms",
-            json={"name": "Lab 101", "latitude": -8.0476, "longitude": -34.8770, "tolerance_radius_meters": 50},
+            json={
+                "name": "Lab 101",
+                "latitude": -8.0476,
+                "longitude": -34.8770,
+                "tolerance_radius_meters": 50,
+            },
             headers=admin_headers,
         )
         assert room_res.status_code == 201
@@ -104,7 +122,9 @@ class TestAttendanceRecordRouter:
             day_code,
             prof_headers,
             student1_headers,
-            student2_headers, _, _,
+            student2_headers,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         # Student 1 confirms (inside room radius)
@@ -156,7 +176,9 @@ class TestAttendanceRecordRouter:
             day_code,
             prof_headers,
             _,
-            student2_headers, _, _,
+            student2_headers,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         # Student 2 confirms outside radius -> irregular
@@ -189,7 +211,10 @@ class TestAttendanceRecordRouter:
             session_id,
             day_code,
             prof_headers,
-            student1_headers, _, _, _,
+            student1_headers,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         # Professor cancela a chamada
@@ -315,7 +340,12 @@ class TestAttendanceRecordRouter:
             tenant,
             sc_id,
             session_id,
-            day_code, _, _, _, _, _,
+            day_code,
+            _,
+            _,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         outsider_user = await UserFactory.create(session)

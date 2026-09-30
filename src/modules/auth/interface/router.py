@@ -1,7 +1,8 @@
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,11 +22,11 @@ from modules.auth.application.use_cases.reset_password import (
     ResetPasswordInput,
     ResetPasswordUseCase,
 )
+from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, SwitchTenantUseCase
 from modules.auth.application.use_cases.verify_reset_code import (
     VerifyResetCodeInput,
     VerifyResetCodeUseCase,
 )
-from modules.auth.application.use_cases.switch_tenant import SwitchTenantInput, SwitchTenantUseCase
 from modules.auth.interface.schemas.password_reset_schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
@@ -40,7 +41,9 @@ from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
 )
 from modules.user.domain.entities.user import User
 from modules.user.infra.repositories.user_sqlalchemy_repository import UserSQLAlchemyRepository
+from security.blacklist import add_token_to_blacklist
 from security.dependencies.current_user import AuthContext, get_auth_context, get_current_user
+from security.jwt import create_refresh_token, decode_access_token
 from security.rate_limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -52,6 +55,7 @@ REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * settings.refresh_token_expire_days
 # ─────────────────────────────────────────
 # Schemas
 # ─────────────────────────────────────────
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -78,6 +82,7 @@ class RefreshTokenRequest(BaseModel):
 
 class LoginMobileResponse(BaseModel):
     """Resposta para clientes mobile: ambos os tokens no body."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -85,6 +90,7 @@ class LoginMobileResponse(BaseModel):
 
 class LoginWebResponse(BaseModel):
     """Resposta para clientes web: apenas o access_token no body; refresh_token vai no Cookie HttpOnly."""
+
     access_token: str
     token_type: str = "bearer"
 
@@ -102,27 +108,51 @@ class MessageResponse(BaseModel):
 # Helpers
 # ─────────────────────────────────────────
 
+
+def _get_cookie_refresh_token(request: Request) -> str | None:
+    """
+    Extrai o Refresh Token do cookie da requisição.
+    Suporta tanto o nome seguro com prefixo RFC 6265bis '__Host-refresh_token' (produção)
+    quanto o fallback 'refresh_token' (desenvolvimento/testes).
+    """
+    return (
+        request.cookies.get(settings.refresh_cookie_name)
+        or request.cookies.get("__Host-refresh_token")
+        or request.cookies.get("refresh_token")
+    )
+
+
 def _set_refresh_cookie(response: Response, token: str) -> None:
-    """Define o Cookie HttpOnly com o Refresh Token para clientes web."""
+    """
+    Define o Cookie HttpOnly com o Refresh Token para clientes web.
+    RFC 6265bis: cookies com prefixo __Host- DEVEM ter path="/" e secure=True.
+    """
+    cookie_name = settings.refresh_cookie_name
+    path = "/" if cookie_name.startswith("__Host-") else "/auth"
     response.set_cookie(
-        key=REFRESH_COOKIE_NAME,
+        key=cookie_name,
         value=token,
-        httponly=True,                       # ✅ JS não consegue ler este cookie
-        secure=settings.cookie_secure,       # True em produção (HTTPS)
-        samesite=settings.cookie_samesite,   # "lax" dev / "strict" prod (proteção CSRF)
-        max_age=REFRESH_COOKIE_MAX_AGE,      # TTL = 7 dias (em segundos)
-        path="/auth",                        # Cookie visível apenas nas rotas /auth/*
+        httponly=True,  # ✅ JS não consegue ler este cookie
+        secure=settings.cookie_secure,  # True em produção (HTTPS)
+        samesite=settings.cookie_samesite,  # "lax" dev / "strict" prod (proteção CSRF)
+        max_age=REFRESH_COOKIE_MAX_AGE,  # TTL = 7 dias (em segundos)
+        path=path,
     )
 
 
 def _clear_refresh_cookie(response: Response) -> None:
     """Limpa o Cookie do Refresh Token no logout de clientes web."""
-    response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/auth")
+    cookie_name = settings.refresh_cookie_name
+    path = "/" if cookie_name.startswith("__Host-") else "/auth"
+    response.delete_cookie(key=cookie_name, path=path)
+    if cookie_name != "refresh_token":
+        response.delete_cookie(key="refresh_token", path="/auth")
 
 
 # ─────────────────────────────────────────
 # Endpoints
 # ─────────────────────────────────────────
+
 
 @router.post("/login")
 @limiter.limit("5/minute")
@@ -163,8 +193,7 @@ async def login(
 async def refresh_token(
     response: Response,
     body: RefreshTokenRequest = RefreshTokenRequest(),
-    # Cookie lido automaticamente pelo FastAPI para clientes web
-    cookie_refresh_token: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
+    cookie_refresh_token: str | None = Depends(_get_cookie_refresh_token),
     db: AsyncSession = Depends(get_db),
 ) -> LoginMobileResponse | LoginWebResponse:
     """
@@ -204,13 +233,17 @@ async def refresh_token(
 
 @router.post("/switch-tenant", response_model=TokenResponse)
 async def switch_tenant(
+    response: Response,
     body: SwitchTenantRequest,
     current_user: User = Depends(get_current_user),
+    cookie_refresh_token: str | None = Depends(_get_cookie_refresh_token),
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     """
     Recebe o JWT base (sem tenant) e devolve um JWT enriquecido com `tenant_id` + `role`.
     Requer que o usuário seja membro da tenant informada.
+    Se o cliente for web (com Cookie HttpOnly), renova o refresh_token no cookie
+    já embutindo o novo escopo da tenant para que recargas de página (F5) não percam o contexto.
     """
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
@@ -223,6 +256,28 @@ async def switch_tenant(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
+    if cookie_refresh_token:
+        try:
+            token_payload = decode_access_token(result.access_token)
+            role = token_payload.get("role")
+            new_refresh = create_refresh_token(
+                user_id=current_user.id,
+                tenant_id=body.tenant_id,
+                role=role,
+            )
+            # Invalida o refresh token anterior no Redis (RTR)
+            old_payload = decode_access_token(cookie_refresh_token)
+            old_jti = old_payload.get("jti")
+            old_exp = old_payload.get("exp")
+            if old_jti and old_exp:
+                now_ts = int(datetime.now(timezone.utc).timestamp())
+                rem = old_exp - now_ts
+                if rem > 0:
+                    await add_token_to_blacklist(jti=old_jti, expire_seconds=rem)
+            _set_refresh_cookie(response, new_refresh)
+        except Exception:
+            pass
+
     return TokenResponse(access_token=result.access_token)
 
 
@@ -230,16 +285,15 @@ async def switch_tenant(
 async def logout(
     response: Response,
     auth_context: AuthContext = Depends(get_auth_context),
-    # Cookie lido automaticamente (clientes web)
-    cookie_refresh_token: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
+    cookie_refresh_token: str | None = Depends(_get_cookie_refresh_token),
 ) -> MessageResponse:
     """
     Efetua o logout:
     - Revoga o Access Token adicionando o JTI à blacklist no Redis.
-    - Se cliente web: limpa o Cookie HttpOnly do Refresh Token.
+    - Se cliente web: revoga o JTI do Refresh Token no Redis e limpa o Cookie HttpOnly.
     """
     use_case = LogoutUseCase()
-    await use_case.execute(auth_context)
+    await use_case.execute(auth_context=auth_context, refresh_token=cookie_refresh_token)
 
     if cookie_refresh_token:
         _clear_refresh_cookie(response)

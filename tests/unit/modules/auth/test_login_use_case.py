@@ -24,9 +24,7 @@ class TestLoginUseCase:
         user = UserFactory.make_with_password(plain, email="ana@example.com")
         self.repo.seed(user)
 
-        result = await self.use_case.execute(
-            LoginInput(email="ana@example.com", password=plain)
-        )
+        result = await self.use_case.execute(LoginInput(email="ana@example.com", password=plain))
 
         assert result.access_token
         assert result.refresh_token

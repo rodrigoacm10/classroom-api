@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -33,7 +32,6 @@ from tests.factories.user_factory import UserFactory
 
 @pytest.mark.asyncio
 class TestEnrollmentSQLAlchemyRepository:
-
     async def test_save_and_find_by_id(self, session):
         """Deve persistir uma matrícula no banco de dados e recuperá-la por ID."""
         user = await UserFactory.create(session)
@@ -88,17 +86,40 @@ class TestEnrollmentSQLAlchemyRepository:
         user3 = await UserFactory.create(session)
 
         tenant = await TenantFactory.create(session)
-        m1 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user1.id, role=UserRole.ALUNO)
-        m2 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO)
-        m3 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user3.id, role=UserRole.ALUNO)
+        m1 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user1.id, role=UserRole.ALUNO
+        )
+        m2 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO
+        )
+        m3 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user3.id, role=UserRole.ALUNO
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma C", discipline_name="History"))
+        sc = await sc_repo.save(
+            SubjectClass(tenant_id=tenant.id, name="Turma C", discipline_name="History")
+        )
 
         repo = EnrollmentSQLAlchemyRepository(session)
-        e1 = await repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=m1.id, status=EnrollmentStatus.ACTIVE))
-        e2 = await repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=m2.id, status=EnrollmentStatus.DROPPED))
-        e3 = await repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=m3.id, status=EnrollmentStatus.ACTIVE, deleted=True))
+        e1 = await repo.save(
+            Enrollment(
+                subject_class_id=sc.id, tenant_member_id=m1.id, status=EnrollmentStatus.ACTIVE
+            )
+        )
+        e2 = await repo.save(
+            Enrollment(
+                subject_class_id=sc.id, tenant_member_id=m2.id, status=EnrollmentStatus.DROPPED
+            )
+        )
+        e3 = await repo.save(
+            Enrollment(
+                subject_class_id=sc.id,
+                tenant_member_id=m3.id,
+                status=EnrollmentStatus.ACTIVE,
+                deleted=True,
+            )
+        )
 
         active_list = await repo.list_by_subject_class(sc.id, status=EnrollmentStatus.ACTIVE)
         assert len(active_list) == 1
@@ -114,15 +135,25 @@ class TestEnrollmentSQLAlchemyRepository:
         """Deve alterar em lote o status de todas as matrículas ativas de um membro para DROPPED."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
         sc1 = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="T1", discipline_name="D1"))
         sc2 = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="T2", discipline_name="D2"))
 
         repo = EnrollmentSQLAlchemyRepository(session)
-        e1 = await repo.save(Enrollment(subject_class_id=sc1.id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE))
-        e2 = await repo.save(Enrollment(subject_class_id=sc2.id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE))
+        e1 = await repo.save(
+            Enrollment(
+                subject_class_id=sc1.id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE
+            )
+        )
+        e2 = await repo.save(
+            Enrollment(
+                subject_class_id=sc2.id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE
+            )
+        )
 
         affected_count = await repo.drop_all_active_for_member(member.id)
         assert affected_count == 2
@@ -141,15 +172,25 @@ class TestEnrollmentSQLAlchemyRepository:
         """Deve listar todas as matrículas de um aluno específico."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
         sc1 = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="T1", discipline_name="D1"))
         sc2 = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="T2", discipline_name="D2"))
 
         repo = EnrollmentSQLAlchemyRepository(session)
-        await repo.save(Enrollment(subject_class_id=sc1.id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE))
-        await repo.save(Enrollment(subject_class_id=sc2.id, tenant_member_id=member.id, status=EnrollmentStatus.DROPPED))
+        await repo.save(
+            Enrollment(
+                subject_class_id=sc1.id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE
+            )
+        )
+        await repo.save(
+            Enrollment(
+                subject_class_id=sc2.id, tenant_member_id=member.id, status=EnrollmentStatus.DROPPED
+            )
+        )
 
         member_list = await repo.list_by_member(member.id)
         assert len(member_list) == 2
@@ -158,10 +199,14 @@ class TestEnrollmentSQLAlchemyRepository:
         """O partial unique index 'uq_enrollment_active' deve impedir duplicidade de ativos, mas permitir nova matrícula se a anterior tiver deleted=True."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        member = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma Index", discipline_name="Test"))
+        sc = await sc_repo.save(
+            SubjectClass(tenant_id=tenant.id, name="Turma Index", discipline_name="Test")
+        )
 
         repo = EnrollmentSQLAlchemyRepository(session)
         # 1. Primeira matrícula ativa
@@ -194,21 +239,56 @@ class TestEnrollmentSQLAlchemyRepository:
         user2 = await UserFactory.create(session)  # Aluno 2 (com apenas celular)
         tenant = await TenantFactory.create(session)
 
-        m1 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user1.id, role=UserRole.ALUNO)
-        m2 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO)
+        m1 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user1.id, role=UserRole.ALUNO
+        )
+        m2 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Turma FCM", discipline_name="Mobile"))
+        sc = await sc_repo.save(
+            SubjectClass(tenant_id=tenant.id, name="Turma FCM", discipline_name="Mobile")
+        )
 
         repo = EnrollmentSQLAlchemyRepository(session)
-        await repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=m1.id, status=EnrollmentStatus.ACTIVE))
-        await repo.save(Enrollment(subject_class_id=sc.id, tenant_member_id=m2.id, status=EnrollmentStatus.ACTIVE))
+        await repo.save(
+            Enrollment(
+                subject_class_id=sc.id, tenant_member_id=m1.id, status=EnrollmentStatus.ACTIVE
+            )
+        )
+        await repo.save(
+            Enrollment(
+                subject_class_id=sc.id, tenant_member_id=m2.id, status=EnrollmentStatus.ACTIVE
+            )
+        )
 
         # Cadastra tokens de celular e tablet no banco
         fcm_repo = FCMTokenSQLAlchemyRepository(session)
-        await fcm_repo.upsert(FCMToken(user_id=user1.id, device_id="dev-mobile-1", fcm_token="token-user1-mobile", platform="android"))
-        await fcm_repo.upsert(FCMToken(user_id=user1.id, device_id="dev-tablet-1", fcm_token="token-user1-tablet", platform="ios"))
-        await fcm_repo.upsert(FCMToken(user_id=user2.id, device_id="dev-mobile-2", fcm_token="token-user2-mobile", platform="android"))
+        await fcm_repo.upsert(
+            FCMToken(
+                user_id=user1.id,
+                device_id="dev-mobile-1",
+                fcm_token="token-user1-mobile",
+                platform="android",
+            )
+        )
+        await fcm_repo.upsert(
+            FCMToken(
+                user_id=user1.id,
+                device_id="dev-tablet-1",
+                fcm_token="token-user1-tablet",
+                platform="ios",
+            )
+        )
+        await fcm_repo.upsert(
+            FCMToken(
+                user_id=user2.id,
+                device_id="dev-mobile-2",
+                fcm_token="token-user2-mobile",
+                platform="android",
+            )
+        )
 
         tokens = await repo.find_active_fcm_tokens(sc.id)
         assert len(tokens) == 3
@@ -257,7 +337,9 @@ class TestEnrollmentSQLAlchemyRepository:
         )
 
         repo = EnrollmentSQLAlchemyRepository(session)
-        await repo.save(Enrollment(subject_class_id=attended.id, tenant_member_id=student_member.id))
+        await repo.save(
+            Enrollment(subject_class_id=attended.id, tenant_member_id=student_member.id)
+        )
         await repo.save(Enrollment(subject_class_id=empty.id, tenant_member_id=student_member.id))
         await repo.save(Enrollment(subject_class_id=attended.id, tenant_member_id=other_member.id))
 
@@ -335,15 +417,25 @@ class TestEnrollmentSQLAlchemyRepository:
         tenant = await TenantFactory.create(session)
         user1 = await UserFactory.create(session)
         user2 = await UserFactory.create(session)
-        m1 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user1.id, role=UserRole.ALUNO)
-        m2 = await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO)
+        m1 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user1.id, role=UserRole.ALUNO
+        )
+        m2 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO
+        )
 
         sc_repo = SubjectClassSQLAlchemyRepository(session)
-        sc = await sc_repo.save(SubjectClass(tenant_id=tenant.id, name="Biologia", discipline_name="Ciências"))
+        sc = await sc_repo.save(
+            SubjectClass(tenant_id=tenant.id, name="Biologia", discipline_name="Ciências")
+        )
 
         repo = EnrollmentSQLAlchemyRepository(session)
-        e1 = Enrollment(subject_class_id=sc.id, tenant_member_id=m1.id, status=EnrollmentStatus.ACTIVE)
-        e2 = Enrollment(subject_class_id=sc.id, tenant_member_id=m2.id, status=EnrollmentStatus.DROPPED)
+        e1 = Enrollment(
+            subject_class_id=sc.id, tenant_member_id=m1.id, status=EnrollmentStatus.ACTIVE
+        )
+        e2 = Enrollment(
+            subject_class_id=sc.id, tenant_member_id=m2.id, status=EnrollmentStatus.DROPPED
+        )
         await repo.save(e1)
         await repo.save(e2)
 

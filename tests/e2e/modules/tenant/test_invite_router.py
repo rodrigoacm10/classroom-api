@@ -19,7 +19,9 @@ class TestInviteRouterEndpoints:
         """POST /tenants/{id}/invites -> Deve enviar convite e disparar e-mail com sucesso quando for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -42,7 +44,9 @@ class TestInviteRouterEndpoints:
         """POST /tenants/{id}/invites -> Deve retornar 403 Forbidden se o usuário não for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -172,7 +176,9 @@ class TestInviteRouterEndpoints:
         """DELETE /tenants/{id}/invites/{invite_id} -> Deve revogar convite pendente com sucesso quando for ADMIN."""
         admin = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
 
         invite_model = TenantInviteModel(
             tenant_id=tenant.id,
@@ -184,10 +190,14 @@ class TestInviteRouterEndpoints:
         session.add(invite_model)
         await session.flush()
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = await client.delete(f"/tenants/{tenant.id}/invites/{invite_model.id}", headers=headers)
+        response = await client.delete(
+            f"/tenants/{tenant.id}/invites/{invite_model.id}", headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "revoked"
@@ -222,7 +232,9 @@ class TestInviteRouterEndpoints:
         """GET /tenants/{tenant_id}/invites -> Deve listar convites paginados com sucesso quando for ADMIN."""
         admin = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, name="Escola Listagem E2E")
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
 
         inv1 = TenantInviteModel(
             tenant_id=tenant.id,
@@ -248,10 +260,14 @@ class TestInviteRouterEndpoints:
         session.add_all([inv1, inv2, inv3])
         await session.flush()
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = await client.get(f"/tenants/{tenant.id}/invites?page=1&page_size=2", headers=headers)
+        response = await client.get(
+            f"/tenants/{tenant.id}/invites?page=1&page_size=2", headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
 
@@ -271,7 +287,9 @@ class TestInviteRouterEndpoints:
         """GET /tenants/{tenant_id}/invites -> Deve retornar 403 Forbidden para não-ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -283,7 +301,9 @@ class TestInviteRouterEndpoints:
         """GET /tenants/{tenant_id}/invites -> Deve filtrar por status (ex.: pending vs accepted)."""
         admin = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
 
         inv_pending = TenantInviteModel(
             tenant_id=tenant.id,
@@ -303,17 +323,23 @@ class TestInviteRouterEndpoints:
         session.add_all([inv_pending, inv_accepted])
         await session.flush()
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        resp_pending = await client.get(f"/tenants/{tenant.id}/invites?status=pending", headers=headers)
+        resp_pending = await client.get(
+            f"/tenants/{tenant.id}/invites?status=pending", headers=headers
+        )
         assert resp_pending.status_code == 200
         data_p = resp_pending.json()
         assert data_p["total"] == 1
         assert data_p["items"][0]["email"] == "pend@escola.com"
         assert data_p["items"][0]["status"] == "pending"
 
-        resp_accepted = await client.get(f"/tenants/{tenant.id}/invites?status=accepted", headers=headers)
+        resp_accepted = await client.get(
+            f"/tenants/{tenant.id}/invites?status=accepted", headers=headers
+        )
         assert resp_accepted.status_code == 200
         data_a = resp_accepted.json()
         assert data_a["total"] == 1
@@ -326,9 +352,13 @@ class TestInviteRouterEndpoints:
 
         admin = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         non_existent_tenant_id = uuid4()

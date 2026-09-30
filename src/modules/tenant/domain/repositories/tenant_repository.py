@@ -9,7 +9,6 @@ from shared.pagination import Page, PaginationParams
 
 
 class TenantRepository(Protocol):
-
     async def find_by_id(self, tenant_id: UUID, include_deleted: bool = False) -> Tenant | None: ...
 
     async def find_by_slug(self, slug: str, include_deleted: bool = False) -> Tenant | None: ...
@@ -18,14 +17,17 @@ class TenantRepository(Protocol):
 
 
 class TenantMemberRepository(Protocol):
-
-    async def find_by_id(self, member_id: UUID, include_deleted: bool = False) -> TenantMember | None: ...
+    async def find_by_id(
+        self, member_id: UUID, include_deleted: bool = False
+    ) -> TenantMember | None: ...
 
     async def find_by_tenant_and_user(
         self, tenant_id: UUID, user_id: UUID, include_deleted: bool = False
     ) -> TenantMember | None: ...
 
-    async def find_by_user_id(self, user_id: UUID, include_deleted: bool = False) -> list[TenantMember]: ...
+    async def find_by_user_id(
+        self, user_id: UUID, include_deleted: bool = False
+    ) -> list[TenantMember]: ...
 
     async def find_by_tenant_id_paginated(
         self,

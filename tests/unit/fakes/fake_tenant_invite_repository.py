@@ -24,9 +24,7 @@ class FakeTenantInviteRepository:
             None,
         )
 
-    async def find_by_email_and_tenant(
-        self, email: str, tenant_id: UUID
-    ) -> TenantInvite | None:
+    async def find_by_email_and_tenant(self, email: str, tenant_id: UUID) -> TenantInvite | None:
         return next(
             (
                 i

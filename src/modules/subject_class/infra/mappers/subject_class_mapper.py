@@ -3,7 +3,6 @@ from modules.subject_class.domain.entities.subject_class import SubjectClass
 
 
 class SubjectClassMapper:
-
     @staticmethod
     def to_domain(model: SubjectClassModel) -> SubjectClass:
         return SubjectClass(

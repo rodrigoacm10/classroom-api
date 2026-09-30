@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from shared.exceptions import ResourceNotFoundException
 
 
@@ -12,7 +14,6 @@ class DeleteSubjectClassInput:
 
 
 class DeleteSubjectClassUseCase:
-
     def __init__(self, subject_class_repo: SubjectClassRepository) -> None:
         self.subject_class_repo = subject_class_repo
 

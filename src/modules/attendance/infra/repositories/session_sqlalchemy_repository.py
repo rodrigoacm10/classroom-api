@@ -16,9 +16,7 @@ from shared.enums.session_status import SessionStatus
 from shared.pagination import Page, PaginationParams
 
 
-
 class SessionSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -82,9 +80,7 @@ class SessionSQLAlchemyRepository:
         await self._apply_stats([session])
         return session
 
-    async def find_open_session_by_class(
-        self, subject_class_id: UUID
-    ) -> AttendanceSession | None:
+    async def find_open_session_by_class(self, subject_class_id: UUID) -> AttendanceSession | None:
         stmt = (
             select(AttendanceSessionModel)
             .options(
@@ -104,9 +100,7 @@ class SessionSQLAlchemyRepository:
         await self._apply_stats([session])
         return session
 
-    async def list_by_class(
-        self, subject_class_id: UUID
-    ) -> list[AttendanceSession]:
+    async def list_by_class(self, subject_class_id: UUID) -> list[AttendanceSession]:
         stmt = (
             select(AttendanceSessionModel)
             .options(
@@ -224,4 +218,3 @@ class SessionSQLAlchemyRepository:
             row = counts_by_session.get(item.id)
             item.confirmed_count = int(row.confirmed_count) if row else 0
             item.irregular_count = int(row.irregular_count) if row else 0
-

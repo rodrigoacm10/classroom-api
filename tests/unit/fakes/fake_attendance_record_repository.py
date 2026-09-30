@@ -3,7 +3,9 @@ from uuid import UUID, uuid4
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
 from modules.attendance.domain.entities.session_roster_item import SessionRosterItem
-from modules.attendance.domain.repositories.attendance_record_repository import AttendanceRecordRepository
+from modules.attendance.domain.repositories.attendance_record_repository import (
+    AttendanceRecordRepository,
+)
 from shared.enums.record_status import RecordStatus
 from shared.exceptions import BusinessRuleException
 
@@ -19,7 +21,6 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 class FakeAttendanceRecordRepository(AttendanceRecordRepository):
-
     def __init__(self) -> None:
         self.records: dict[UUID, AttendanceRecord] = {}
         self.room_coordinates: dict[UUID, tuple[float, float]] = {}

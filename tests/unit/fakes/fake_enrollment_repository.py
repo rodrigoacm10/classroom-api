@@ -11,7 +11,6 @@ from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeEnrollmentRepository:
-
     def __init__(self) -> None:
         self._enrollments: dict[UUID, Enrollment] = {}
 
@@ -144,5 +143,3 @@ class FakeEnrollmentRepository:
         if not hasattr(self, "_active_fcm_tokens"):
             return []
         return self._active_fcm_tokens.get(subject_class_id, [])
-
-

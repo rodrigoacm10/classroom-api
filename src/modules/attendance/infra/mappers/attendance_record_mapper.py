@@ -9,7 +9,6 @@ from modules.attendance.domain.entities.attendance_record import AttendanceRecor
 
 
 class AttendanceRecordMapper:
-
     @staticmethod
     def to_domain(model: AttendanceRecordModel) -> AttendanceRecord:
         point = cast(Point, to_shape(cast(Any, model.student_location)))

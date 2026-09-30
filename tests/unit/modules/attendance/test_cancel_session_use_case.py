@@ -3,13 +3,20 @@ from uuid import uuid4
 
 import pytest
 
-from modules.attendance.application.use_cases.cancel_session import CancelAttendanceSessionInput, CancelAttendanceSessionUseCase
+from modules.attendance.application.use_cases.cancel_session import (
+    CancelAttendanceSessionInput,
+    CancelAttendanceSessionUseCase,
+)
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.subject_class.domain.entities.subject_class import SubjectClass
 from modules.tenant.domain.entities.tenant_member import TenantMember
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
-from shared.exceptions import BusinessRuleException, ForbiddenException, ResourceAlreadyExistsException
+from shared.exceptions import (
+    BusinessRuleException,
+    ForbiddenException,
+    ResourceAlreadyExistsException,
+)
 from tests.factories.tenant_factory import TenantFactory
 from tests.unit.fakes.fake_attendance_session_repository import FakeAttendanceSessionRepository
 from tests.unit.fakes.fake_subject_class_repository import FakeSubjectClassRepository
@@ -19,7 +26,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestCancelAttendanceSessionUseCase:
-
     async def test_cancel_session_success(self):
         """Deve cancelar uma chamada aberta setando status=CANCELLED e preenchendo closed_at."""
         session_repo = FakeAttendanceSessionRepository()
@@ -31,7 +37,9 @@ class TestCancelAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -81,7 +89,9 @@ class TestCancelAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -129,7 +139,9 @@ class TestCancelAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -155,7 +167,9 @@ class TestCancelAttendanceSessionUseCase:
             member_repo=member_repo,
         )
 
-        with pytest.raises(BusinessRuleException, match="A chamada já foi encerrada e não pode ser cancelada"):
+        with pytest.raises(
+            BusinessRuleException, match="A chamada já foi encerrada e não pode ser cancelada"
+        ):
             await use_case.execute(
                 CancelAttendanceSessionInput(
                     tenant_id=tenant.id,

@@ -9,6 +9,7 @@ Estratégia de isolamento:
 O rollback automático garante que cada teste começa com o banco limpo,
 sem precisar truncar tabelas ou recriar o banco entre testes.
 """
+
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -19,9 +20,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 # Banco de dados EXCLUSIVO para testes — nunca toca o banco de desenvolvimento
-TEST_DATABASE_URL = (
-    "postgresql+psycopg://classroom:classroom@localhost:5432/classroom_test"
-)
+TEST_DATABASE_URL = "postgresql+psycopg://classroom:classroom@localhost:5432/classroom_test"
 
 
 from sqlalchemy import text
@@ -49,13 +48,22 @@ async def create_tables(engine) -> AsyncGenerator[None, None]:
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
         await conn.run_sync(Base.metadata.drop_all)
+
+        # Tipos ENUM marcados com create_type=False nos models não são criados
+        # automaticamente pelo create_all (pressupõem que já existem via Alembic
+        # em produção). No banco de testes, criamos manualmente antes das tabelas.
+        await conn.execute(text("DROP TYPE IF EXISTS user_role CASCADE;"))
+        await conn.execute(text(
+            "CREATE TYPE user_role AS ENUM ('ADMIN', 'PROFESSOR', 'ALUNO', 'COORDENADOR');"
+        ))
+
         await conn.run_sync(Base.metadata.create_all)
 
     yield  # Testes de integração rodam aqui
 
-
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(text("DROP TYPE IF EXISTS user_role;"))
 
 
 @pytest.fixture
@@ -88,4 +96,5 @@ async def cleanup_redis() -> AsyncGenerator[None, None]:
     """Desconecta o pool do Redis ao final de cada teste para evitar conflito de event loops."""
     yield
     from infra.cache.redis_client import redis_client
+
     await redis_client.connection_pool.disconnect()

@@ -11,8 +11,7 @@ class ComputeStrategy(Protocol[T, R]):
     COMO distribuir o trabalho (sequencial, múltiplos processos, múltiplas threads).
     """
 
-    def compute(self, items: list[T], fn) -> list[R]:
-        ...
+    def compute(self, items: list[T], fn) -> list[R]: ...
 
     @property
     def name(self) -> str:

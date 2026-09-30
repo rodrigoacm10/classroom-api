@@ -16,7 +16,9 @@ from infra.database.models.tenant import TenantMemberModel
 from infra.database.models.user import UserModel
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
 from modules.attendance.domain.entities.session_roster_item import SessionRosterItem
-from modules.attendance.domain.repositories.attendance_record_repository import AttendanceRecordRepository
+from modules.attendance.domain.repositories.attendance_record_repository import (
+    AttendanceRecordRepository,
+)
 from modules.attendance.infra.mappers.attendance_record_mapper import AttendanceRecordMapper
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
@@ -34,7 +36,6 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 class RecordSQLAlchemyRepository(AttendanceRecordRepository):
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -184,8 +185,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
                 AttendanceRecordModel,
                 and_(
                     AttendanceRecordModel.session_id == session_id,
-                    AttendanceRecordModel.tenant_member_id
-                    == EnrollmentModel.tenant_member_id,
+                    AttendanceRecordModel.tenant_member_id == EnrollmentModel.tenant_member_id,
                 ),
             )
             .where(
@@ -214,9 +214,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
                     enrollment_id=enrollment_id,
                     record_id=record_id,
                     confirmed_at=confirmed_at,
-                    distance_meters=float(distance_meters)
-                    if distance_meters is not None
-                    else None,
+                    distance_meters=float(distance_meters) if distance_meters is not None else None,
                     within_radius=within_radius,
                     record_status=record_status,
                 )

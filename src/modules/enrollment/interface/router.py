@@ -16,16 +16,28 @@ from modules.enrollment.application.use_cases.enroll_student import (
     EnrollStudentInput,
     EnrollStudentUseCase,
 )
+from modules.enrollment.application.use_cases.get_enrollment import (
+    GetEnrollmentInput,
+    GetEnrollmentUseCase,
+)
 from modules.enrollment.application.use_cases.list_enrollments import (
     ListEnrollmentsInput,
     ListEnrollmentsUseCase,
+)
+from modules.enrollment.application.use_cases.list_enrollments_by_member import (
+    ListEnrollmentsByMemberInput,
+    ListEnrollmentsByMemberUseCase,
+)
+from modules.enrollment.application.use_cases.list_student_subject_classes import (
+    ListStudentSubjectClassesInput,
+    ListStudentSubjectClassesUseCase,
 )
 from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
     EnrollmentSQLAlchemyRepository,
 )
 from modules.enrollment.interface.schemas.enrollment_schemas import (
-    EnrollStudentRequest,
     EnrollmentResponse,
+    EnrollStudentRequest,
     StudentSubjectClassListItemResponse,
 )
 from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import (
@@ -39,19 +51,6 @@ from security.dependencies.require_role import require_role
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.user_role import UserRole
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
-
-from modules.enrollment.application.use_cases.get_enrollment import (
-    GetEnrollmentInput,
-    GetEnrollmentUseCase,
-)
-from modules.enrollment.application.use_cases.list_enrollments_by_member import (
-    ListEnrollmentsByMemberInput,
-    ListEnrollmentsByMemberUseCase,
-)
-from modules.enrollment.application.use_cases.list_student_subject_classes import (
-    ListStudentSubjectClassesInput,
-    ListStudentSubjectClassesUseCase,
-)
 
 router = APIRouter(
     prefix="/subject-classes/{subject_class_id}/enrollments",
@@ -173,9 +172,7 @@ async def list_enrollments_by_member(
     return [EnrollmentResponse.model_validate(e) for e in enrollments]
 
 
-@student_subject_classes_router.get(
-    "", response_model=list[StudentSubjectClassListItemResponse]
-)
+@student_subject_classes_router.get("", response_model=list[StudentSubjectClassListItemResponse])
 async def list_student_subject_classes(
     member_id: UUID,
     tenant_id: UUID = Depends(get_current_tenant_id),

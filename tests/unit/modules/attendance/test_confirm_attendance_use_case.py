@@ -3,7 +3,10 @@ from uuid import uuid4
 
 import pytest
 
-from modules.attendance.application.use_cases.confirm_attendance import ConfirmAttendanceInput, ConfirmAttendanceUseCase
+from modules.attendance.application.use_cases.confirm_attendance import (
+    ConfirmAttendanceInput,
+    ConfirmAttendanceUseCase,
+)
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.room.domain.entities.room import Room
@@ -13,7 +16,11 @@ from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
-from shared.exceptions import BusinessRuleException, ForbiddenException, ResourceAlreadyExistsException
+from shared.exceptions import (
+    BusinessRuleException,
+    ForbiddenException,
+    ResourceAlreadyExistsException,
+)
 from tests.factories.tenant_factory import TenantFactory
 from tests.unit.fakes.fake_attendance_record_repository import FakeAttendanceRecordRepository
 from tests.unit.fakes.fake_attendance_session_repository import FakeAttendanceSessionRepository
@@ -26,7 +33,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestConfirmAttendanceUseCase:
-
     async def _setup_fixtures(self):
         session_repo = FakeAttendanceSessionRepository()
         record_repo = FakeAttendanceRecordRepository()
@@ -43,7 +49,13 @@ class TestConfirmAttendanceUseCase:
         student_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.ALUNO)
         await member_repo.save(student_member)
 
-        room = Room(tenant_id=tenant.id, name="Sala 101", latitude=-8.047600, longitude=-34.877000, tolerance_radius_meters=50)
+        room = Room(
+            tenant_id=tenant.id,
+            name="Sala 101",
+            latitude=-8.047600,
+            longitude=-34.877000,
+            tolerance_radius_meters=50,
+        )
         await room_repo.save(room)
         record_repo.seed_room_location(room.id, -8.047600, -34.877000)
 
@@ -104,7 +116,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -133,7 +147,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -162,7 +178,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -191,7 +209,8 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _,
+            room,
+            _,
             session_repo,
         ) = await self._setup_fixtures()
 
@@ -223,7 +242,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -252,7 +273,8 @@ class TestConfirmAttendanceUseCase:
             user_id,
             student_member,
             room,
-            record_repo, _,
+            record_repo,
+            _,
         ) = await self._setup_fixtures()
 
         device_id = "device-uuid-1234"
@@ -291,7 +313,10 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _,
+            user_id,
+            _,
+            _,
+            _,
             session_repo,
         ) = await self._setup_fixtures()
 
@@ -318,7 +343,10 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _,
+            user_id,
+            _,
+            _,
+            _,
             session_repo,
         ) = await self._setup_fixtures()
 
@@ -345,7 +373,10 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _,
+            user_id,
+            _,
+            _,
+            _,
             session_repo,
         ) = await self._setup_fixtures()
 
@@ -372,7 +403,11 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _, _,
+            user_id,
+            _,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         with pytest.raises(BusinessRuleException, match="Código da chamada inválido"):
@@ -394,7 +429,12 @@ class TestConfirmAttendanceUseCase:
             use_case,
             tenant,
             subject_class,
-            session, _, _, _, _, _,
+            session,
+            _,
+            _,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         outsider_user = uuid4()
@@ -418,13 +458,16 @@ class TestConfirmAttendanceUseCase:
             use_case,
             tenant,
             subject_class,
-            session, _, _, _, _, _,
+            session,
+            _,
+            _,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         other_user_id = uuid4()
-        other_member = TenantMember(
-            tenant_id=tenant.id, user_id=other_user_id, role=UserRole.ALUNO
-        )
+        other_member = TenantMember(tenant_id=tenant.id, user_id=other_user_id, role=UserRole.ALUNO)
         await use_case.member_repo.save(other_member)
 
         other_class = SubjectClass(
@@ -462,7 +505,11 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _, _,
+            user_id,
+            _,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         await use_case.execute(
@@ -499,7 +546,11 @@ class TestConfirmAttendanceUseCase:
             tenant,
             subject_class,
             session,
-            user_id, _, _, _, _,
+            user_id,
+            _,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -527,7 +578,8 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _,
+            room,
+            _,
             session_repo,
         ) = await self._setup_fixtures()
 
@@ -559,7 +611,8 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _,
+            room,
+            _,
             session_repo,
         ) = await self._setup_fixtures()
 
@@ -567,7 +620,9 @@ class TestConfirmAttendanceUseCase:
         await session_repo.save(session)
         subject_class.room_id = None
 
-        with pytest.raises(BusinessRuleException, match="Nenhuma sala cadastrada para a chamada ou para a turma"):
+        with pytest.raises(
+            BusinessRuleException, match="Nenhuma sala cadastrada para a chamada ou para a turma"
+        ):
             await use_case.execute(
                 ConfirmAttendanceInput(
                     tenant_id=tenant.id,

@@ -15,7 +15,6 @@ class RevokeInviteInput:
 
 
 class RevokeInviteUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,

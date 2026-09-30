@@ -11,7 +11,6 @@ class TestAttendanceTasks:
     """
 
     def test_close_expired_sessions_task_success_unit(self):
-
         """Deve fechar chamadas vencidas chamando o repositório e despachando os eventos de notificação."""
         mock_session = MagicMock()
         mock_session.id = uuid4()

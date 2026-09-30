@@ -54,7 +54,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestEnrollmentUseCases:
-
     async def test_enroll_student_success(self):
         """Matricular aluno válido deve retornar Enrollment com status=active e deleted=false."""
         enrollment_repo = FakeEnrollmentRepository()
@@ -361,9 +360,22 @@ class TestEnrollmentUseCases:
         subject_class = SubjectClass(tenant_id=tenant_id, name="Turma 1", discipline_name="Math")
         await subject_class_repo.save(subject_class)
 
-        e1 = Enrollment(subject_class_id=subject_class.id, tenant_member_id=uuid4(), status=EnrollmentStatus.ACTIVE)
-        e2 = Enrollment(subject_class_id=subject_class.id, tenant_member_id=uuid4(), status=EnrollmentStatus.DROPPED)
-        e3 = Enrollment(subject_class_id=subject_class.id, tenant_member_id=uuid4(), status=EnrollmentStatus.ACTIVE, deleted=True)
+        e1 = Enrollment(
+            subject_class_id=subject_class.id,
+            tenant_member_id=uuid4(),
+            status=EnrollmentStatus.ACTIVE,
+        )
+        e2 = Enrollment(
+            subject_class_id=subject_class.id,
+            tenant_member_id=uuid4(),
+            status=EnrollmentStatus.DROPPED,
+        )
+        e3 = Enrollment(
+            subject_class_id=subject_class.id,
+            tenant_member_id=uuid4(),
+            status=EnrollmentStatus.ACTIVE,
+            deleted=True,
+        )
 
         await enrollment_repo.save(e1)
         await enrollment_repo.save(e2)
@@ -421,8 +433,16 @@ class TestEnrollmentUseCases:
         aluno_member = TenantMember(tenant_id=tenant.id, user_id=aluno_user_id, role=UserRole.ALUNO)
         await member_repo.save(aluno_member)
 
-        e1 = Enrollment(subject_class_id=uuid4(), tenant_member_id=aluno_member.id, status=EnrollmentStatus.ACTIVE)
-        e2 = Enrollment(subject_class_id=uuid4(), tenant_member_id=aluno_member.id, status=EnrollmentStatus.ACTIVE)
+        e1 = Enrollment(
+            subject_class_id=uuid4(),
+            tenant_member_id=aluno_member.id,
+            status=EnrollmentStatus.ACTIVE,
+        )
+        e2 = Enrollment(
+            subject_class_id=uuid4(),
+            tenant_member_id=aluno_member.id,
+            status=EnrollmentStatus.ACTIVE,
+        )
         await enrollment_repo.save(e1)
         await enrollment_repo.save(e2)
 
@@ -473,8 +493,12 @@ class TestEnrollmentUseCases:
         member = TenantMember(tenant_id=tenant_id, user_id=uuid4(), role=UserRole.ALUNO)
         await member_repo.save(member)
 
-        e1 = Enrollment(subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE)
-        e2 = Enrollment(subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.DROPPED)
+        e1 = Enrollment(
+            subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE
+        )
+        e2 = Enrollment(
+            subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.DROPPED
+        )
         await enrollment_repo.save(e1)
         await enrollment_repo.save(e2)
 
@@ -489,7 +513,9 @@ class TestEnrollmentUseCases:
         assert len(res_all) == 2
 
         res_active = await use_case.execute(
-            ListEnrollmentsByMemberInput(tenant_id=tenant_id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE)
+            ListEnrollmentsByMemberInput(
+                tenant_id=tenant_id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE
+            )
         )
         assert len(res_active) == 1
         assert res_active[0].id == e1.id

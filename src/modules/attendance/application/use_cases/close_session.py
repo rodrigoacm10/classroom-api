@@ -3,12 +3,19 @@ from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.events.attendance_events import AttendanceSessionClosedEvent
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
-from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository, TenantRepository
-from shared.events.event_dispatcher import EventDispatcher
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
+from modules.tenant.domain.repositories.tenant_repository import (
+    TenantMemberRepository,
+    TenantRepository,
+)
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
+from shared.events.event_dispatcher import EventDispatcher
 from shared.exceptions import (
     ForbiddenException,
     ResourceAlreadyExistsException,
@@ -26,7 +33,6 @@ class CloseAttendanceSessionInput:
 
 
 class CloseAttendanceSessionUseCase:
-
     def __init__(
         self,
         session_repo: AttendanceSessionRepository,
@@ -52,7 +58,9 @@ class CloseAttendanceSessionUseCase:
         if not subject_class or getattr(subject_class, "deleted", False):
             raise ResourceNotFoundException("Turma não encontrada.")
 
-        session = await self.session_repo.find_by_id_and_class(data.session_id, data.subject_class_id)
+        session = await self.session_repo.find_by_id_and_class(
+            data.session_id, data.subject_class_id
+        )
         if not session:
             raise ResourceNotFoundException("Sessão de chamada não encontrada.")
 
@@ -64,7 +72,9 @@ class CloseAttendanceSessionUseCase:
         is_professor = subject_class.professor_id == member.id
 
         if not (is_admin or is_professor):
-            raise ForbiddenException("Apenas o professor da turma ou um administrador podem encerrar chamadas.")
+            raise ForbiddenException(
+                "Apenas o professor da turma ou um administrador podem encerrar chamadas."
+            )
 
         if session.status == SessionStatus.CLOSED:
             raise ResourceAlreadyExistsException("A chamada já está encerrada.")

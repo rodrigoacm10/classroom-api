@@ -13,7 +13,6 @@ class CreateUserInput:
 
 
 class CreateUserUseCase:
-
     def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
 

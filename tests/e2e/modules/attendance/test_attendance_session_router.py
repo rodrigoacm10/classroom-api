@@ -9,7 +9,6 @@ from tests.factories.user_factory import UserFactory
 
 @pytest.mark.asyncio
 class TestAttendanceSessionRouter:
-
     async def _setup_fixtures(self, session, client):
         admin_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
@@ -17,14 +16,18 @@ class TestAttendanceSessionRouter:
             session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
         )
 
-        admin_token = create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        admin_token = create_access_token(
+            user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         prof_user = await UserFactory.create(session)
         prof_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=prof_user.id, role=UserRole.PROFESSOR
         )
-        prof_token = create_access_token(user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        prof_token = create_access_token(
+            user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         prof_headers = {"Authorization": f"Bearer {prof_token}"}
 
         room_res = await client.post(
@@ -261,7 +264,9 @@ class TestAttendanceSessionRouter:
         """Abertura de chamada deve publicar AttendanceSessionOpenedEvent no EventDispatcher."""
         from unittest.mock import AsyncMock, patch
 
-        tenant, admin_headers, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
+        tenant, admin_headers, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(
+            session, client
+        )
 
         with patch(
             "shared.events.event_dispatcher.EventDispatcher.publish",
@@ -275,7 +280,10 @@ class TestAttendanceSessionRouter:
             assert res.status_code == 201
             mock_publish.assert_called_once()
             published_event = mock_publish.call_args.args[0]
-            from modules.attendance.domain.events.attendance_events import AttendanceSessionOpenedEvent
+            from modules.attendance.domain.events.attendance_events import (
+                AttendanceSessionOpenedEvent,
+            )
+
             assert isinstance(published_event, AttendanceSessionOpenedEvent)
             assert published_event.day_code == res.json()["day_code"]
 
@@ -311,5 +319,3 @@ class TestAttendanceSessionRouter:
         )
         assert res_open.status_code == 200
         assert res_open.json()["total"] == 0
-
-

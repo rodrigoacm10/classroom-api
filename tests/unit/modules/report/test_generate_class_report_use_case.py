@@ -189,7 +189,11 @@ class TestGenerateClassReportUseCase:
 
         seq, process, thread = reports
         assert seq.total_students == process.total_students == thread.total_students
-        assert seq.class_average_frequency == process.class_average_frequency == thread.class_average_frequency
+        assert (
+            seq.class_average_frequency
+            == process.class_average_frequency
+            == thread.class_average_frequency
+        )
         assert seq.students_at_risk == process.students_at_risk == thread.students_at_risk
 
         for a, b, c in zip(seq.students, process.students, thread.students, strict=True):
@@ -200,7 +204,11 @@ class TestGenerateClassReportUseCase:
             assert a.total_irregular == b.total_irregular == c.total_irregular
             assert a.at_risk == b.at_risk == c.at_risk
             assert a.avg_distance_meters == b.avg_distance_meters == c.avg_distance_meters
-            assert a.confirmations_near_limit == b.confirmations_near_limit == c.confirmations_near_limit
+            assert (
+                a.confirmations_near_limit
+                == b.confirmations_near_limit
+                == c.confirmations_near_limit
+            )
 
         assert seq.strategy_used == "sequential"
         assert process.strategy_used == "process_pool"
@@ -253,9 +261,7 @@ class TestGetStudentReportUseCase:
 
         tenant = TenantFactory.make()
         await tenant_repo.save(tenant)
-        subject_class = SubjectClass(
-            tenant_id=tenant.id, name="Turma POO", discipline_name="POO"
-        )
+        subject_class = SubjectClass(tenant_id=tenant.id, name="Turma POO", discipline_name="POO")
         await subject_class_repo.save(subject_class)
 
         member_id = uuid4()
@@ -288,9 +294,7 @@ class TestGetStudentReportUseCase:
 
         tenant = TenantFactory.make()
         await tenant_repo.save(tenant)
-        subject_class = SubjectClass(
-            tenant_id=tenant.id, name="Turma POO", discipline_name="POO"
-        )
+        subject_class = SubjectClass(tenant_id=tenant.id, name="Turma POO", discipline_name="POO")
         await subject_class_repo.save(subject_class)
 
         use_case = GetStudentReportUseCase(

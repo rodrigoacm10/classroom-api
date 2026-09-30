@@ -1,9 +1,12 @@
 from infra.database.models.attendance_session import AttendanceSessionModel
-from modules.attendance.domain.entities.attendance_session import AttendanceSession, RoomInfo, SubjectClassInfo
+from modules.attendance.domain.entities.attendance_session import (
+    AttendanceSession,
+    RoomInfo,
+    SubjectClassInfo,
+)
 
 
 class AttendanceSessionMapper:
-
     @staticmethod
     def to_domain(model: AttendanceSessionModel) -> AttendanceSession:
         subject_class_info = None

@@ -41,7 +41,9 @@ def _render_invite_template(
 ) -> str:
     """Lê e substitui as variáveis no template HTML de convite."""
     if not INVITE_TEMPLATE_PATH.exists():
-        raise FileNotFoundError(f"Template HTML de convite não encontrado em: {INVITE_TEMPLATE_PATH}")
+        raise FileNotFoundError(
+            f"Template HTML de convite não encontrado em: {INVITE_TEMPLATE_PATH}"
+        )
 
     content = INVITE_TEMPLATE_PATH.read_text(encoding="utf-8")
     content = content.replace("{{ inviter_name }}", inviter_name)
@@ -102,12 +104,14 @@ def send_invite_email(
             expires_in_hours=expires_in_hours,
         )
 
-        resend.Emails.send({
-            "from": settings.email_from,
-            "to": [to_email],
-            "subject": f"Você foi convidado para participar de {tenant_name}",
-            "html": html_content,
-        })
+        resend.Emails.send(
+            {
+                "from": settings.email_from,
+                "to": [to_email],
+                "subject": f"Você foi convidado para participar de {tenant_name}",
+                "html": html_content,
+            }
+        )
         logger.info(
             f"E-mail de convite enviado com sucesso para {to_email} (instituição: {tenant_name})"
         )
@@ -144,12 +148,14 @@ def send_password_reset_email(
             expires_in_minutes=expires_in_minutes,
         )
 
-        resend.Emails.send({
-            "from": settings.email_from,
-            "to": [to_email],
-            "subject": f"Código de recuperação de senha: {code}",
-            "html": html_content,
-        })
+        resend.Emails.send(
+            {
+                "from": settings.email_from,
+                "to": [to_email],
+                "subject": f"Código de recuperação de senha: {code}",
+                "html": html_content,
+            }
+        )
         logger.info(f"E-mail de recuperação de senha enviado com sucesso para {to_email}")
     except Exception as exc:
         logger.error(
