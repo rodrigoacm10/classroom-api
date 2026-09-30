@@ -1,10 +1,11 @@
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
+from infra.storage.r2_storage_service import R2StorageService
 from modules.attendance.application.use_cases.cancel_session import (
     CancelAttendanceSessionInput,
     CancelAttendanceSessionUseCase,
@@ -44,6 +45,10 @@ from modules.attendance.application.use_cases.open_session import (
 from modules.attendance.application.use_cases.review_record import (
     ReviewAttendanceRecordInput,
     ReviewAttendanceRecordUseCase,
+)
+from modules.attendance.application.use_cases.upload_evidence_photo import (
+    UploadEvidencePhotoInput,
+    UploadEvidencePhotoUseCase,
 )
 from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
     RecordSQLAlchemyRepository,
@@ -85,6 +90,7 @@ from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.events.event_dispatcher import EventDispatcher
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
+
 
 router = APIRouter(
     prefix="/subject-classes/{subject_class_id}/attendance-sessions",
@@ -287,6 +293,40 @@ async def cancel_attendance_session(
 
 
 @router.post(
+    "/{session_id}/evidence-photo",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_session_evidence_photo(
+    subject_class_id: UUID,
+    session_id: UUID,
+    photo: UploadFile,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Faz upload de uma foto de evidência para uma sessão de chamada aberta, retornando a URL pública."""
+    file_bytes = await photo.read()
+
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    storage_service = R2StorageService()
+
+    use_case = UploadEvidencePhotoUseCase(
+        session_repo=session_repo,
+        storage_service=storage_service,
+    )
+
+    result = await use_case.execute(
+        UploadEvidencePhotoInput(
+            tenant_id=tenant_id,
+            subject_class_id=subject_class_id,
+            session_id=session_id,
+            file_bytes=file_bytes,
+            content_type=photo.content_type,
+        )
+    )
+    return {"url": result.url}
+
+
+@router.post(
     "/{session_id}/confirm",
     response_model=AttendanceRecordResponse,
     status_code=status.HTTP_201_CREATED,
@@ -336,6 +376,7 @@ async def confirm_attendance(
             ip_address=ip_address,
             user_agent=user_agent,
             device_info=body.device_info,
+            evidence_photo_url=body.evidence_photo_url,
         )
     )
     return AttendanceRecordResponse.model_validate(record)
