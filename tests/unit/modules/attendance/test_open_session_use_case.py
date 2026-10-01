@@ -16,6 +16,7 @@ from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.events.event_dispatcher import EventDispatcher
 from shared.exceptions import (
+    BusinessRuleException,
     ForbiddenException,
     ResourceAlreadyExistsException,
     ResourceNotFoundException,
@@ -332,5 +333,52 @@ class TestOpenAttendanceSessionUseCase:
                     user_id=user_id,
                     user_role=UserRole.PROFESSOR,
                     room_id=uuid4(),
+                )
+            )
+
+    async def test_open_session_raises_business_rule_exception_when_class_inactive(self):
+        """Deve lançar BusinessRuleException ao tentar abrir chamada para uma turma inativa."""
+        session_repo = FakeAttendanceSessionRepository()
+        subject_class_repo = FakeSubjectClassRepository()
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        room_repo = FakeRoomRepository()
+
+        tenant = TenantFactory.make()
+        await tenant_repo.save(tenant)
+
+        user_id = uuid4()
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
+        await member_repo.save(professor_member)
+
+        room = Room(tenant_id=tenant.id, name="Sala 101", latitude=-8.0, longitude=-34.0)
+        await room_repo.save(room)
+
+        subject_class = SubjectClass(
+            tenant_id=tenant.id,
+            name="Turma POO Inativa",
+            discipline_name="POO",
+            professor_id=professor_member.id,
+            room_id=room.id,
+            active=False,
+        )
+        await subject_class_repo.save(subject_class)
+
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo
+        )
+
+        with pytest.raises(
+            BusinessRuleException, match="Não é possível abrir chamada para uma turma inativa."
+        ):
+            await use_case.execute(
+                OpenAttendanceSessionInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    user_id=user_id,
+                    user_role=UserRole.PROFESSOR,
+                    room_id=room.id,
                 )
             )

@@ -178,19 +178,77 @@ class SessionSQLAlchemyRepository:
         await self.session.flush()
         return closed_sessions
 
+    async def list_active_sessions_by_tenant(
+        self,
+        tenant_id: UUID,
+        professor_user_id: UUID | None = None,
+    ) -> list[AttendanceSession]:
+        from infra.database.models.subject_class import SubjectClassModel
+        from infra.database.models.tenant import TenantMemberModel
+
+        now = datetime.now(timezone.utc)
+        stmt = (
+            select(AttendanceSessionModel)
+            .options(
+                joinedload(AttendanceSessionModel.subject_class),
+                joinedload(AttendanceSessionModel.room),
+            )
+            .join(
+                SubjectClassModel,
+                SubjectClassModel.id == AttendanceSessionModel.subject_class_id,
+            )
+            .where(
+                SubjectClassModel.tenant_id == tenant_id,
+                SubjectClassModel.deleted.is_(False),
+                SubjectClassModel.active.is_(True),
+                AttendanceSessionModel.status == SessionStatus.OPEN,
+                AttendanceSessionModel.expires_at > now,
+            )
+        )
+
+        if professor_user_id is not None:
+            stmt = stmt.join(
+                TenantMemberModel,
+                TenantMemberModel.id == SubjectClassModel.professor_id,
+            ).where(
+                TenantMemberModel.user_id == professor_user_id,
+                TenantMemberModel.deleted.is_(False),
+            )
+
+        stmt = stmt.order_by(AttendanceSessionModel.opened_at.desc())
+
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+        if not models:
+            return []
+
+        sessions = [AttendanceSessionMapper.to_domain(m) for m in models]
+        await self._apply_stats(sessions)
+        return sessions
+
     async def _apply_stats(self, sessions: list[AttendanceSession]) -> None:
         if not sessions:
             return
 
-        subject_class_id = sessions[0].subject_class_id
+        class_ids = list({item.subject_class_id for item in sessions})
         session_ids = [item.id for item in sessions]
 
-        total_stmt = select(func.count(EnrollmentModel.id)).where(
-            EnrollmentModel.subject_class_id == subject_class_id,
-            EnrollmentModel.deleted.is_(False),
-            EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+        total_stmt = (
+            select(
+                EnrollmentModel.subject_class_id,
+                func.count(EnrollmentModel.id).label("student_count"),
+            )
+            .where(
+                EnrollmentModel.subject_class_id.in_(class_ids),
+                EnrollmentModel.deleted.is_(False),
+                EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+            )
+            .group_by(EnrollmentModel.subject_class_id)
         )
-        total_students = int((await self.session.execute(total_stmt)).scalar_one() or 0)
+        total_by_class = {
+            row.subject_class_id: int(row.student_count)
+            for row in (await self.session.execute(total_stmt)).all()
+        }
 
         counts_stmt = (
             select(
@@ -214,7 +272,7 @@ class SessionSQLAlchemyRepository:
         }
 
         for item in sessions:
-            item.total_students = total_students
+            item.total_students = total_by_class.get(item.subject_class_id, 0)
             row = counts_by_session.get(item.id)
             item.confirmed_count = int(row.confirmed_count) if row else 0
             item.irregular_count = int(row.irregular_count) if row else 0

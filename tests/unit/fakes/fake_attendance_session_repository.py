@@ -69,3 +69,25 @@ class FakeAttendanceSessionRepository(AttendanceSessionRepository):
                 session.close()
                 closed.append(session)
         return closed
+
+    async def list_active_sessions_by_tenant(
+        self,
+        tenant_id: UUID,
+        professor_user_id: UUID | None = None,
+    ) -> list[AttendanceSession]:
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        result: list[AttendanceSession] = []
+        for s in self.sessions.values():
+            if s.status == SessionStatus.OPEN and s.expires_at > now:
+                if getattr(s, "_tenant_id", tenant_id) != tenant_id:
+                    continue
+                if (
+                    professor_user_id is not None
+                    and getattr(s, "_professor_user_id", None) != professor_user_id
+                ):
+                    continue
+                result.append(s)
+        result.sort(key=lambda x: x.opened_at, reverse=True)
+        return result

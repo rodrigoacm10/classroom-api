@@ -25,6 +25,10 @@ from modules.attendance.application.use_cases.get_session import (
     GetAttendanceSessionInput,
     GetAttendanceSessionUseCase,
 )
+from modules.attendance.application.use_cases.list_active_sessions import (
+    ListActiveAttendanceSessionsUseCase,
+    ListActiveSessionsInput,
+)
 from modules.attendance.application.use_cases.list_records import (
     ListAttendanceRecordsInput,
     ListAttendanceRecordsUseCase,
@@ -58,6 +62,7 @@ from modules.attendance.interface.schemas.record_schemas import (
     SessionRosterItemResponse,
 )
 from modules.attendance.interface.schemas.session_schemas import (
+    ActiveAttendanceSessionResponse,
     AttendanceSessionResponse,
     CreateAttendanceSessionRequest,
 )
@@ -486,3 +491,55 @@ async def review_attendance_record(
         )
     )
     return AttendanceRecordResponse.model_validate(record)
+
+
+active_sessions_router = APIRouter(
+    prefix="/attendance-sessions",
+    tags=["attendance"],
+)
+
+
+@active_sessions_router.get(
+    "/active",
+    response_model=list[ActiveAttendanceSessionResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def list_active_attendance_sessions(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> list[ActiveAttendanceSessionResponse]:
+    """Consulta chamadas abertas no momento. Se professor, lista apenas de suas turmas; se role maior, lista do tenant inteiro."""
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+
+    use_case = ListActiveAttendanceSessionsUseCase(
+        session_repo=session_repo,
+        tenant_repo=tenant_repo,
+    )
+
+    sessions = await use_case.execute(
+        ListActiveSessionsInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+            user_role=auth.role,
+        )
+    )
+
+    return [
+        ActiveAttendanceSessionResponse(
+            session_id=s.id,
+            subject_class_id=s.subject_class_id,
+            subject_class_name=s.subject_class.name if s.subject_class else "",
+            discipline_name=s.subject_class.discipline_name if s.subject_class else "",
+            day_code=s.day_code,
+            room_id=s.room_id,
+            room_name=s.room.name if s.room else None,
+            opened_at=s.opened_at,
+            expires_at=s.expires_at,
+            duration_minutes=s.duration_minutes,
+            present_count=s.confirmed_count,
+            total_students=s.total_students,
+        )
+        for s in sessions
+    ]
