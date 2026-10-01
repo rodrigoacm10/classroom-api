@@ -32,3 +32,9 @@ class AttendanceSessionRepository(Protocol):
     ) -> Page[AttendanceSession]: ...
 
     async def close_expired_sessions(self) -> list[AttendanceSession]: ...
+
+    async def list_active_sessions_by_tenant(
+        self,
+        tenant_id: UUID,
+        professor_user_id: UUID | None = None,
+    ) -> list[AttendanceSession]: ...

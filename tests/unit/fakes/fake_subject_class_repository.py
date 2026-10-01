@@ -30,12 +30,17 @@ class FakeSubjectClassRepository:
         return None
 
     async def list_by_tenant(
-        self, tenant_id: UUID, include_deleted: bool = False
+        self,
+        tenant_id: UUID,
+        include_deleted: bool = False,
+        active: bool | None = None,
     ) -> list[SubjectClass]:
         return [
             c
             for c in self._classes.values()
-            if c.tenant_id == tenant_id and (include_deleted or not c.deleted)
+            if c.tenant_id == tenant_id
+            and (include_deleted or not c.deleted)
+            and (active is None or c.active == active)
         ]
 
     async def list_summaries_by_tenant(
@@ -44,8 +49,11 @@ class FakeSubjectClassRepository:
         include_deleted: bool = False,
         professor_id: UUID | None = None,
         room_id: UUID | None = None,
+        active: bool | None = None,
     ) -> list[SubjectClassSummary]:
-        classes = await self.list_by_tenant(tenant_id, include_deleted=include_deleted)
+        classes = await self.list_by_tenant(
+            tenant_id, include_deleted=include_deleted, active=active
+        )
         if professor_id is not None:
             classes = [c for c in classes if c.professor_id == professor_id]
         if room_id is not None:
@@ -57,8 +65,12 @@ class FakeSubjectClassRepository:
                 professor_id=c.professor_id,
                 professor_name=None,
                 room_id=c.room_id,
+                room_name=None,
+                has_active_session=False,
+                active_session_id=None,
                 name=c.name,
                 discipline_name=c.discipline_name,
+                active=c.active,
                 student_count=0,
                 attendance_rate=0.0,
                 created_at=c.created_at,
@@ -75,12 +87,14 @@ class FakeSubjectClassRepository:
         professor_id: UUID | None = None,
         room_id: UUID | None = None,
         search: str | None = None,
+        active: bool | None = None,
     ) -> Page[SubjectClassSummary]:
         summaries = await self.list_summaries_by_tenant(
             tenant_id=tenant_id,
             include_deleted=include_deleted,
             professor_id=professor_id,
             room_id=room_id,
+            active=active,
         )
         if search:
             s = search.lower()

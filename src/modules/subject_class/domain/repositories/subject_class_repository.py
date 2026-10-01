@@ -18,7 +18,10 @@ class SubjectClassRepository(Protocol):
     ) -> SubjectClass | None: ...
 
     async def list_by_tenant(
-        self, tenant_id: UUID, include_deleted: bool = False
+        self,
+        tenant_id: UUID,
+        include_deleted: bool = False,
+        active: bool | None = None,
     ) -> list[SubjectClass]: ...
 
     async def list_summaries_by_tenant(
@@ -27,6 +30,7 @@ class SubjectClassRepository(Protocol):
         include_deleted: bool = False,
         professor_id: UUID | None = None,
         room_id: UUID | None = None,
+        active: bool | None = None,
     ) -> list[SubjectClassSummary]: ...
 
     async def find_summaries_by_tenant_paginated(
@@ -37,6 +41,7 @@ class SubjectClassRepository(Protocol):
         professor_id: UUID | None = None,
         room_id: UUID | None = None,
         search: str | None = None,
+        active: bool | None = None,
     ) -> Page[SubjectClassSummary]: ...
 
     async def delete(self, subject_class: SubjectClass) -> None: ...

@@ -317,6 +317,9 @@ class TestSubjectClassRouterEndpoints:
         assert listed["professor_name"] == "Prof Carlos"
         assert listed["student_count"] == 2
         assert listed["attendance_rate"] == 0.5
+        assert listed["room_name"] == "Lab Lista"
+        assert listed["has_active_session"] is True
+        assert listed["active_session_id"] == session_data["id"]
 
     async def test_list_subject_classes_filters_by_professor_id(self, client, session):
         """GET /subject-classes?professor_id= filtra turmas pelo professor responsável."""
@@ -495,3 +498,191 @@ class TestSubjectClassRouterEndpoints:
         search_data = res_search.json()
         assert len(search_data["items"]) == 2
         assert search_data["total"] == 2
+
+    async def test_patch_subject_class_active_toggle(self, client, session):
+        """PATCH /subject-classes/{id} -> Deve atualizar o campo active para False e True."""
+        admin_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
+        )
+        headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)}"
+        }
+
+        room_res = await client.post(
+            "/rooms",
+            json={"name": "Sala Patch", "latitude": -8.0, "longitude": -34.0},
+            headers=headers,
+        )
+        room_id = room_res.json()["id"]
+
+        create_res = await client.post(
+            "/subject-classes",
+            json={"room_id": room_id, "name": "Turma A", "discipline_name": "POO"},
+            headers=headers,
+        )
+        sc_id = create_res.json()["id"]
+        assert create_res.json()["active"] is True
+
+        # Desativa via PATCH geral
+        patch_res = await client.patch(
+            f"/subject-classes/{sc_id}",
+            json={"active": False},
+            headers=headers,
+        )
+        assert patch_res.status_code == 200
+        assert patch_res.json()["active"] is False
+
+        # Verifica persistência no GET
+        get_res = await client.get(f"/subject-classes/{sc_id}", headers=headers)
+        assert get_res.status_code == 200
+        assert get_res.json()["active"] is False
+
+        # Reativa via PATCH geral
+        patch_res2 = await client.patch(
+            f"/subject-classes/{sc_id}",
+            json={"active": True},
+            headers=headers,
+        )
+        assert patch_res2.status_code == 200
+        assert patch_res2.json()["active"] is True
+
+    async def test_patch_subject_class_active_forbidden_for_student(self, client, session):
+        """PATCH /subject-classes/{id} com active deve retornar 403 Forbidden para ALUNO."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
+        student_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)}"
+        }
+
+        any_id = "00000000-0000-0000-0000-000000000000"
+        patch_res = await client.patch(
+            f"/subject-classes/{any_id}", json={"active": False}, headers=student_headers
+        )
+        assert patch_res.status_code == 403
+
+    async def test_list_subject_classes_filter_by_active(self, client, session):
+        """GET /subject-classes?active=true|false deve filtrar turmas por status active."""
+        admin_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
+        )
+        headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)}"
+        }
+
+        room_res = await client.post(
+            "/rooms",
+            json={"name": "Sala Filter Act", "latitude": -8.0, "longitude": -34.0},
+            headers=headers,
+        )
+        room_id = room_res.json()["id"]
+
+        sc1_res = await client.post(
+            "/subject-classes",
+            json={"room_id": room_id, "name": "Turma 1 Ativa", "discipline_name": "D1"},
+            headers=headers,
+        )
+        sc1_id = sc1_res.json()["id"]
+
+        sc2_res = await client.post(
+            "/subject-classes",
+            json={"room_id": room_id, "name": "Turma 2 Inativa", "discipline_name": "D2"},
+            headers=headers,
+        )
+        sc2_id = sc2_res.json()["id"]
+
+        # Desativa a turma 2 via PATCH /subject-classes/{id}
+        await client.patch(
+            f"/subject-classes/{sc2_id}",
+            json={"active": False},
+            headers=headers,
+        )
+
+        # Filtra ativas
+        res_act = await client.get("/subject-classes?active=true", headers=headers)
+        assert res_act.status_code == 200
+        items_act = res_act.json()["items"]
+        assert len(items_act) == 1
+        assert items_act[0]["id"] == sc1_id
+        assert items_act[0]["active"] is True
+
+        # Filtra inativas
+        res_inact = await client.get("/subject-classes?active=false", headers=headers)
+        assert res_inact.status_code == 200
+        items_inact = res_inact.json()["items"]
+        assert len(items_inact) == 1
+        assert items_inact[0]["id"] == sc2_id
+        assert items_inact[0]["active"] is False
+
+    async def test_list_subject_classes_includes_room_details_and_active_session_status(
+        self, client, session
+    ):
+        """GET /subject-classes deve retornar os dados completos da sala e o status de chamada ativa."""
+        admin_user = await UserFactory.create(session, name="Admin Salas")
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
+        )
+        headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)}"
+        }
+
+        # Cria sala
+        room_res = await client.post(
+            "/rooms",
+            json={"name": "Lab 105", "latitude": -8.0476, "longitude": -34.8770},
+            headers=headers,
+        )
+        room_id = room_res.json()["id"]
+
+        # Cria turma com sala
+        sc1_res = await client.post(
+            "/subject-classes",
+            json={"room_id": room_id, "name": "Turma A", "discipline_name": "Estruturas"},
+            headers=headers,
+        )
+        sc1_id = sc1_res.json()["id"]
+
+        # Inicialmente sem chamadas abertas
+        list_res1 = await client.get("/subject-classes", headers=headers)
+        assert list_res1.status_code == 200
+        item1 = next(item for item in list_res1.json()["items"] if item["id"] == sc1_id)
+        assert item1["room_id"] == room_id
+        assert item1["room_name"] == "Lab 105"
+        assert item1["has_active_session"] is False
+        assert item1["active_session_id"] is None
+
+        # Abre uma sessão de chamada
+        session_res = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"room_id": room_id, "duration_minutes": 15},
+            headers=headers,
+        )
+        session_id = session_res.json()["id"]
+
+        # Agora a turma possui chamada ativa
+        list_res2 = await client.get("/subject-classes", headers=headers)
+        assert list_res2.status_code == 200
+        item2 = next(item for item in list_res2.json()["items"] if item["id"] == sc1_id)
+        assert item2["has_active_session"] is True
+        assert item2["active_session_id"] == session_id
+
+        # Encerra a chamada
+        close_res = await client.patch(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{session_id}/close",
+            headers=headers,
+        )
+        assert close_res.status_code == 200
+
+        # Após encerrar, a turma volta a ter has_active_session = False
+        list_res3 = await client.get("/subject-classes", headers=headers)
+        assert list_res3.status_code == 200
+        item3 = next(item for item in list_res3.json()["items"] if item["id"] == sc1_id)
+        assert item3["has_active_session"] is False
+        assert item3["active_session_id"] is None

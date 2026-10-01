@@ -507,6 +507,92 @@ class TestSubjectClassUseCases:
         sc_active = await subject_class_repo.find_by_id(sc.id, include_deleted=False)
         assert sc_active is None
 
+    async def test_update_subject_class_active_field(self):
+        """Deve permitir atualizar o status active através de UpdateSubjectClassUseCase."""
+        subject_class_repo = FakeSubjectClassRepository()
+        room_repo = FakeRoomRepository()
+        tenant_id = uuid4()
+
+        sc = SubjectClass(
+            tenant_id=tenant_id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Turma Teste",
+            discipline_name="D1",
+            active=True,
+        )
+        await subject_class_repo.save(sc)
+
+        use_case = UpdateSubjectClassUseCase(
+            subject_class_repo=subject_class_repo, room_repo=room_repo
+        )
+        updated = await use_case.execute(
+            UpdateSubjectClassInput(
+                subject_class_id=sc.id,
+                tenant_id=tenant_id,
+                active=False,
+            )
+        )
+        assert updated.active is False
+
+        # Reativar via update
+        reactivated = await use_case.execute(
+            UpdateSubjectClassInput(
+                subject_class_id=sc.id,
+                tenant_id=tenant_id,
+                active=True,
+            )
+        )
+        assert reactivated.active is True
+
+    async def test_list_subject_classes_filters_by_active(self):
+        """Deve filtrar turmas pelo status active (True ou False)."""
+        subject_class_repo = FakeSubjectClassRepository()
+        tenant_repo = FakeTenantRepository()
+        tenant = Tenant(name="UFPE", slug="ufpe")
+        await tenant_repo.save(tenant)
+
+        sc_active = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Turma Ativa",
+            discipline_name="D1",
+            active=True,
+        )
+        sc_inactive = SubjectClass(
+            tenant_id=tenant.id,
+            professor_id=uuid4(),
+            room_id=uuid4(),
+            name="Turma Encerrada",
+            discipline_name="D2",
+            active=False,
+        )
+        await subject_class_repo.save(sc_active)
+        await subject_class_repo.save(sc_inactive)
+
+        use_case = ListSubjectClassesUseCase(
+            subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+        )
+
+        # Filtra apenas ativas
+        res_active = await use_case.execute(
+            ListSubjectClassesInput(tenant_id=tenant.id, active=True)
+        )
+        assert len(res_active.items) == 1
+        assert res_active.items[0].id == sc_active.id
+
+        # Filtra apenas inativas
+        res_inactive = await use_case.execute(
+            ListSubjectClassesInput(tenant_id=tenant.id, active=False)
+        )
+        assert len(res_inactive.items) == 1
+        assert res_inactive.items[0].id == sc_inactive.id
+
+        # Sem filtro retorna ambas
+        res_all = await use_case.execute(ListSubjectClassesInput(tenant_id=tenant.id, active=None))
+        assert len(res_all.items) == 2
+
 
 class TestSubjectClassSummary:
     def test_compute_attendance_rate(self):

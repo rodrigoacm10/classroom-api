@@ -14,6 +14,7 @@ class UpdateSubjectClassRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     discipline_name: str | None = Field(default=None, min_length=1, max_length=255)
     room_id: UUID | None = Field(default=None, description="Alterar a sala vinculada à turma.")
+    active: bool | None = Field(default=None, description="Ativar ou desativar/encerrar a turma.")
 
 
 class SubjectClassResponse(BaseModel):
@@ -23,6 +24,7 @@ class SubjectClassResponse(BaseModel):
     room_id: UUID | None
     name: str
     discipline_name: str
+    active: bool = True
     created_at: datetime
     updated_at: datetime
 
@@ -31,5 +33,8 @@ class SubjectClassResponse(BaseModel):
 
 class SubjectClassListItemResponse(SubjectClassResponse):
     professor_name: str | None = None
+    room_name: str | None = None
+    has_active_session: bool = False
+    active_session_id: UUID | None = None
     student_count: int
     attendance_rate: float

@@ -5,6 +5,7 @@ from infra.database.session import get_db
 from modules.user.application.use_cases.create_user import CreateUserInput, CreateUserUseCase
 from modules.user.infra.repositories.user_sqlalchemy_repository import UserSQLAlchemyRepository
 from modules.user.interface.schemas.user_schemas import CreateUserRequest, UserResponse
+from security.dependencies.current_user import AuthContext, get_auth_context
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -29,4 +30,19 @@ async def create_user(
         name=user.name,
         email=user.email,
         created_at=user.created_at,
+    )
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_my_profile(
+    auth: AuthContext = Depends(get_auth_context),
+) -> UserResponse:
+    """Retorna os dados do perfil do usuário autenticado, incluindo papel e tenant ativo se selecionados."""
+    return UserResponse(
+        id=auth.user.id,
+        name=auth.user.name,
+        email=auth.user.email,
+        tenant_id=auth.tenant_id,
+        role=auth.role,
+        created_at=auth.user.created_at,
     )

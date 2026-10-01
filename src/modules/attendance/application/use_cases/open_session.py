@@ -70,6 +70,9 @@ class OpenAttendanceSessionUseCase:
         if not subject_class or getattr(subject_class, "deleted", False):
             raise ResourceNotFoundException("Turma não encontrada.")
 
+        if not getattr(subject_class, "active", True):
+            raise BusinessRuleException("Não é possível abrir chamada para uma turma inativa.")
+
         # Verificar permissão
         member = await self.member_repo.find_by_tenant_and_user(data.tenant_id, data.user_id)
         if not member:

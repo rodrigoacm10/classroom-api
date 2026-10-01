@@ -53,3 +53,20 @@ class AttendanceSessionResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ActiveAttendanceSessionResponse(BaseModel):
+    session_id: UUID
+    subject_class_id: UUID
+    subject_class_name: str
+    discipline_name: str
+    day_code: str
+    room_id: UUID | None = None
+    room_name: str | None = None
+    opened_at: datetime
+    expires_at: datetime
+    duration_minutes: int
+    present_count: int
+    total_students: int
+
+    model_config = {"from_attributes": True}

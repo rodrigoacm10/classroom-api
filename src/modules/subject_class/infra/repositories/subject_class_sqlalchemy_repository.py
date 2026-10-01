@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from infra.database.models.attendance_record import AttendanceRecordModel
 from infra.database.models.attendance_session import AttendanceSessionModel
 from infra.database.models.enrollment import EnrollmentModel
+from infra.database.models.room import RoomModel
 from infra.database.models.subject_class import SubjectClassModel
 from infra.database.models.tenant import TenantMemberModel
 from infra.database.models.user import UserModel
@@ -53,11 +54,16 @@ class SubjectClassSQLAlchemyRepository:
         return SubjectClassMapper.to_domain(model) if model else None
 
     async def list_by_tenant(
-        self, tenant_id: UUID, include_deleted: bool = False
+        self,
+        tenant_id: UUID,
+        include_deleted: bool = False,
+        active: bool | None = None,
     ) -> list[SubjectClass]:
         stmt = select(SubjectClassModel).where(SubjectClassModel.tenant_id == tenant_id)
         if not include_deleted:
             stmt = stmt.where(SubjectClassModel.deleted == False)  # noqa: E712
+        if active is not None:
+            stmt = stmt.where(SubjectClassModel.active == active)
         result = await self.session.execute(stmt)
         return [SubjectClassMapper.to_domain(m) for m in result.scalars().all()]
 
@@ -67,6 +73,7 @@ class SubjectClassSQLAlchemyRepository:
         include_deleted: bool = False,
         professor_id: UUID | None = None,
         room_id: UUID | None = None,
+        active: bool | None = None,
     ) -> list[SubjectClassSummary]:
         enrollment_count = (
             select(
@@ -131,19 +138,44 @@ class SubjectClassSQLAlchemyRepository:
             .subquery()
         )
 
+        active_session_subquery = (
+            select(
+                AttendanceSessionModel.subject_class_id.label("subject_class_id"),
+                AttendanceSessionModel.id.label("active_session_id"),
+            )
+            .join(
+                SubjectClassModel,
+                SubjectClassModel.id == AttendanceSessionModel.subject_class_id,
+            )
+            .where(
+                SubjectClassModel.tenant_id == tenant_id,
+                AttendanceSessionModel.status == SessionStatus.OPEN,
+                AttendanceSessionModel.expires_at > func.now(),
+            )
+            .distinct(AttendanceSessionModel.subject_class_id)
+            .order_by(
+                AttendanceSessionModel.subject_class_id,
+                AttendanceSessionModel.opened_at.desc(),
+            )
+            .subquery()
+        )
+
         stmt = (
             select(
                 SubjectClassModel,
                 UserModel.name,
+                RoomModel.name.label("room_name"),
                 func.coalesce(enrollment_count.c.student_count, 0),
                 func.coalesce(session_count.c.session_count, 0),
                 func.coalesce(present_count.c.present_count, 0),
+                active_session_subquery.c.active_session_id,
             )
             .outerjoin(
                 TenantMemberModel,
                 TenantMemberModel.id == SubjectClassModel.professor_id,
             )
             .outerjoin(UserModel, UserModel.id == TenantMemberModel.user_id)
+            .outerjoin(RoomModel, RoomModel.id == SubjectClassModel.room_id)
             .outerjoin(
                 enrollment_count,
                 enrollment_count.c.subject_class_id == SubjectClassModel.id,
@@ -156,10 +188,16 @@ class SubjectClassSQLAlchemyRepository:
                 present_count,
                 present_count.c.subject_class_id == SubjectClassModel.id,
             )
+            .outerjoin(
+                active_session_subquery,
+                active_session_subquery.c.subject_class_id == SubjectClassModel.id,
+            )
             .where(SubjectClassModel.tenant_id == tenant_id)
         )
         if not include_deleted:
             stmt = stmt.where(SubjectClassModel.deleted.is_(False))
+        if active is not None:
+            stmt = stmt.where(SubjectClassModel.active == active)
         if professor_id is not None:
             stmt = stmt.where(SubjectClassModel.professor_id == professor_id)
         if room_id is not None:
@@ -167,7 +205,15 @@ class SubjectClassSQLAlchemyRepository:
 
         result = await self.session.execute(stmt)
         summaries: list[SubjectClassSummary] = []
-        for model, professor_name, students, sessions, presents in result.all():
+        for (
+            model,
+            professor_name,
+            room_name,
+            students,
+            sessions,
+            presents,
+            active_session_id,
+        ) in result.all():
             student_count = int(students)
             session_total = int(sessions)
             present_total = int(presents)
@@ -178,8 +224,12 @@ class SubjectClassSQLAlchemyRepository:
                     professor_id=model.professor_id,
                     professor_name=professor_name,
                     room_id=model.room_id,
+                    room_name=room_name,
+                    has_active_session=active_session_id is not None,
+                    active_session_id=active_session_id,
                     name=model.name,
                     discipline_name=model.discipline_name,
+                    active=model.active,
                     student_count=student_count,
                     attendance_rate=SubjectClassSummary.compute_attendance_rate(
                         present_total, student_count, session_total
@@ -198,11 +248,15 @@ class SubjectClassSQLAlchemyRepository:
         professor_id: UUID | None = None,
         room_id: UUID | None = None,
         search: str | None = None,
+        active: bool | None = None,
     ) -> Page[SubjectClassSummary]:
         conditions = [SubjectClassModel.tenant_id == tenant_id]
 
         if not include_deleted:
             conditions.append(SubjectClassModel.deleted.is_(False))
+
+        if active is not None:
+            conditions.append(SubjectClassModel.active == active)
 
         if professor_id is not None:
             conditions.append(SubjectClassModel.professor_id == professor_id)
@@ -284,19 +338,44 @@ class SubjectClassSQLAlchemyRepository:
             .subquery()
         )
 
+        active_session_subquery = (
+            select(
+                AttendanceSessionModel.subject_class_id.label("subject_class_id"),
+                AttendanceSessionModel.id.label("active_session_id"),
+            )
+            .join(
+                SubjectClassModel,
+                SubjectClassModel.id == AttendanceSessionModel.subject_class_id,
+            )
+            .where(
+                SubjectClassModel.tenant_id == tenant_id,
+                AttendanceSessionModel.status == SessionStatus.OPEN,
+                AttendanceSessionModel.expires_at > func.now(),
+            )
+            .distinct(AttendanceSessionModel.subject_class_id)
+            .order_by(
+                AttendanceSessionModel.subject_class_id,
+                AttendanceSessionModel.opened_at.desc(),
+            )
+            .subquery()
+        )
+
         stmt = (
             select(
                 SubjectClassModel,
                 UserModel.name,
+                RoomModel.name.label("room_name"),
                 func.coalesce(enrollment_count.c.student_count, 0),
                 func.coalesce(session_count.c.session_count, 0),
                 func.coalesce(present_count.c.present_count, 0),
+                active_session_subquery.c.active_session_id,
             )
             .outerjoin(
                 TenantMemberModel,
                 TenantMemberModel.id == SubjectClassModel.professor_id,
             )
             .outerjoin(UserModel, UserModel.id == TenantMemberModel.user_id)
+            .outerjoin(RoomModel, RoomModel.id == SubjectClassModel.room_id)
             .outerjoin(
                 enrollment_count,
                 enrollment_count.c.subject_class_id == SubjectClassModel.id,
@@ -309,6 +388,10 @@ class SubjectClassSQLAlchemyRepository:
                 present_count,
                 present_count.c.subject_class_id == SubjectClassModel.id,
             )
+            .outerjoin(
+                active_session_subquery,
+                active_session_subquery.c.subject_class_id == SubjectClassModel.id,
+            )
             .where(*conditions)
             .order_by(SubjectClassModel.created_at.desc())
             .offset(pagination.offset)
@@ -317,7 +400,15 @@ class SubjectClassSQLAlchemyRepository:
 
         result = await self.session.execute(stmt)
         summaries: list[SubjectClassSummary] = []
-        for model, professor_name, students, sessions, presents in result.all():
+        for (
+            model,
+            professor_name,
+            room_name,
+            students,
+            sessions,
+            presents,
+            active_session_id,
+        ) in result.all():
             student_count = int(students)
             session_total = int(sessions)
             present_total = int(presents)
@@ -328,8 +419,12 @@ class SubjectClassSQLAlchemyRepository:
                     professor_id=model.professor_id,
                     professor_name=professor_name,
                     room_id=model.room_id,
+                    room_name=room_name,
+                    has_active_session=active_session_id is not None,
+                    active_session_id=active_session_id,
                     name=model.name,
                     discipline_name=model.discipline_name,
+                    active=model.active,
                     student_count=student_count,
                     attendance_rate=SubjectClassSummary.compute_attendance_rate(
                         present_total, student_count, session_total

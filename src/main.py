@@ -17,7 +17,12 @@ from config.settings import settings
 from modules.attendance.application.handlers.attendance_notification_handler import (
     register_attendance_event_handlers,
 )
-from modules.attendance.interface.router import router as attendance_router
+from modules.attendance.interface.router import (
+    active_sessions_router,
+)
+from modules.attendance.interface.router import (
+    router as attendance_router,
+)
 from modules.auth.interface.router import router as auth_router
 from modules.enrollment.interface.router import (
     member_enrollments_router,
@@ -27,6 +32,7 @@ from modules.enrollment.interface.router import (
     router as enrollment_router,
 )
 from modules.notification.interface.router import router as notification_router
+from modules.report.interface.dashboard_router import router as dashboard_router
 from modules.report.interface.router import router as report_router
 from modules.room.interface.router import router as room_router
 from modules.subject_class.interface.router import router as subject_class_router
@@ -98,8 +104,10 @@ app.include_router(student_subject_classes_router)
 app.include_router(tenant_invites_router)
 app.include_router(invites_router)
 app.include_router(attendance_router)
+app.include_router(active_sessions_router)
 app.include_router(notification_router)
 app.include_router(report_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/")

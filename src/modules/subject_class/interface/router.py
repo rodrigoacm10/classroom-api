@@ -91,9 +91,10 @@ async def list_subject_classes(
     professor_id: UUID | None = Query(None, description="Filtrar por ID do professor responsável"),
     room_id: UUID | None = Query(None, description="Filtrar por ID da sala vinculada"),
     search: str | None = Query(None, description="Busca por nome da turma ou disciplina"),
+    active: bool | None = Query(None, description="Filtrar por status ativo/inativo"),
     db: AsyncSession = Depends(get_db),
 ) -> PageResponse[SubjectClassListItemResponse]:
-    """Lista turmas ativas da Tenant com paginação offset, nome do professor, alunos ativos e taxa de presença."""
+    """Lista turmas da Tenant com filtros, nome do professor, alunos ativos e taxa de presença."""
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     use_case = ListSubjectClassesUseCase(
@@ -107,6 +108,7 @@ async def list_subject_classes(
             professor_id=professor_id,
             room_id=room_id,
             search=search,
+            active=active,
         )
     )
     items = [SubjectClassListItemResponse.model_validate(c) for c in page.items]
@@ -152,6 +154,7 @@ async def update_subject_class(
             name=body.name,
             discipline_name=body.discipline_name,
             room_id=body.room_id,
+            active=body.active,
         )
     )
     return SubjectClassResponse.model_validate(subject_class)

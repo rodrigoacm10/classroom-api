@@ -20,6 +20,12 @@ class EnrollmentModel(Base):
             unique=True,
             postgresql_where=text("deleted = false"),
         ),
+        Index(
+            "ix_enrollments_member_active",
+            "tenant_member_id",
+            "status",
+            postgresql_where=text("deleted = false"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
