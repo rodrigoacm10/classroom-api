@@ -77,6 +77,7 @@ class ReportDataRepository:
                 StudentAttendanceData(
                     tenant_member_id=member.id,
                     student_name=user.name,
+                    email=user.email,
                     total_sessions=total_sessions,
                     confirmations=confirmations,
                     room_lat=room_lat,

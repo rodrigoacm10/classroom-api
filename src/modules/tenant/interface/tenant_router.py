@@ -23,6 +23,10 @@ from modules.tenant.application.use_cases.create_tenant import (
 from modules.tenant.application.use_cases.deactivate_tenant import DeactivateTenantUseCase
 from modules.tenant.application.use_cases.delete_tenant import DeleteTenantUseCase
 from modules.tenant.application.use_cases.list_my_tenants import ListMyTenantsUseCase
+from modules.tenant.application.use_cases.list_students import (
+    ListStudentsInput,
+    ListStudentsUseCase,
+)
 from modules.tenant.application.use_cases.list_tenant_members import (
     ListTenantMembersInput,
     ListTenantMembersUseCase,
@@ -45,17 +49,19 @@ from modules.tenant.interface.schemas.tenant_schemas import (
     AddTenantMemberRequest,
     CreateTenantRequest,
     MyTenantResponse,
+    StudentResponse,
     TenantMemberResponse,
     TenantResponse,
     UpdateTenantMemberRoleRequest,
 )
 from modules.user.domain.entities.user import User
-from security.dependencies.current_user import get_current_user
+from security.dependencies.current_user import get_current_tenant_id, get_current_user
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
+members_router = APIRouter(prefix="/members", tags=["members"])
 
 
 @router.post("/", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
@@ -161,6 +167,8 @@ async def list_tenant_members(
             id=member.id,
             tenant_id=member.tenant_id,
             user_id=member.user_id,
+            name=member.name,
+            email=member.email,
             role=member.role,
             created_at=member.created_at,
         )
@@ -168,6 +176,108 @@ async def list_tenant_members(
     ]
 
     return PageResponse.of(page, items)
+
+
+@router.get(
+    "/{tenant_id}/students",
+    response_model=PageResponse[StudentResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+@router.get(
+    "/{tenant_id}/members/students",
+    response_model=PageResponse[StudentResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def list_tenant_students(
+    tenant_id: UUID,
+    pagination: PaginationParams = Depends(get_pagination_params),
+    search: str | None = Query(None, description="Busca por nome ou e-mail"),
+    subject_class_id: UUID | None = Query(None, description="Filtrar por ID da turma"),
+    include_deleted: bool = Query(False, description="Incluir alunos inativos/deletados"),
+    db: AsyncSession = Depends(get_db),
+) -> PageResponse[StudentResponse]:
+    """
+    Lista todos os alunos (papel ALUNO) da Tenant/Instituição informada no path.
+    Acessível por ADMIN, COORDENADOR e PROFESSOR.
+    Retorna campos flat (id, tenant_member_id, user_id, name, email, role, created_at).
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = ListStudentsUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    page = await use_case.execute(
+        ListStudentsInput(
+            tenant_id=tenant_id,
+            pagination=pagination,
+            search=search,
+            subject_class_id=subject_class_id,
+            include_deleted=include_deleted,
+        )
+    )
+
+    items = [
+        StudentResponse(
+            id=member.id,
+            tenant_member_id=member.id,
+            user_id=member.user_id,
+            name=member.name,
+            email=member.email,
+            role=member.role,
+            created_at=member.created_at,
+        )
+        for member in page.items
+    ]
+
+    return PageResponse.of(page, items)
+
+
+@members_router.get(
+    "/students",
+    response_model=PageResponse[StudentResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def list_students_current_tenant(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    pagination: PaginationParams = Depends(get_pagination_params),
+    search: str | None = Query(None, description="Busca por nome ou e-mail"),
+    subject_class_id: UUID | None = Query(None, description="Filtrar por ID da turma"),
+    include_deleted: bool = Query(False, description="Incluir alunos inativos/deletados"),
+    db: AsyncSession = Depends(get_db),
+) -> PageResponse[StudentResponse]:
+    """
+    Lista todos os alunos (papel ALUNO) da instituição ativa no token JWT (/members/students).
+    Acessível por ADMIN, COORDENADOR e PROFESSOR.
+    Retorna campos flat (id, tenant_member_id, user_id, name, email, role, created_at).
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = ListStudentsUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    page = await use_case.execute(
+        ListStudentsInput(
+            tenant_id=tenant_id,
+            pagination=pagination,
+            search=search,
+            subject_class_id=subject_class_id,
+            include_deleted=include_deleted,
+        )
+    )
+
+    items = [
+        StudentResponse(
+            id=member.id,
+            tenant_member_id=member.id,
+            user_id=member.user_id,
+            name=member.name,
+            email=member.email,
+            role=member.role,
+            created_at=member.created_at,
+        )
+        for member in page.items
+    ]
+
+    return PageResponse.of(page, items)
+
 
 
 @router.post(
