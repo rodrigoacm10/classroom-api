@@ -106,3 +106,29 @@ class TestTenantMemberSQLAlchemyRepository:
 
         # Agora deve restar apenas 1 admin ativo
         assert await self.repository.count_active_admins(tenant.id) == 1
+
+    async def test_find_by_tenant_id_paginated_populates_name_and_email(self) -> None:
+        """find_by_tenant_id_paginated deve popular name e email vindos do UserModel em flat."""
+        from shared.pagination import PaginationParams
+
+        tenant = await TenantFactory.create(self.session)
+        user = await UserFactory.create(
+            self.session, name="Carla Aluna", email="carla.aluna@faculdade.edu"
+        )
+        member = TenantMember(tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        await self.repository.save(member)
+
+        page = await self.repository.find_by_tenant_id_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            role=UserRole.ALUNO,
+        )
+
+        assert page.total == 1
+        assert len(page.items) == 1
+        item = page.items[0]
+        assert item.name == "Carla Aluna"
+        assert item.email == "carla.aluna@faculdade.edu"
+        assert item.role == UserRole.ALUNO
+        assert item.id == member.id
+
