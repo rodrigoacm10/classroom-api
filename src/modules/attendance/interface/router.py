@@ -17,6 +17,10 @@ from modules.attendance.application.use_cases.confirm_attendance import (
     ConfirmAttendanceInput,
     ConfirmAttendanceUseCase,
 )
+from modules.attendance.application.use_cases.get_attendance_metrics import (
+    GetAttendanceMetricsInput,
+    GetAttendanceMetricsUseCase,
+)
 from modules.attendance.application.use_cases.get_record import (
     GetAttendanceRecordInput,
     GetAttendanceRecordUseCase,
@@ -41,6 +45,10 @@ from modules.attendance.application.use_cases.list_sessions import (
     ListAttendanceSessionsInput,
     ListAttendanceSessionsUseCase,
 )
+from modules.attendance.application.use_cases.list_tenant_sessions import (
+    ListTenantAttendanceSessionsInput,
+    ListTenantAttendanceSessionsUseCase,
+)
 from modules.attendance.application.use_cases.open_session import (
     OpenAttendanceSessionInput,
     OpenAttendanceSessionUseCase,
@@ -63,6 +71,7 @@ from modules.attendance.interface.schemas.record_schemas import (
 )
 from modules.attendance.interface.schemas.session_schemas import (
     ActiveAttendanceSessionResponse,
+    AttendanceMetricsResponse,
     AttendanceSessionResponse,
     CreateAttendanceSessionRequest,
 )
@@ -543,3 +552,100 @@ async def list_active_attendance_sessions(
         )
         for s in sessions
     ]
+
+
+@active_sessions_router.get(
+    "/metrics",
+    response_model=AttendanceMetricsResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_attendance_metrics(
+    days: int = Query(30, ge=1, le=365, description="Janela de dias para as métricas (padrão: 30)"),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> AttendanceMetricsResponse:
+    """Retorna métricas consolidadas de chamadas (total, taxa média, canceladas e última chamada)."""
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+
+    use_case = GetAttendanceMetricsUseCase(
+        session_repo=session_repo,
+        tenant_repo=tenant_repo,
+    )
+
+    metrics = await use_case.execute(
+        GetAttendanceMetricsInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+            user_role=auth.role,
+            days=days,
+        )
+    )
+
+    return AttendanceMetricsResponse.model_validate(metrics)
+
+
+@active_sessions_router.get(
+    "",
+    response_model=PageResponse[AttendanceSessionResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def list_attendance_sessions_by_tenant(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    pagination: PaginationParams = Depends(get_pagination_params),
+    subject_class_id: UUID | None = Query(
+        None,
+        description="Filtrar por ID de uma turma específica (opcional)",
+    ),
+    session_status: SessionStatus | None = Query(
+        None,
+        alias="status",
+        description="Filtrar por status da chamada (open, closed, cancelled)",
+    ),
+    exclude_status: SessionStatus | None = Query(
+        None,
+        alias="exclude_status",
+        description="Excluir chamadas com este status (ex: open)",
+    ),
+    opened_after: datetime | None = Query(
+        None,
+        description="Filtrar por chamadas abertas a partir desta data (ISO-8601)",
+    ),
+    opened_before: datetime | None = Query(
+        None,
+        description="Filtrar por chamadas abertas até esta data (ISO-8601)",
+    ),
+    search: str | None = Query(
+        None,
+        description="Busca textual por nome da turma ou disciplina",
+    ),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> PageResponse[AttendanceSessionResponse]:
+    """Lista sessões de chamada de todas as turmas do tenant/professor com paginação e filtros."""
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+
+    use_case = ListTenantAttendanceSessionsUseCase(
+        session_repo=session_repo,
+        tenant_repo=tenant_repo,
+    )
+
+    page = await use_case.execute(
+        ListTenantAttendanceSessionsInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+            user_role=auth.role,
+            pagination=pagination,
+            subject_class_id=subject_class_id,
+            status=session_status,
+            exclude_status=exclude_status,
+            opened_after=opened_after,
+            opened_before=opened_before,
+            search=search,
+        )
+    )
+
+    items = [AttendanceSessionResponse.model_validate(item) for item in page.items]
+    return PageResponse.of(page, items)

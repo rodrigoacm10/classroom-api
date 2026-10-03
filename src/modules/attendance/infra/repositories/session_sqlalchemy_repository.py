@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import case, func, select
@@ -225,6 +225,214 @@ class SessionSQLAlchemyRepository:
         sessions = [AttendanceSessionMapper.to_domain(m) for m in models]
         await self._apply_stats(sessions)
         return sessions
+
+    async def list_by_tenant_paginated(
+        self,
+        tenant_id: UUID,
+        pagination: PaginationParams,
+        professor_user_id: UUID | None = None,
+        subject_class_id: UUID | None = None,
+        status: SessionStatus | None = None,
+        exclude_status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+        search: str | None = None,
+    ) -> Page[AttendanceSession]:
+        from infra.database.models.subject_class import SubjectClassModel
+        from infra.database.models.tenant import TenantMemberModel
+
+        conditions = [
+            SubjectClassModel.tenant_id == tenant_id,
+            SubjectClassModel.deleted.is_(False),
+        ]
+
+        if subject_class_id is not None:
+            conditions.append(AttendanceSessionModel.subject_class_id == subject_class_id)
+
+        if status is not None:
+            conditions.append(AttendanceSessionModel.status == status)
+
+        if exclude_status is not None:
+            conditions.append(AttendanceSessionModel.status != exclude_status)
+
+        if opened_after is not None:
+            conditions.append(AttendanceSessionModel.opened_at >= opened_after)
+
+        if opened_before is not None:
+            conditions.append(AttendanceSessionModel.opened_at <= opened_before)
+
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            conditions.append(
+                (SubjectClassModel.name.ilike(term)) | (SubjectClassModel.discipline_name.ilike(term))
+            )
+
+        base_from = select(func.count(AttendanceSessionModel.id)).join(
+            SubjectClassModel,
+            SubjectClassModel.id == AttendanceSessionModel.subject_class_id,
+        )
+
+        if professor_user_id is not None:
+            base_from = base_from.join(
+                TenantMemberModel,
+                TenantMemberModel.id == SubjectClassModel.professor_id,
+            )
+            conditions.extend([
+                TenantMemberModel.user_id == professor_user_id,
+                TenantMemberModel.deleted.is_(False),
+            ])
+
+        count_stmt = base_from.where(*conditions)
+        total = (await self.session.execute(count_stmt)).scalar_one() or 0
+
+        items_stmt = (
+            select(AttendanceSessionModel)
+            .options(
+                joinedload(AttendanceSessionModel.subject_class),
+                joinedload(AttendanceSessionModel.room),
+            )
+            .join(
+                SubjectClassModel,
+                SubjectClassModel.id == AttendanceSessionModel.subject_class_id,
+            )
+        )
+
+        if professor_user_id is not None:
+            items_stmt = items_stmt.join(
+                TenantMemberModel,
+                TenantMemberModel.id == SubjectClassModel.professor_id,
+            )
+
+        items_stmt = (
+            items_stmt.where(*conditions)
+            .order_by(AttendanceSessionModel.opened_at.desc())
+            .offset(pagination.offset)
+            .limit(pagination.page_size)
+        )
+
+        result = await self.session.execute(items_stmt)
+        models = result.scalars().all()
+        sessions = [AttendanceSessionMapper.to_domain(m) for m in models]
+        await self._apply_stats(sessions)
+
+        return Page.from_params(sessions, total=total, pagination=pagination)
+
+    async def get_metrics_by_tenant(
+        self,
+        tenant_id: UUID,
+        professor_user_id: UUID | None = None,
+        days: int = 30,
+    ) -> dict:
+        from infra.database.models.subject_class import SubjectClassModel
+        from infra.database.models.tenant import TenantMemberModel
+
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=days)
+
+        class_conditions = [
+            SubjectClassModel.tenant_id == tenant_id,
+            SubjectClassModel.deleted.is_(False),
+        ]
+        class_query = select(SubjectClassModel.id)
+        if professor_user_id is not None:
+            class_query = class_query.join(
+                TenantMemberModel,
+                TenantMemberModel.id == SubjectClassModel.professor_id,
+            )
+            class_conditions.extend([
+                TenantMemberModel.user_id == professor_user_id,
+                TenantMemberModel.deleted.is_(False),
+            ])
+        class_ids = (await self.session.execute(class_query.where(*class_conditions))).scalars().all()
+
+        if not class_ids:
+            return {
+                "total_sessions": 0,
+                "average_attendance_rate": 0.0,
+                "cancelled_sessions": 0,
+                "last_session": None,
+            }
+
+        # 1. Total sessions in the last N days
+        total_stmt = select(func.count(AttendanceSessionModel.id)).where(
+            AttendanceSessionModel.subject_class_id.in_(class_ids),
+            AttendanceSessionModel.opened_at >= since,
+        )
+        total_sessions = (await self.session.execute(total_stmt)).scalar_one() or 0
+
+        # 2. Cancelled sessions in the last N days
+        cancelled_stmt = select(func.count(AttendanceSessionModel.id)).where(
+            AttendanceSessionModel.subject_class_id.in_(class_ids),
+            AttendanceSessionModel.status == SessionStatus.CANCELLED,
+            AttendanceSessionModel.opened_at >= since,
+        )
+        cancelled_sessions = (await self.session.execute(cancelled_stmt)).scalar_one() or 0
+
+        # 3. Average attendance rate across non-cancelled sessions in the last N days
+        sessions_stmt = (
+            select(AttendanceSessionModel)
+            .options(
+                joinedload(AttendanceSessionModel.subject_class),
+                joinedload(AttendanceSessionModel.room),
+            )
+            .where(
+                AttendanceSessionModel.subject_class_id.in_(class_ids),
+                AttendanceSessionModel.status != SessionStatus.CANCELLED,
+                AttendanceSessionModel.opened_at >= since,
+            )
+        )
+        period_models = (await self.session.execute(sessions_stmt)).scalars().all()
+        period_sessions = [AttendanceSessionMapper.to_domain(m) for m in period_models]
+        await self._apply_stats(period_sessions)
+
+        valid_sessions = [s for s in period_sessions if s.total_students > 0]
+        if valid_sessions:
+            total_rate = sum((s.confirmed_count / s.total_students) for s in valid_sessions)
+            avg_rate = round(total_rate / len(valid_sessions), 4)
+        else:
+            avg_rate = 0.0
+
+        # 4. Last session performed
+        last_stmt = (
+            select(AttendanceSessionModel)
+            .options(
+                joinedload(AttendanceSessionModel.subject_class),
+                joinedload(AttendanceSessionModel.room),
+            )
+            .where(AttendanceSessionModel.subject_class_id.in_(class_ids))
+            .order_by(AttendanceSessionModel.opened_at.desc())
+            .limit(1)
+        )
+        last_model = (await self.session.execute(last_stmt)).scalar_one_or_none()
+        last_session_dict = None
+        if last_model:
+            last_domain = AttendanceSessionMapper.to_domain(last_model)
+            await self._apply_stats([last_domain])
+            rate = (
+                round(last_domain.confirmed_count / last_domain.total_students, 4)
+                if last_domain.total_students > 0
+                else 0.0
+            )
+            last_session_dict = {
+                "id": last_domain.id,
+                "subject_class_id": last_domain.subject_class_id,
+                "subject_class_name": last_domain.subject_class.name if last_domain.subject_class else "",
+                "discipline_name": last_domain.subject_class.discipline_name if last_domain.subject_class else "",
+                "room_name": last_domain.room.name if last_domain.room else None,
+                "opened_at": last_domain.opened_at,
+                "day_code": last_domain.day_code,
+                "status": last_domain.status,
+                "confirmed_count": last_domain.confirmed_count,
+                "total_students": last_domain.total_students,
+                "attendance_rate": rate,
+            }
+
+        return {
+            "total_sessions": total_sessions,
+            "average_attendance_rate": avg_rate,
+            "cancelled_sessions": cancelled_sessions,
+            "last_session": last_session_dict,
+        }
 
     async def _apply_stats(self, sessions: list[AttendanceSession]) -> None:
         if not sessions:
