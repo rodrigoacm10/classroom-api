@@ -27,6 +27,7 @@ def _build_student_report(data: StudentAttendanceData, distances: list[float]) -
     return StudentReport(
         tenant_member_id=data.tenant_member_id,
         student_name=data.student_name,
+        email=data.email,
         total_present=present,
         total_absent=absent,
         total_irregular=len(irregular),
