@@ -201,14 +201,14 @@ async def list_student_subject_classes(
 @router.patch(
     "/{enrollment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR))],
 )
 async def drop_enrollment(
     subject_class_id: UUID,
     enrollment_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Cancela matrícula por evento legítimo (status → dropped). Histórico preservado. Apenas ADMIN."""
+    """Cancela matrícula por evento legítimo (status → dropped). Histórico preservado. ADMIN ou COORDENADOR."""
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     use_case = DropEnrollmentUseCase(enrollment_repo=enrollment_repo)
     await use_case.execute(
@@ -222,14 +222,14 @@ async def drop_enrollment(
 @router.delete(
     "/{enrollment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR))],
 )
 async def delete_enrollment(
     subject_class_id: UUID,
     enrollment_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Remove matrícula por erro administrativo (soft delete → deleted=True). Some do histórico. Apenas ADMIN."""
+    """Remove matrícula por erro administrativo (soft delete → deleted=True). Some do histórico. ADMIN ou COORDENADOR."""
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     use_case = DeleteEnrollmentUseCase(enrollment_repo=enrollment_repo)
     await use_case.execute(

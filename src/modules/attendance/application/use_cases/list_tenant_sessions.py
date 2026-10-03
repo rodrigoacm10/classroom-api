@@ -36,9 +36,7 @@ class ListTenantAttendanceSessionsUseCase:
         self.session_repo = session_repo
         self.tenant_repo = tenant_repo
 
-    async def execute(
-        self, data: ListTenantAttendanceSessionsInput
-    ) -> Page[AttendanceSession]:
+    async def execute(self, data: ListTenantAttendanceSessionsInput) -> Page[AttendanceSession]:
         tenant = await self.tenant_repo.find_by_id(data.tenant_id)
         if not tenant or getattr(tenant, "deleted", False):
             raise ResourceNotFoundException("Instituição/tenant não encontrada.")

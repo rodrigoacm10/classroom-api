@@ -91,7 +91,11 @@ class LastSessionSummaryResponse(BaseModel):
 class AttendanceMetricsResponse(BaseModel):
     total_sessions: int = Field(..., description="Total de chamadas nos últimos N dias")
     average_attendance_rate: float = Field(..., description="Frequência média agregada (0.0 a 1.0)")
-    cancelled_sessions: int = Field(..., description="Total de chamadas canceladas nos últimos N dias")
-    last_session: LastSessionSummaryResponse | None = Field(default=None, description="Última chamada realizada")
+    cancelled_sessions: int = Field(
+        ..., description="Total de chamadas canceladas nos últimos N dias"
+    )
+    last_session: LastSessionSummaryResponse | None = Field(
+        default=None, description="Última chamada realizada"
+    )
 
     model_config = {"from_attributes": True}

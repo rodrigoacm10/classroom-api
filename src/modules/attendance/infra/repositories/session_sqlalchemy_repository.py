@@ -264,7 +264,8 @@ class SessionSQLAlchemyRepository:
         if search and search.strip():
             term = f"%{search.strip()}%"
             conditions.append(
-                (SubjectClassModel.name.ilike(term)) | (SubjectClassModel.discipline_name.ilike(term))
+                (SubjectClassModel.name.ilike(term))
+                | (SubjectClassModel.discipline_name.ilike(term))
             )
 
         base_from = select(func.count(AttendanceSessionModel.id)).join(
@@ -277,10 +278,12 @@ class SessionSQLAlchemyRepository:
                 TenantMemberModel,
                 TenantMemberModel.id == SubjectClassModel.professor_id,
             )
-            conditions.extend([
-                TenantMemberModel.user_id == professor_user_id,
-                TenantMemberModel.deleted.is_(False),
-            ])
+            conditions.extend(
+                [
+                    TenantMemberModel.user_id == professor_user_id,
+                    TenantMemberModel.deleted.is_(False),
+                ]
+            )
 
         count_stmt = base_from.where(*conditions)
         total = (await self.session.execute(count_stmt)).scalar_one() or 0
@@ -339,11 +342,15 @@ class SessionSQLAlchemyRepository:
                 TenantMemberModel,
                 TenantMemberModel.id == SubjectClassModel.professor_id,
             )
-            class_conditions.extend([
-                TenantMemberModel.user_id == professor_user_id,
-                TenantMemberModel.deleted.is_(False),
-            ])
-        class_ids = (await self.session.execute(class_query.where(*class_conditions))).scalars().all()
+            class_conditions.extend(
+                [
+                    TenantMemberModel.user_id == professor_user_id,
+                    TenantMemberModel.deleted.is_(False),
+                ]
+            )
+        class_ids = (
+            (await self.session.execute(class_query.where(*class_conditions))).scalars().all()
+        )
 
         if not class_ids:
             return {
@@ -416,8 +423,12 @@ class SessionSQLAlchemyRepository:
             last_session_dict = {
                 "id": last_domain.id,
                 "subject_class_id": last_domain.subject_class_id,
-                "subject_class_name": last_domain.subject_class.name if last_domain.subject_class else "",
-                "discipline_name": last_domain.subject_class.discipline_name if last_domain.subject_class else "",
+                "subject_class_name": last_domain.subject_class.name
+                if last_domain.subject_class
+                else "",
+                "discipline_name": last_domain.subject_class.discipline_name
+                if last_domain.subject_class
+                else "",
                 "room_name": last_domain.room.name if last_domain.room else None,
                 "opened_at": last_domain.opened_at,
                 "day_code": last_domain.day_code,
