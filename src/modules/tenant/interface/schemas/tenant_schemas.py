@@ -48,7 +48,21 @@ class TenantMemberResponse(BaseModel):
     id: UUID
     tenant_id: UUID
     user_id: UUID
+    name: str = ""
+    email: str = ""
     role: UserRole
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StudentResponse(BaseModel):
+    id: UUID  # tenant_member_id (usado para matricular na turma)
+    tenant_member_id: UUID  # alias explícito para evitar qualquer ambiguidade
+    user_id: UUID
+    name: str
+    email: str
+    role: UserRole = UserRole.ALUNO
     created_at: datetime
 
     model_config = {"from_attributes": True}

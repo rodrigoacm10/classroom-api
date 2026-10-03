@@ -24,10 +24,17 @@ class TenantMemberSQLAlchemyRepository:
         if not include_deleted:
             conditions.append(TenantMemberModel.deleted.is_(False))
 
-        stmt = select(TenantMemberModel).where(*conditions)
+        stmt = (
+            select(TenantMemberModel, UserModel.name, UserModel.email)
+            .join(UserModel, UserModel.id == TenantMemberModel.user_id)
+            .where(*conditions)
+        )
         result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-        return TenantMemberMapper.to_domain(model) if model else None
+        row = result.first()
+        if not row:
+            return None
+        model, user_name, user_email = row
+        return TenantMemberMapper.to_domain(model, user_name, user_email)
 
     async def find_by_tenant_and_user(
         self,
@@ -42,10 +49,17 @@ class TenantMemberSQLAlchemyRepository:
         if not include_deleted:
             conditions.append(TenantMemberModel.deleted.is_(False))
 
-        stmt = select(TenantMemberModel).where(*conditions)
+        stmt = (
+            select(TenantMemberModel, UserModel.name, UserModel.email)
+            .join(UserModel, UserModel.id == TenantMemberModel.user_id)
+            .where(*conditions)
+        )
         result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-        return TenantMemberMapper.to_domain(model) if model else None
+        row = result.first()
+        if not row:
+            return None
+        model, user_name, user_email = row
+        return TenantMemberMapper.to_domain(model, user_name, user_email)
 
     async def find_by_user_id(
         self, user_id: UUID, include_deleted: bool = False
@@ -54,10 +68,14 @@ class TenantMemberSQLAlchemyRepository:
         if not include_deleted:
             conditions.append(TenantMemberModel.deleted.is_(False))
 
-        stmt = select(TenantMemberModel).where(*conditions)
+        stmt = (
+            select(TenantMemberModel, UserModel.name, UserModel.email)
+            .join(UserModel, UserModel.id == TenantMemberModel.user_id)
+            .where(*conditions)
+        )
         result = await self.session.execute(stmt)
-        models = result.scalars().all()
-        return [TenantMemberMapper.to_domain(m) for m in models]
+        rows = result.all()
+        return [TenantMemberMapper.to_domain(m, name, email) for m, name, email in rows]
 
     async def find_by_tenant_id_paginated(
         self,
@@ -102,12 +120,14 @@ class TenantMemberSQLAlchemyRepository:
 
         total = int((await self.session.execute(count_stmt)).scalar_one() or 0)
 
-        # Query dos itens paginados
-        items_stmt = select(TenantMemberModel).where(*conditions)
+        # Query dos itens paginados com UserModel.name e UserModel.email
+        items_stmt = (
+            select(TenantMemberModel, UserModel.name, UserModel.email)
+            .join(UserModel, UserModel.id == TenantMemberModel.user_id)
+            .where(*conditions)
+        )
         if search:
-            items_stmt = items_stmt.join(
-                UserModel, UserModel.id == TenantMemberModel.user_id
-            ).where(
+            items_stmt = items_stmt.where(
                 or_(
                     UserModel.name.ilike(f"%{search}%"),
                     UserModel.email.ilike(f"%{search}%"),
@@ -129,8 +149,11 @@ class TenantMemberSQLAlchemyRepository:
         )
 
         result = await self.session.execute(items_stmt)
-        models = result.scalars().all()
-        items = [TenantMemberMapper.to_domain(m) for m in models]
+        rows = result.all()
+        items = [
+            TenantMemberMapper.to_domain(m, user_name, user_email)
+            for m, user_name, user_email in rows
+        ]
 
         return Page.from_params(items, total=total, pagination=pagination)
 
@@ -148,4 +171,4 @@ class TenantMemberSQLAlchemyRepository:
         merged_model = await self.session.merge(model)
         await self.session.flush()
         await self.session.refresh(merged_model)
-        return TenantMemberMapper.to_domain(merged_model)
+        return TenantMemberMapper.to_domain(merged_model, member.name, member.email)

@@ -12,4 +12,6 @@ class TenantMember:
     role: UserRole
     id: UUID = field(default_factory=uuid4)
     deleted: bool = False
+    name: str = ""
+    email: str = ""
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
