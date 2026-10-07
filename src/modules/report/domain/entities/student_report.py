@@ -13,3 +13,4 @@ class StudentReport:
     at_risk: bool  # frequency_rate < limite institucional (padrão 0.75)
     avg_distance_meters: float  # métrica geoespacial recalculada
     confirmations_near_limit: int  # nº de confirmações a ≥90% do raio de tolerância
+    email: str = ""

@@ -319,3 +319,23 @@ class TestAttendanceSessionRouter:
         )
         assert res_open.status_code == 200
         assert res_open.json()["total"] == 0
+
+    async def test_open_session_fails_for_inactive_subject_class(self, client, session):
+        """POST /attendance-sessions -> Retorna 400 ao tentar abrir sessão para turma inativa."""
+        tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
+
+        # Desativa a turma via PATCH geral
+        deact_res = await client.patch(
+            f"/subject-classes/{sc_id}", json={"active": False}, headers=prof_headers
+        )
+        assert deact_res.status_code == 200
+        assert deact_res.json()["active"] is False
+
+        # Tenta abrir sessão de chamada
+        res = await client.post(
+            f"/subject-classes/{sc_id}/attendance-sessions",
+            json={"room_id": room_id, "duration_minutes": 20},
+            headers=prof_headers,
+        )
+        assert res.status_code == 400
+        assert res.json()["detail"] == "Não é possível abrir chamada para uma turma inativa."

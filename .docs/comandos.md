@@ -62,3 +62,9 @@ uv run pre-commit run
 # Rodar em todo o repositório
 uv run pre-commit run --all-files
 ```
+
+## 11. Popular Banco com Dados Iniciais (Seed para Desenvolvimento)
+```bash
+uv run python scripts/seed_dashboard_data.py
+```
+> Cria automaticamente instituições (tenants), usuários professores (`ana.professora@classroom.dev` / `senha123`), 5 alunos, 4 turmas com métricas realistas (100%, 65%, 68% e 90%), histórico semanal de chamadas e uma chamada ativa ao vivo no momento para testes do frontend.

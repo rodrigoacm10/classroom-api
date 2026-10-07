@@ -22,6 +22,7 @@ class StudentAttendanceData:
     tenant_member_id: UUID
     student_name: str
     total_sessions: int
+    email: str = ""
     confirmations: list[RawConfirmation] = field(default_factory=list)
     room_lat: float = 0.0
     room_lon: float = 0.0

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +16,20 @@ if TYPE_CHECKING:
 
 class AttendanceSessionModel(Base):
     __tablename__ = "attendance_sessions"
+    __table_args__ = (
+        Index(
+            "ix_attendance_sessions_open_active",
+            "subject_class_id",
+            text("opened_at DESC"),
+            postgresql_where=text("status = 'open'"),
+        ),
+        Index(
+            "ix_attendance_sessions_class_opened",
+            "subject_class_id",
+            "opened_at",
+            postgresql_where=text("status != 'cancelled'"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     subject_class_id: Mapped[uuid.UUID] = mapped_column(

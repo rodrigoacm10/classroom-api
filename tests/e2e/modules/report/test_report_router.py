@@ -131,8 +131,10 @@ class TestReportRouter:
         assert present["total_absent"] == 0
         assert present["frequency_rate"] == 1.0
         assert present["at_risk"] is False
+        assert "email" in present and "@" in present["email"]
         assert absent["total_present"] == 0
         assert absent["total_absent"] == 1
+        assert "email" in absent and "@" in absent["email"]
         assert absent["frequency_rate"] == 0.0
         assert absent["at_risk"] is True
 

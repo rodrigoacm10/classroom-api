@@ -16,6 +16,7 @@ class UpdateSubjectClassInput:
     name: str | None = None
     discipline_name: str | None = None
     room_id: UUID | None = None
+    active: bool | None = None
 
 
 class UpdateSubjectClassUseCase:
@@ -48,5 +49,10 @@ class UpdateSubjectClassUseCase:
             subject_class.name = data.name
         if data.discipline_name is not None:
             subject_class.discipline_name = data.discipline_name
+        if data.active is not None:
+            if data.active:
+                subject_class.activate()
+            else:
+                subject_class.deactivate()
 
         return await self.subject_class_repo.save(subject_class)

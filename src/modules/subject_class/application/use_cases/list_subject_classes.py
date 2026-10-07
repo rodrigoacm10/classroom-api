@@ -17,6 +17,10 @@ class ListSubjectClassesInput:
     professor_id: UUID | None = None
     room_id: UUID | None = None
     search: str | None = None
+    active: bool | None = None
+    has_active_session: bool | None = None
+    sort_by: str | None = None
+    order: str | None = None
 
 
 class ListSubjectClassesUseCase:
@@ -39,4 +43,9 @@ class ListSubjectClassesUseCase:
             professor_id=data.professor_id,
             room_id=data.room_id,
             search=data.search,
+            active=data.active,
+            has_active_session=data.has_active_session,
+            sort_by=data.sort_by,
+            order=data.order,
         )
+

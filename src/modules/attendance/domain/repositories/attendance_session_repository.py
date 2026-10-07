@@ -32,3 +32,29 @@ class AttendanceSessionRepository(Protocol):
     ) -> Page[AttendanceSession]: ...
 
     async def close_expired_sessions(self) -> list[AttendanceSession]: ...
+
+    async def list_active_sessions_by_tenant(
+        self,
+        tenant_id: UUID,
+        professor_user_id: UUID | None = None,
+    ) -> list[AttendanceSession]: ...
+
+    async def list_by_tenant_paginated(
+        self,
+        tenant_id: UUID,
+        pagination: PaginationParams,
+        professor_user_id: UUID | None = None,
+        subject_class_id: UUID | None = None,
+        status: SessionStatus | None = None,
+        exclude_status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+        search: str | None = None,
+    ) -> Page[AttendanceSession]: ...
+
+    async def get_metrics_by_tenant(
+        self,
+        tenant_id: UUID,
+        professor_user_id: UUID | None = None,
+        days: int = 30,
+    ) -> dict: ...

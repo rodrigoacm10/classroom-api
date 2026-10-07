@@ -44,7 +44,7 @@ class AttendanceRecordModel(Base):
 
     # Geolocalização
     student_location: Mapped[str] = mapped_column(
-        Geography(geometry_type="POINT", srid=4326), nullable=False
+        Geography(geometry_type="POINT", srid=4326, spatial_index=False), nullable=False
     )
     distance_meters: Mapped[float] = mapped_column(Float, nullable=False)
     within_radius: Mapped[bool] = mapped_column(Boolean, nullable=False)

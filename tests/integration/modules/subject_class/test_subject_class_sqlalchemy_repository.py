@@ -24,6 +24,7 @@ from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
+from shared.pagination import PaginationParams
 from tests.factories.tenant_factory import TenantFactory
 from tests.factories.user_factory import UserFactory
 
@@ -408,3 +409,455 @@ class TestSubjectClassSQLAlchemyRepository:
         )
         assert len(search_res.items) == 2
         assert search_res.total == 2
+
+    async def test_list_and_paginated_summaries_filter_by_active(self, session):
+        """Deve filtrar turmas por status active no repositório SQLAlchemy."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
+        room_repo = RoomSQLAlchemyRepository(session)
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala Act", latitude=-8.0, longitude=-34.0)
+        )
+        repo = SubjectClassSQLAlchemyRepository(session)
+
+        sc_act = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Ativa",
+                discipline_name="Ativa D",
+                active=True,
+            )
+        )
+        sc_inact = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Inativa",
+                discipline_name="Inativa D",
+                active=False,
+            )
+        )
+
+        # list_by_tenant filter
+        actives = await repo.list_by_tenant(tenant.id, active=True)
+        assert len(actives) == 1
+        assert actives[0].id == sc_act.id
+
+        inactives = await repo.list_by_tenant(tenant.id, active=False)
+        assert len(inactives) == 1
+        assert inactives[0].id == sc_inact.id
+
+        # find_summaries_by_tenant_paginated filter
+        page_act = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            active=True,
+        )
+        assert page_act.total == 1
+        assert page_act.items[0].id == sc_act.id
+        assert page_act.items[0].active is True
+
+        page_inact = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            active=False,
+        )
+        assert page_inact.total == 1
+        assert page_inact.items[0].id == sc_inact.id
+        assert page_inact.items[0].active is False
+
+    async def test_summaries_include_room_info_and_active_session_status(self, session):
+        """Deve retornar informações completas da sala e indicar a presença de chamada ativa na turma."""
+        tenant = await TenantFactory.create(session)
+        user = await UserFactory.create(session, name="Prof Sessao")
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
+        room_repo = RoomSQLAlchemyRepository(session)
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Lab 305", latitude=-8.0, longitude=-34.0)
+        )
+        repo = SubjectClassSQLAlchemyRepository(session)
+        session_repo = SessionSQLAlchemyRepository(session)
+
+        # Turma 1: com sala e com sessão ativa (aberta e não expirada)
+        sc_active_session = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Sessao Ativa",
+                discipline_name="Sistemas",
+            )
+        )
+        open_session = await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc_active_session.id,
+                room_id=room.id,
+                day_code="ACT123",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
+                status=SessionStatus.OPEN,
+            )
+        )
+
+        # Turma 2: com sala e com sessão encerrada/fechada
+        sc_closed_session = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Sessao Fechada",
+                discipline_name="Redes",
+            )
+        )
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc_closed_session.id,
+                room_id=room.id,
+                day_code="CLS456",
+                expires_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+                status=SessionStatus.CLOSED,
+            )
+        )
+
+        # Turma 3: sem sala e sem sessão
+        sc_no_room = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=None,
+                name="Turma Sem Sala",
+                discipline_name="Tópicos",
+            )
+        )
+
+        # Consulta paginada
+        page = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+        )
+        summaries_by_id = {s.id: s for s in page.items}
+
+        s1 = summaries_by_id[sc_active_session.id]
+        assert s1.room_id == room.id
+        assert s1.room_name == "Lab 305"
+        assert s1.has_active_session is True
+        assert s1.active_session_id == open_session.id
+
+        s2 = summaries_by_id[sc_closed_session.id]
+        assert s2.room_id == room.id
+        assert s2.room_name == "Lab 305"
+        assert s2.has_active_session is False
+        assert s2.active_session_id is None
+
+        s3 = summaries_by_id[sc_no_room.id]
+        assert s3.room_id is None
+        assert s3.room_name is None
+        assert s3.has_active_session is False
+        assert s3.active_session_id is None
+
+        # Consulta não paginada (list_summaries_by_tenant)
+        all_summaries = await repo.list_summaries_by_tenant(tenant.id)
+        all_by_id = {s.id: s for s in all_summaries}
+        assert all_by_id[sc_active_session.id].has_active_session is True
+        assert all_by_id[sc_active_session.id].active_session_id == open_session.id
+        assert all_by_id[sc_active_session.id].room_name == "Lab 305"
+        assert all_by_id[sc_closed_session.id].has_active_session is False
+        assert all_by_id[sc_no_room.id].room_name is None
+
+    async def test_get_metrics_by_tenant(self, session):
+        """Deve calcular métricas consolidadas de turmas corretamente no banco de dados."""
+        user = await UserFactory.create(session, name="Prof Carlos")
+        tenant = await TenantFactory.create(session)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
+        room_repo = RoomSQLAlchemyRepository(session)
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala M", latitude=-8.0, longitude=-34.0)
+        )
+        repo = SubjectClassSQLAlchemyRepository(session)
+        session_repo = SessionSQLAlchemyRepository(session)
+        enrollment_repo = EnrollmentSQLAlchemyRepository(session)
+        record_repo = RecordSQLAlchemyRepository(session)
+
+        # Turma 1: ativa, 1 aluno, 1 sessão com 1 presença (100% de taxa)
+        sc1 = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Metricas 1",
+                discipline_name="Disc 1",
+                active=True,
+            )
+        )
+        student_user1 = await UserFactory.create(session)
+        student_member1 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student_user1.id, role=UserRole.ALUNO
+        )
+        await enrollment_repo.save(
+            Enrollment(
+                tenant_member_id=student_member1.id,
+                subject_class_id=sc1.id,
+            )
+        )
+        s1 = await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc1.id,
+                room_id=room.id,
+                day_code="MET1",
+                expires_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+                status=SessionStatus.CLOSED,
+            )
+        )
+        await record_repo.save(
+            AttendanceRecord(
+                session_id=s1.id,
+                tenant_member_id=student_member1.id,
+                latitude=-8.0,
+                longitude=-34.0,
+                distance_meters=5.0,
+                within_radius=True,
+                record_status=RecordStatus.REGULAR,
+            )
+        )
+
+        # Turma 2: ativa, 1 aluno, 2 sessões e 0 presenças (0% de taxa -> em risco < 75%)
+        # além disso, tem uma sessão aberta no momento (live)
+        sc2 = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Metricas 2",
+                discipline_name="Disc 2",
+                active=True,
+            )
+        )
+        student_user2 = await UserFactory.create(session)
+        student_member2 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student_user2.id, role=UserRole.ALUNO
+        )
+        await enrollment_repo.save(
+            Enrollment(
+                tenant_member_id=student_member2.id,
+                subject_class_id=sc2.id,
+            )
+        )
+        # Sessão passada sem presença
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc2.id,
+                room_id=room.id,
+                day_code="MET2A",
+                expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+                status=SessionStatus.CLOSED,
+            )
+        )
+        # Sessão ativa aberta agora
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc2.id,
+                room_id=room.id,
+                day_code="MET2B",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
+                status=SessionStatus.OPEN,
+            )
+        )
+
+        # Turma 3: inativa
+        sc3 = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Metricas 3",
+                discipline_name="Disc 3",
+                active=False,
+            )
+        )
+
+        metrics = await repo.get_metrics_by_tenant(tenant.id)
+        assert metrics.total_classes == 3
+        assert metrics.active_classes == 2
+        assert metrics.inactive_classes == 1
+        assert metrics.total_students == 2
+        # sc1 = 1.0 (1/1), sc2 = 0.0 (0/2) -> média das 2 ativas = 0.5
+        assert metrics.average_attendance_rate == 0.5
+        # sc2 tem taxa 0.0 < 0.75 -> 1 turma em risco
+        assert metrics.at_risk_classes_count == 1
+        # sc2 tem sessão aberta agora -> 1 turma ao vivo
+        assert metrics.live_classes_count == 1
+
+    async def test_find_summaries_search_by_professor_and_room(self, session):
+        """Busca em find_summaries_by_tenant_paginated deve encontrar por nome de professor e sala."""
+        prof1 = await UserFactory.create(session, name="Professora Beatriz")
+        prof2 = await UserFactory.create(session, name="Professor Marcos")
+        tenant = await TenantFactory.create(session)
+        member1 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=prof1.id, role=UserRole.PROFESSOR
+        )
+        member2 = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=prof2.id, role=UserRole.PROFESSOR
+        )
+        room_repo = RoomSQLAlchemyRepository(session)
+        room_auditorio = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Auditório Principal", latitude=-8.0, longitude=-34.0)
+        )
+        room_lab = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Laboratório 202", latitude=-8.0, longitude=-34.0)
+        )
+        repo = SubjectClassSQLAlchemyRepository(session)
+
+        sc1 = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member1.id,
+                room_id=room_lab.id,
+                name="Turma Bio",
+                discipline_name="Biologia Geral",
+            )
+        )
+        sc2 = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member2.id,
+                room_id=room_auditorio.id,
+                name="Turma Hist",
+                discipline_name="História Moderna",
+            )
+        )
+
+        # 1. Busca por nome do professor: "Beatriz"
+        page_prof = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            search="Beatriz",
+        )
+        assert page_prof.total == 1
+        assert page_prof.items[0].id == sc1.id
+
+        # 2. Busca por nome da sala: "Auditório"
+        page_room = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            search="Auditório",
+        )
+        assert page_room.total == 1
+        assert page_room.items[0].id == sc2.id
+
+    async def test_find_summaries_filter_has_active_session(self, session):
+        """Filtro has_active_session deve retornar apenas turmas com ou sem sessão ativa."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
+        room_repo = RoomSQLAlchemyRepository(session)
+        room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Sala Live", latitude=-8.0, longitude=-34.0)
+        )
+        repo = SubjectClassSQLAlchemyRepository(session)
+        session_repo = SessionSQLAlchemyRepository(session)
+
+        sc_live = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Com Sessao Aberta",
+                discipline_name="Ao Vivo",
+            )
+        )
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc_live.id,
+                room_id=room.id,
+                day_code="LIVE99",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=25),
+                status=SessionStatus.OPEN,
+            )
+        )
+
+        sc_quiet = await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=room.id,
+                name="Turma Sem Chamada",
+                discipline_name="Offline",
+            )
+        )
+
+        # Filtro has_active_session=True
+        page_live = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            has_active_session=True,
+        )
+        assert page_live.total == 1
+        assert page_live.items[0].id == sc_live.id
+
+        # Filtro has_active_session=False
+        page_quiet = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            has_active_session=False,
+        )
+        assert page_quiet.total == 1
+        assert page_quiet.items[0].id == sc_quiet.id
+
+    async def test_find_summaries_sorting(self, session):
+        """Deve suportar ordenação por nome e outros campos em find_summaries_by_tenant_paginated."""
+        user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.PROFESSOR
+        )
+        repo = SubjectClassSQLAlchemyRepository(session)
+
+        await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=None,
+                name="Alfa",
+                discipline_name="D1",
+            )
+        )
+        await repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=member.id,
+                room_id=None,
+                name="Zeta",
+                discipline_name="D2",
+            )
+        )
+
+        # Sort por nome asc
+        page_asc = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            sort_by="name",
+            order="asc",
+        )
+        assert page_asc.items[0].name == "Alfa"
+        assert page_asc.items[1].name == "Zeta"
+
+        # Sort por nome desc (ou name_desc)
+        page_desc = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            sort_by="name_desc",
+        )
+        assert page_desc.items[0].name == "Zeta"
+        assert page_desc.items[1].name == "Alfa"
+

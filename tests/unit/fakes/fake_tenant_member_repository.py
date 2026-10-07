@@ -80,8 +80,8 @@ class FakeTenantMemberRepository:
                 continue
             if search is not None:
                 search_lower = search.lower()
-                user_name = getattr(m, "_user_name", "").lower()
-                user_email = getattr(m, "_user_email", "").lower()
+                user_name = (m.name or getattr(m, "_user_name", "")).lower()
+                user_email = (m.email or getattr(m, "_user_email", "")).lower()
                 if search_lower not in user_name and search_lower not in user_email:
                     continue
             results.append(m)
