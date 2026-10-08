@@ -5,6 +5,10 @@ import pytest
 from modules.room.application.use_cases.create_room import CreateRoomInput, CreateRoomUseCase
 from modules.room.application.use_cases.delete_room import DeleteRoomInput, DeleteRoomUseCase
 from modules.room.application.use_cases.get_room import GetRoomInput, GetRoomUseCase
+from modules.room.application.use_cases.get_room_metrics import (
+    GetRoomMetricsInput,
+    GetRoomMetricsUseCase,
+)
 from modules.room.application.use_cases.list_rooms import ListRoomsInput, ListRoomsUseCase
 from modules.room.application.use_cases.update_room import UpdateRoomInput, UpdateRoomUseCase
 from modules.room.domain.entities.room import Room
@@ -173,11 +177,33 @@ class TestListRoomsUseCase:
         use_case = ListRoomsUseCase(room_repo=room_repo, tenant_repo=tenant_repo)
         result = await use_case.execute(ListRoomsInput(tenant_id=tenant1.id))
 
-        assert len(result) == 2
-        names = [r.name for r in result]
+        assert result.total == 2
+        assert len(result.items) == 2
+        names = [r.name for r in result.items]
         assert "Sala A" in names
         assert "Sala B" in names
         assert "Sala C" not in names
+
+    async def test_list_rooms_with_search(self):
+        """Deve filtrar salas por busca textual no nome."""
+        room_repo = FakeRoomRepository()
+        tenant_repo = FakeTenantRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        room1 = Room(
+            tenant_id=tenant.id, name="Laboratório de Informática", latitude=0.0, longitude=0.0
+        )
+        room2 = Room(tenant_id=tenant.id, name="Auditório Principal", latitude=0.0, longitude=0.0)
+        await room_repo.save(room1)
+        await room_repo.save(room2)
+
+        use_case = ListRoomsUseCase(room_repo=room_repo, tenant_repo=tenant_repo)
+        result = await use_case.execute(ListRoomsInput(tenant_id=tenant.id, search="lab"))
+
+        assert result.total == 1
+        assert result.items[0].name == "Laboratório de Informática"
 
     async def test_list_rooms_excludes_deleted_rooms(self):
         """Deve excluir salas marcadas com deleted=True da listagem."""
@@ -199,8 +225,9 @@ class TestListRoomsUseCase:
         use_case = ListRoomsUseCase(room_repo=room_repo, tenant_repo=tenant_repo)
         result = await use_case.execute(ListRoomsInput(tenant_id=tenant.id))
 
-        assert len(result) == 1
-        assert result[0].name == "Sala Ativa"
+        assert result.total == 1
+        assert len(result.items) == 1
+        assert result.items[0].name == "Sala Ativa"
 
     async def test_list_rooms_raises_when_tenant_not_found(self):
         """Deve lançar ResourceNotFoundException quando a tenant não existe."""
@@ -329,3 +356,49 @@ class TestDeleteRoomUseCase:
 
         with pytest.raises(ResourceNotFoundException):
             await use_case.execute(DeleteRoomInput(room_id=uuid4(), tenant_id=uuid4()))
+
+
+@pytest.mark.asyncio
+class TestGetRoomMetricsUseCase:
+    async def test_get_room_metrics_success(self):
+        """Deve calcular métricas consolidadas das salas da tenant."""
+        room_repo = FakeRoomRepository()
+        tenant_repo = FakeTenantRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        # 1 sala precisa (<= 30m), 1 sala ampla (> 75m), 1 sala intermediária
+        r1 = Room(
+            tenant_id=tenant.id,
+            name="Sala P",
+            latitude=0.0,
+            longitude=0.0,
+            tolerance_radius_meters=20,
+        )
+        r2 = Room(
+            tenant_id=tenant.id,
+            name="Sala M",
+            latitude=0.0,
+            longitude=0.0,
+            tolerance_radius_meters=50,
+        )
+        r3 = Room(
+            tenant_id=tenant.id,
+            name="Sala G",
+            latitude=0.0,
+            longitude=0.0,
+            tolerance_radius_meters=100,
+        )
+        await room_repo.save(r1)
+        await room_repo.save(r2)
+        await room_repo.save(r3)
+
+        use_case = GetRoomMetricsUseCase(room_repo=room_repo, tenant_repo=tenant_repo)
+        metrics = await use_case.execute(GetRoomMetricsInput(tenant_id=tenant.id))
+
+        assert metrics.total_rooms == 3
+        # (20 + 50 + 100) / 3 = 170 / 3 = 57
+        assert metrics.avg_radius == 57
+        assert metrics.precisas_count == 1
+        assert metrics.amplas_count == 1
