@@ -3,7 +3,11 @@ from uuid import UUID
 
 from infra.storage.evidence_photo_service import upload_evidence_photo
 from infra.storage.storage_service import StorageService
+from modules.attendance.domain.entities.evidence_photo_upload import EvidencePhotoUpload
 from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
+from modules.attendance.domain.repositories.evidence_photo_upload_repository import (
+    EvidencePhotoUploadRepository,
+)
 from shared.enums.session_status import SessionStatus
 from shared.exceptions import BusinessRuleException, ResourceNotFoundException
 
@@ -27,9 +31,11 @@ class UploadEvidencePhotoUseCase:
     def __init__(
         self,
         session_repo: AttendanceSessionRepository,
+        upload_repo: EvidencePhotoUploadRepository,
         storage_service: StorageService,
     ) -> None:
         self.session_repo = session_repo
+        self.upload_repo = upload_repo
         self.storage_service = storage_service
 
     async def execute(self, data: UploadEvidencePhotoInput) -> UploadEvidencePhotoOutput:
@@ -40,11 +46,19 @@ class UploadEvidencePhotoUseCase:
         if session.status != SessionStatus.OPEN:
             raise BusinessRuleException("A chamada não está aberta para receber evidências.")
 
-        url = await upload_evidence_photo(
+        uploaded = await upload_evidence_photo(
             storage_service=self.storage_service,
             session_id=data.session_id,
             file_bytes=data.file_bytes,
             content_type=data.content_type,
         )
 
-        return UploadEvidencePhotoOutput(url=url)
+        await self.upload_repo.save(
+            EvidencePhotoUpload(
+                session_id=data.session_id,
+                file_key=uploaded.key,
+                url=uploaded.url,
+            )
+        )
+
+        return UploadEvidencePhotoOutput(url=uploaded.url)

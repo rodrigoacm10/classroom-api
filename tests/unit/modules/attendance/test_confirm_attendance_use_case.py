@@ -8,6 +8,7 @@ from modules.attendance.application.use_cases.confirm_attendance import (
     ConfirmAttendanceUseCase,
 )
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
+from modules.attendance.domain.entities.evidence_photo_upload import EvidencePhotoUpload
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.room.domain.entities.room import Room
 from modules.subject_class.domain.entities.subject_class import SubjectClass
@@ -16,6 +17,7 @@ from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
+from shared.enums.upload_status import UploadStatus
 from shared.exceptions import (
     BusinessRuleException,
     ForbiddenException,
@@ -29,6 +31,7 @@ from tests.unit.fakes.fake_room_repository import FakeRoomRepository
 from tests.unit.fakes.fake_subject_class_repository import FakeSubjectClassRepository
 from tests.unit.fakes.fake_tenant_member_repository import FakeTenantMemberRepository
 from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
+from tests.unit.fakes.fake_evidence_photo_upload_repository import FakeEvidencePhotoUploadRepository
 
 
 @pytest.mark.asyncio
@@ -41,6 +44,7 @@ class TestConfirmAttendanceUseCase:
         member_repo = FakeTenantMemberRepository()
         enrollment_repo = FakeEnrollmentRepository()
         room_repo = FakeRoomRepository()
+        upload_repo = FakeEvidencePhotoUploadRepository()
 
         tenant = TenantFactory.make()
         await tenant_repo.save(tenant)
@@ -93,6 +97,7 @@ class TestConfirmAttendanceUseCase:
             member_repo=member_repo,
             enrollment_repo=enrollment_repo,
             room_repo=room_repo,
+            upload_repo=upload_repo,
         )
 
         return (
@@ -637,7 +642,7 @@ class TestConfirmAttendanceUseCase:
             )
 
     async def test_confirm_attendance_with_evidence_photo_url(self):
-        """Quando evidence_photo_url é fornecida, deve ser persistida no record."""
+        """URL de um upload pending é aceita, persistida e o upload vira confirmed."""
         (
             use_case,
             tenant,
@@ -649,6 +654,12 @@ class TestConfirmAttendanceUseCase:
         ) = await self._setup_fixtures()
 
         photo_url = "https://fake-r2.dev/evidence/session-id/uuid.jpg"
+        upload = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key="evidence/session-id/uuid.jpg",
+            url=photo_url,
+        )
+        await use_case.upload_repo.save(upload)
 
         record = await use_case.execute(
             ConfirmAttendanceInput(
@@ -665,6 +676,11 @@ class TestConfirmAttendanceUseCase:
         )
 
         assert record.evidence_photo_url == photo_url
+
+        saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved.status == UploadStatus.CONFIRMED
+        assert saved.attendance_record_id == record.id
+        assert saved.confirmed_at is not None
 
     async def test_confirm_attendance_without_evidence_photo_url(self):
         """Quando evidence_photo_url não é fornecida, o campo deve permanecer None."""
@@ -692,3 +708,105 @@ class TestConfirmAttendanceUseCase:
         )
 
         assert record.evidence_photo_url is None
+    
+    async def test_confirm_attendance_rejects_unknown_evidence_photo_url(self):
+        """URL que não veio do endpoint de upload deve ser rejeitada."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        with pytest.raises(BusinessRuleException, match="Foto de evidência inválida"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                    evidence_photo_url="https://site-qualquer.com/foto.jpg",
+                )
+            )
+
+        # A validação acontece antes de criar a presença
+        assert await use_case.record_repo.find_by_session_and_member(session.id, student_member.id) is None
+
+    async def test_confirm_attendance_rejects_evidence_photo_from_another_session(self):
+        """Foto enviada para outra sessão não pode ser usada nesta confirmação."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        photo_url = "https://fake-r2.dev/evidence/other-session/uuid.jpg"
+        await use_case.upload_repo.save(
+            EvidencePhotoUpload(
+                session_id=uuid4(),  # outra sessão
+                file_key="evidence/other-session/uuid.jpg",
+                url=photo_url,
+            )
+        )
+
+        with pytest.raises(BusinessRuleException, match="Foto de evidência inválida"):
+          await use_case.execute(
+              ConfirmAttendanceInput(
+                  tenant_id=tenant.id,
+                  subject_class_id=subject_class.id,
+                  session_id=session.id,
+                  user_id=user_id,
+                  day_code="X3KP7Q",
+                  latitude=-8.047610,
+                  longitude=-34.877010,
+                  user_agent="okhttp/4.9.0",
+                  evidence_photo_url=photo_url,
+              )
+          )
+    
+    async def test_confirm_attendance_rejects_already_used_evidence_photo(self):
+        """Foto já confirmada em outra presença não pode ser reaproveitada."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        photo_url = "https://fake-r2.dev/evidence/session-id/used.jpg"
+        used = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key="evidence/session-id/used.jpg",
+            url=photo_url,
+        )
+        used.confirm(uuid4())
+        await use_case.upload_repo.save(used)
+
+        with pytest.raises(BusinessRuleException, match="expirada ou já utilizada"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                    evidence_photo_url=photo_url,
+                )
+            )

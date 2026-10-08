@@ -9,9 +9,11 @@ from modules.attendance.application.use_cases.upload_evidence_photo import (
 )
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from shared.enums.session_status import SessionStatus
+from shared.enums.upload_status import UploadStatus
 from shared.exceptions import BusinessRuleException, ResourceNotFoundException
 from tests.unit.fakes.fake_attendance_session_repository import FakeAttendanceSessionRepository
 from tests.unit.fakes.fake_storage_service import FakeStorageService
+from tests.unit.fakes.fake_evidence_photo_upload_repository import FakeEvidencePhotoUploadRepository
 
 
 @pytest.mark.asyncio
@@ -19,6 +21,7 @@ class TestUploadEvidencePhotoUseCase:
 
     async def _setup_fixtures(self, status: SessionStatus = SessionStatus.OPEN):
         session_repo = FakeAttendanceSessionRepository()
+        upload_repo = FakeEvidencePhotoUploadRepository()
         storage_service = FakeStorageService()
 
         subject_class_id = uuid4()
@@ -32,13 +35,14 @@ class TestUploadEvidencePhotoUseCase:
 
         use_case = UploadEvidencePhotoUseCase(
             session_repo=session_repo,
+            upload_repo=upload_repo,
             storage_service=storage_service,
         )
 
         return use_case, subject_class_id, session, storage_service
 
     async def test_upload_evidence_photo_success(self):
-        """Deve fazer upload da foto e retornar a URL quando a sessão existe e está aberta."""
+        """Deve fazer upload, retornar a URL e registrar o upload como pending."""
         use_case, subject_class_id, session, storage_service = await self._setup_fixtures()
 
         result = await use_case.execute(
@@ -53,6 +57,13 @@ class TestUploadEvidencePhotoUseCase:
 
         assert result.url == storage_service.return_url
         assert len(storage_service.uploaded_files) == 1
+
+        saved = list(use_case.upload_repo.uploads.values())
+        assert len(saved) == 1
+        assert saved[0].status == UploadStatus.PENDING
+        assert saved[0].url == result.url
+        assert saved[0].session_id == session.id
+        assert saved[0].file_key.startswith(f"evidence/{session.id}/")
 
     async def test_upload_evidence_photo_raises_when_session_not_found(self):
         """Deve lançar ResourceNotFoundException se a sessão não existir para a turma informada."""

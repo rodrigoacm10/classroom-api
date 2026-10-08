@@ -68,6 +68,9 @@ from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
 from modules.attendance.infra.repositories.session_sqlalchemy_repository import (
     SessionSQLAlchemyRepository,
 )
+from modules.attendance.infra.repositories.evidence_photo_upload_sqlalchemy_repository import (
+    EvidencePhotoUploadSQLAlchemyRepository,
+)
 from modules.attendance.interface.schemas.record_schemas import (
     AttendanceRecordResponse,
     ConfirmAttendanceRequest,
@@ -321,10 +324,12 @@ async def upload_session_evidence_photo(
     file_bytes = await photo.read()
 
     session_repo = SessionSQLAlchemyRepository(session=db)
+    upload_repo = EvidencePhotoUploadSQLAlchemyRepository(session=db)
     storage_service = R2StorageService()
 
     use_case = UploadEvidencePhotoUseCase(
         session_repo=session_repo,
+        upload_repo=upload_repo,
         storage_service=storage_service,
     )
 
@@ -362,6 +367,7 @@ async def confirm_attendance(
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     room_repo = RoomSQLAlchemyRepository(session=db)
+    upload_repo = EvidencePhotoUploadSQLAlchemyRepository(session=db)
 
     use_case = ConfirmAttendanceUseCase(
         session_repo=session_repo,
@@ -371,6 +377,7 @@ async def confirm_attendance(
         member_repo=member_repo,
         enrollment_repo=enrollment_repo,
         room_repo=room_repo,
+        upload_repo=upload_repo,
     )
 
     ip_address = request.client.host if request.client else None
