@@ -696,8 +696,8 @@ class TestSubjectClassSQLAlchemyRepository:
         # sc2 tem sessão aberta agora -> 1 turma ao vivo
         assert metrics.live_classes_count == 1
 
-    async def test_find_summaries_search_by_professor_and_room(self, session):
-        """Busca em find_summaries_by_tenant_paginated deve encontrar por nome de professor e sala."""
+    async def test_find_summaries_search_by_name_and_discipline(self, session):
+        """Busca em find_summaries_by_tenant_paginated deve encontrar por nome de turma e disciplina apenas."""
         prof1 = await UserFactory.create(session, name="Professora Beatriz")
         prof2 = await UserFactory.create(session, name="Professor Marcos")
         tenant = await TenantFactory.create(session)
@@ -735,23 +735,38 @@ class TestSubjectClassSQLAlchemyRepository:
             )
         )
 
-        # 1. Busca por nome do professor: "Beatriz"
+        # 1. Busca por nome da turma: "Bio"
+        page_turma = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            search="Bio",
+        )
+        assert page_turma.total == 1
+        assert page_turma.items[0].id == sc1.id
+
+        # 2. Busca por disciplina: "História"
+        page_disc = await repo.find_summaries_by_tenant_paginated(
+            tenant_id=tenant.id,
+            pagination=PaginationParams(page=1, page_size=10),
+            search="História",
+        )
+        assert page_disc.total == 1
+        assert page_disc.items[0].id == sc2.id
+
+        # 3. Busca por professor ou sala não deve retornar turmas
         page_prof = await repo.find_summaries_by_tenant_paginated(
             tenant_id=tenant.id,
             pagination=PaginationParams(page=1, page_size=10),
             search="Beatriz",
         )
-        assert page_prof.total == 1
-        assert page_prof.items[0].id == sc1.id
+        assert page_prof.total == 0
 
-        # 2. Busca por nome da sala: "Auditório"
         page_room = await repo.find_summaries_by_tenant_paginated(
             tenant_id=tenant.id,
             pagination=PaginationParams(page=1, page_size=10),
             search="Auditório",
         )
-        assert page_room.total == 1
-        assert page_room.items[0].id == sc2.id
+        assert page_room.total == 0
 
     async def test_find_summaries_filter_has_active_session(self, session):
         """Filtro has_active_session deve retornar apenas turmas com ou sem sessão ativa."""
@@ -860,4 +875,3 @@ class TestSubjectClassSQLAlchemyRepository:
         )
         assert page_desc.items[0].name == "Zeta"
         assert page_desc.items[1].name == "Alfa"
-

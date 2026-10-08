@@ -128,17 +128,10 @@ class FakeSubjectClassRepository:
         if search:
             s = search.lower()
             summaries = [
-                sm
-                for sm in summaries
-                if s in sm.name.lower()
-                or s in sm.discipline_name.lower()
-                or (sm.professor_name and s in sm.professor_name.lower())
-                or (sm.room_name and s in sm.room_name.lower())
+                sm for sm in summaries if s in sm.name.lower() or s in sm.discipline_name.lower()
             ]
         if has_active_session is not None:
-            summaries = [
-                sm for sm in summaries if sm.has_active_session == has_active_session
-            ]
+            summaries = [sm for sm in summaries if sm.has_active_session == has_active_session]
 
         parsed_sort = (sort_by or "").lower().strip()
         parsed_order = (order or "asc").lower().strip()
@@ -156,8 +149,6 @@ class FakeSubjectClassRepository:
             summaries.sort(key=lambda sm: sm.discipline_name.lower(), reverse=reverse)
         elif parsed_sort in ("students", "student_count"):
             summaries.sort(key=lambda sm: sm.student_count, reverse=reverse)
-        elif parsed_sort in ("rate", "attendance_rate"):
-            summaries.sort(key=lambda sm: sm.attendance_rate, reverse=reverse)
         elif parsed_sort == "created_at":
             summaries.sort(key=lambda sm: sm.created_at, reverse=reverse)
         else:
@@ -202,4 +193,3 @@ class FakeSubjectClassRepository:
     async def delete(self, subject_class: SubjectClass) -> None:
         subject_class.deleted = True
         await self.save(subject_class)
-

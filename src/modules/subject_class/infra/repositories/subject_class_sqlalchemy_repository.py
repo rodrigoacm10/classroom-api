@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import Float, and_, case, func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.models.attendance_record import AttendanceRecordModel
@@ -19,7 +19,6 @@ from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
 from shared.pagination import Page, PaginationParams
-
 
 
 class SubjectClassSQLAlchemyRepository:
@@ -87,9 +86,7 @@ class SubjectClassSQLAlchemyRepository:
             SubjectClassModel.id == subject_class_id,
             SubjectClassModel.tenant_id == tenant_id,
             AttendanceSessionModel.status != SessionStatus.CANCELLED,
-            AttendanceRecordModel.record_status.in_(
-                (RecordStatus.REGULAR, RecordStatus.APPROVED)
-            ),
+            AttendanceRecordModel.record_status.in_((RecordStatus.REGULAR, RecordStatus.APPROVED)),
         ]
 
         session_count = (
@@ -279,9 +276,7 @@ class SubjectClassSQLAlchemyRepository:
         present_conditions = [
             SubjectClassModel.tenant_id == tenant_id,
             AttendanceSessionModel.status != SessionStatus.CANCELLED,
-            AttendanceRecordModel.record_status.in_(
-                (RecordStatus.REGULAR, RecordStatus.APPROVED)
-            ),
+            AttendanceRecordModel.record_status.in_((RecordStatus.REGULAR, RecordStatus.APPROVED)),
         ]
         if days is not None:
             since = datetime.now(timezone.utc) - timedelta(days=days)
@@ -484,8 +479,6 @@ class SubjectClassSQLAlchemyRepository:
                 or_(
                     SubjectClassModel.name.ilike(f"%{search}%"),
                     SubjectClassModel.discipline_name.ilike(f"%{search}%"),
-                    UserModel.name.ilike(f"%{search}%"),
-                    RoomModel.name.ilike(f"%{search}%"),
                 )
             )
 
@@ -497,12 +490,6 @@ class SubjectClassSQLAlchemyRepository:
         count_stmt = (
             select(func.count(SubjectClassModel.id.distinct()))
             .select_from(SubjectClassModel)
-            .outerjoin(
-                TenantMemberModel,
-                TenantMemberModel.id == SubjectClassModel.professor_id,
-            )
-            .outerjoin(UserModel, UserModel.id == TenantMemberModel.user_id)
-            .outerjoin(RoomModel, RoomModel.id == SubjectClassModel.room_id)
             .outerjoin(
                 active_session_subquery,
                 active_session_subquery.c.subject_class_id == SubjectClassModel.id,
@@ -600,22 +587,6 @@ class SubjectClassSQLAlchemyRepository:
                 func.coalesce(enrollment_count.c.student_count, 0).desc()
                 if is_desc
                 else func.coalesce(enrollment_count.c.student_count, 0).asc(),
-                SubjectClassModel.name.asc(),
-            ]
-        elif parsed_sort in ("rate", "attendance_rate"):
-            expected_count = func.coalesce(
-                enrollment_count.c.student_count, 0
-            ) * func.coalesce(session_count.c.session_count, 0)
-            attendance_rate_expr = case(
-                (
-                    expected_count > 0,
-                    func.cast(func.coalesce(present_count.c.present_count, 0), Float)
-                    / expected_count,
-                ),
-                else_=0.0,
-            )
-            order_exprs = [
-                attendance_rate_expr.desc() if is_desc else attendance_rate_expr.asc(),
                 SubjectClassModel.name.asc(),
             ]
         elif parsed_sort in ("created_at",):
@@ -735,7 +706,6 @@ class SubjectClassSQLAlchemyRepository:
             at_risk_classes_count=at_risk_count,
             live_classes_count=live_classes_count,
         )
-
 
     async def delete(self, subject_class: SubjectClass) -> None:
         subject_class.deleted = True

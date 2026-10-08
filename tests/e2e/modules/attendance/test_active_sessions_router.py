@@ -328,7 +328,9 @@ class TestActiveAttendanceSessionsRouter:
         )
 
         # Consulta métricas
-        metrics_res = await client.get("/attendance-sessions/metrics?days=30", headers=prof1_headers)
+        metrics_res = await client.get(
+            "/attendance-sessions/metrics?days=30", headers=prof1_headers
+        )
         assert metrics_res.status_code == 200
         metrics = metrics_res.json()
         assert metrics["total_sessions"] == 1
@@ -456,11 +458,16 @@ class TestActiveAttendanceSessionsRouter:
         )
 
         # Busca por "Algoritmos" via Admin
-        res_search = await client.get("/attendance-sessions?search=Algoritmos", headers=admin_headers)
+        res_search = await client.get(
+            "/attendance-sessions?search=Algoritmos", headers=admin_headers
+        )
         assert res_search.status_code == 200
         data_search = res_search.json()
         assert data_search["total"] == 1
-        assert data_search["items"][0]["subject_class"]["discipline_name"] == "Algoritmos e Estruturas de Dados"
+        assert (
+            data_search["items"][0]["subject_class"]["discipline_name"]
+            == "Algoritmos e Estruturas de Dados"
+        )
 
         # Filtro por status closed
         res_closed = await client.get("/attendance-sessions?status=closed", headers=admin_headers)
@@ -477,9 +484,65 @@ class TestActiveAttendanceSessionsRouter:
         assert data_open["items"][0]["status"] == "open"
 
         # Excluir status open (Apenas realizadas / finalizadas)
-        res_exclude = await client.get("/attendance-sessions?exclude_status=open", headers=admin_headers)
+        res_exclude = await client.get(
+            "/attendance-sessions?exclude_status=open", headers=admin_headers
+        )
         assert res_exclude.status_code == 200
         data_exclude = res_exclude.json()
         assert data_exclude["total"] == 1
         assert data_exclude["items"][0]["status"] == "closed"
 
+    async def test_list_attendance_sessions_sorting(self, client, session):
+        """GET /attendance-sessions suporta ordenação por recent, oldest e presence."""
+        (
+            tenant,
+            admin_headers,
+            prof1_headers,
+            prof2_headers,
+            student_headers,
+            sc1_id,
+            sc2_id,
+            room1_id,
+            _,
+        ) = await self._setup_fixtures(session, client)
+
+        # 1. Cria chamada 1 (com presença)
+        res1 = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"room_id": room1_id, "duration_minutes": 15},
+            headers=prof1_headers,
+        )
+        s1 = res1.json()
+        confirm_res = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{s1['id']}/confirm",
+            json={
+                "day_code": s1["day_code"],
+                "latitude": -8.0476,
+                "longitude": -34.8770,
+                "gps_accuracy_meters": 5.0,
+            },
+            headers=student_headers,
+        )
+        assert confirm_res.status_code == 201
+
+        # 2. Cria chamada 2 (sem presença)
+        res2 = await client.post(
+            f"/subject-classes/{sc2_id}/attendance-sessions",
+            json={"room_id": room1_id, "duration_minutes": 20},
+            headers=prof2_headers,
+        )
+        s2 = res2.json()
+
+        # Teste sort=recent (padrão): s2 foi criada depois de s1
+        res_recent = await client.get("/attendance-sessions?sort=recent", headers=admin_headers)
+        assert res_recent.status_code == 200
+        items_recent = res_recent.json()["items"]
+        assert items_recent[0]["id"] == s2["id"]
+        assert items_recent[1]["id"] == s1["id"]
+
+        # Teste sort=oldest: s1 primeiro
+        res_oldest = await client.get("/attendance-sessions?sort=oldest", headers=admin_headers)
+        assert res_oldest.status_code == 200
+        items_oldest = res_oldest.json()["items"]
+        assert items_oldest[0]["id"] == s1["id"]
+        assert items_oldest[1]["id"] == s2["id"]

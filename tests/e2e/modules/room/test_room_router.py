@@ -112,10 +112,35 @@ class TestRoomRouterEndpoints:
         response = await client.get("/rooms", headers=headers)
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
-        names = [r["name"] for r in data]
+        assert data["total"] == 2
+        names = [r["name"] for r in data["items"]]
         assert "Lab 1" in names
         assert "Lab 2" in names
+
+        # Busca textual
+        search_res = await client.get("/rooms?search=Lab 1", headers=headers)
+        assert search_res.status_code == 200
+        search_data = search_res.json()
+        assert search_data["total"] == 1
+        assert search_data["items"][0]["name"] == "Lab 1"
+
+        # Paginação
+        page_res = await client.get("/rooms?page=1&page_size=1", headers=headers)
+        assert page_res.status_code == 200
+        page_data = page_res.json()
+        assert page_data["total"] == 2
+        assert len(page_data["items"]) == 1
+        assert page_data["page"] == 1
+        assert page_data["pages"] == 2
+
+        # Métricas
+        metrics_res = await client.get("/rooms/metrics", headers=headers)
+        assert metrics_res.status_code == 200
+        metrics_data = metrics_res.json()
+        assert metrics_data["total_rooms"] == 2
+        assert metrics_data["avg_radius"] == 35
+        assert metrics_data["precisas_count"] == 1
+        assert metrics_data["amplas_count"] == 0
 
     async def test_get_room_by_id_success(self, client, session):
         """GET /rooms/{room_id} -> Deve retornar a sala por ID."""
@@ -260,7 +285,7 @@ class TestRoomRouterEndpoints:
         # 4. GET listagem não deve incluir a sala
         list_res = await client.get("/rooms", headers=headers)
         assert list_res.status_code == 200
-        room_ids = [r["id"] for r in list_res.json()]
+        room_ids = [r["id"] for r in list_res.json()["items"]]
         assert room_id not in room_ids
 
         # 5. PATCH deve retornar 404
@@ -355,7 +380,7 @@ class TestRoomRouterEndpoints:
         # Listagem por Aluno -> 200
         list_res = await client.get("/rooms", headers={"Authorization": f"Bearer {student_token}"})
         assert list_res.status_code == 200
-        assert len(list_res.json()) >= 1
+        assert list_res.json()["total"] >= 1
 
         # Busca por ID por Aluno -> 200
         get_res = await client.get(

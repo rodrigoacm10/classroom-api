@@ -792,8 +792,8 @@ class TestSubjectClassRouterEndpoints:
         admin_res_live = await client.get("/subject-classes/metrics", headers=admin_headers)
         assert admin_res_live.json()["live_classes_count"] == 1
 
-    async def test_list_subject_classes_search_by_professor_and_room(self, client, session):
-        """GET /subject-classes?search=... deve encontrar turmas por nome do professor ou sala."""
+    async def test_list_subject_classes_search_by_name_and_discipline(self, client, session):
+        """GET /subject-classes?search=... deve encontrar turmas por nome da turma ou disciplina, e não por professor ou sala."""
         tenant = await TenantFactory.create(session)
         admin_user = await UserFactory.create(session, name="Admin Geral")
         await TenantFactory.create_member(
@@ -833,25 +833,28 @@ class TestSubjectClassRouterEndpoints:
             headers=headers,
         )
 
-        # 1. Busca por nome da professora: "Clarice"
+        # 1. Busca por nome da turma: "Literatura"
+        res_turma = await client.get("/subject-classes?search=Literatura", headers=headers)
+        assert res_turma.status_code == 200
+        data_turma = res_turma.json()
+        assert data_turma["total"] == 1
+        assert data_turma["items"][0]["name"] == "Literatura"
+
+        # 2. Busca por código/nome da disciplina: "ROB1"
+        res_disc = await client.get("/subject-classes?search=ROB1", headers=headers)
+        assert res_disc.status_code == 200
+        data_disc = res_disc.json()
+        assert data_disc["total"] == 1
+        assert data_disc["items"][0]["name"] == "Robótica"
+
+        # 3. Busca por professor ou sala não deve retornar resultados
         res_prof = await client.get("/subject-classes?search=Clarice", headers=headers)
         assert res_prof.status_code == 200
-        data_prof = res_prof.json()
-        assert data_prof["total"] == 1
-        assert data_prof["items"][0]["name"] == "Literatura"
+        assert res_prof.json()["total"] == 0
 
-        # 2. Busca por nome da sala: "Anfiteatro"
         res_room = await client.get("/subject-classes?search=Anfiteatro", headers=headers)
         assert res_room.status_code == 200
-        data_room = res_room.json()
-        assert data_room["total"] == 1
-        assert data_room["items"][0]["name"] == "Literatura"
-
-        # 3. Busca por outra sala: "Alfa"
-        res_room2 = await client.get("/subject-classes?search=Alfa", headers=headers)
-        assert res_room2.status_code == 200
-        assert res_room2.json()["total"] == 1
-        assert res_room2.json()["items"][0]["name"] == "Robótica"
+        assert res_room.json()["total"] == 0
 
     async def test_list_subject_classes_has_active_session_filter(self, client, session):
         """GET /subject-classes?has_active_session=true/false filtra por presença de chamada ao vivo."""
@@ -951,4 +954,3 @@ class TestSubjectClassRouterEndpoints:
         assert res_desc.status_code == 200
         names_desc = [it["name"] for it in res_desc.json()["items"]]
         assert names_desc == ["GAMA", "BETA", "ALFA"]
-

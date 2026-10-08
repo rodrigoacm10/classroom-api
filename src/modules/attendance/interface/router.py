@@ -620,6 +620,10 @@ async def list_attendance_sessions_by_tenant(
         None,
         description="Busca textual por nome da turma ou disciplina",
     ),
+    sort: str = Query(
+        "recent",
+        description="Critério de ordenação ('recent', 'oldest')",
+    ),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> PageResponse[AttendanceSessionResponse]:
@@ -644,6 +648,7 @@ async def list_attendance_sessions_by_tenant(
             opened_after=opened_after,
             opened_before=opened_before,
             search=search,
+            sort=sort,
         )
     )
 
