@@ -18,15 +18,18 @@ from modules.tenant.domain.repositories.tenant_repository import (
     TenantMemberRepository,
     TenantRepository,
 )
+from modules.attendance.domain.repositories.evidence_photo_upload_repository import (
+    EvidencePhotoUploadRepository,
+)
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.session_status import SessionStatus
+from shared.enums.upload_status import UploadStatus
 from shared.exceptions import (
     BusinessRuleException,
     ForbiddenException,
     ResourceAlreadyExistsException,
     ResourceNotFoundException,
 )
-
 
 def is_mobile_user_agent(ua: str | None) -> bool:
     if not ua:
@@ -52,7 +55,7 @@ class ConfirmAttendanceInput:
     ip_address: str | None = None
     user_agent: str | None = None
     device_info: dict | None = None
-
+    evidence_photo_url: str | None = None
 
 class ConfirmAttendanceUseCase:
     def __init__(
@@ -64,6 +67,7 @@ class ConfirmAttendanceUseCase:
         member_repo: TenantMemberRepository,
         enrollment_repo: EnrollmentRepository,
         room_repo: RoomRepository,
+        upload_repo: EvidencePhotoUploadRepository,
     ) -> None:
         self.session_repo = session_repo
         self.record_repo = record_repo
@@ -72,6 +76,7 @@ class ConfirmAttendanceUseCase:
         self.member_repo = member_repo
         self.enrollment_repo = enrollment_repo
         self.room_repo = room_repo
+        self.upload_repo = upload_repo
 
     async def execute(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
         # 1. Tenant
@@ -149,6 +154,17 @@ class ConfirmAttendanceUseCase:
         # 11. Calcular flags de irregularidade pré-inserção
         flags: list[str] = []
 
+        # 12. Validar foto de evidência (se informada)
+        evidence_upload = None
+        if data.evidence_photo_url:
+            evidence_upload = await self.upload_repo.find_by_url(data.evidence_photo_url)
+            if not evidence_upload or evidence_upload.session_id != data.session_id:
+                raise BusinessRuleException("Foto de evidência inválida para esta chamada.")
+            if evidence_upload.status != UploadStatus.PENDING:
+                raise BusinessRuleException(
+                    "Foto de evidência expirada ou já utilizada. Envie a foto novamente."
+                )
+
         # GPS accuracy imprecisa
         if data.gps_accuracy_meters is not None and data.gps_accuracy_meters > tolerance_radius:
             flags.append("low_gps_accuracy")
@@ -170,7 +186,7 @@ class ConfirmAttendanceUseCase:
             if shared_rec and shared_rec.tenant_member_id != member.id:
                 flags.append("shared_device")
 
-        return await self.record_repo.create_record(
+        record = await self.record_repo.create_record(
             session_id=data.session_id,
             tenant_member_id=member.id,
             latitude=data.latitude,
@@ -183,4 +199,12 @@ class ConfirmAttendanceUseCase:
             ip_address=data.ip_address,
             user_agent=data.user_agent,
             device_info=data.device_info,
+            evidence_photo_url=data.evidence_photo_url,
         )
+
+        # 13. Vincular o upload ao registro de presença criado
+        if evidence_upload:
+          evidence_upload.confirm(record.id)
+          await self.upload_repo.save(evidence_upload)
+
+        return record

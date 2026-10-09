@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 
+from unittest.mock import AsyncMock, patch
 from security.jwt import create_access_token
 from shared.enums.record_status import RecordStatus
 from shared.enums.user_role import UserRole
@@ -231,6 +232,105 @@ class TestAttendanceRecordRouter:
         )
         assert res.status_code == 409
         assert res.json()["detail"] == "A chamada foi cancelada."
+
+    async def test_confirm_attendance_with_photo_upload(self, client, session):
+        """Upload de foto seguido de confirmação retorna evidence_photo_url no response."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        fake_url = "https://pub-test.r2.dev/evidence/session-id/uuid.jpg"
+
+        with patch("modules.attendance.interface.router.R2StorageService") as MockR2:
+            instance = MockR2.return_value
+            instance.upload = AsyncMock(return_value=fake_url)
+
+            upload_res = await client.post(
+                f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/evidence-photo",
+                files={"photo": ("selfie.jpg", b"fake-jpeg-bytes", "image/jpeg")},
+                headers=student1_headers,
+            )
+            assert upload_res.status_code == 201
+            assert upload_res.json()["url"] == fake_url
+
+        res = await client.post(
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={
+                "day_code": day_code,
+                "latitude": -8.04761,
+                "longitude": -34.87701,
+                "evidence_photo_url": fake_url,
+            },
+            headers=student1_headers,
+        )
+
+        assert res.status_code == 201
+        assert res.json()["evidence_photo_url"] == fake_url
+
+    async def test_confirm_attendance_without_photo(self, client, session):
+        """Confirmação sem evidence_photo_url deve funcionar normalmente, com o campo nulo."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        res = await client.post(
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
+            headers=student1_headers,
+        )
+
+        assert res.status_code == 201
+        assert res.json()["evidence_photo_url"] is None
+
+    async def test_upload_evidence_photo_invalid_mime_type(self, client, session):
+        """Tipo MIME não suportado no endpoint de upload deve retornar 400."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        res = await client.post(
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/evidence-photo",
+            files={"photo": ("document.pdf", b"fake-pdf", "application/pdf")},
+            headers=student1_headers,
+        )
+
+        assert res.status_code == 400
+
+    async def test_upload_evidence_photo_too_large(self, client, session):
+        """Arquivo maior que 5 MB no endpoint de upload deve retornar 400."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers, _, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        big_file = b"x" * (5 * 1024 * 1024 + 1)
+
+        res = await client.post(
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/evidence-photo",
+            files={"photo": ("big.jpg", big_file, "image/jpeg")},
+            headers=student1_headers,
+        )
+
+        assert res.status_code == 400
 
     async def test_confirm_attendance_when_student_not_enrolled_in_class_returns_403(
         self, client, session
