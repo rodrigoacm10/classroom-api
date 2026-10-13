@@ -9,6 +9,9 @@ from modules.attendance.domain.repositories.attendance_record_repository import 
 from modules.attendance.domain.repositories.attendance_session_repository import (
     AttendanceSessionRepository,
 )
+from modules.attendance.domain.repositories.evidence_photo_upload_repository import (
+    EvidencePhotoUploadRepository,
+)
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
 from modules.room.domain.repositories.room_repository import RoomRepository
 from modules.subject_class.domain.repositories.subject_class_repository import (
@@ -17,9 +20,6 @@ from modules.subject_class.domain.repositories.subject_class_repository import (
 from modules.tenant.domain.repositories.tenant_repository import (
     TenantMemberRepository,
     TenantRepository,
-)
-from modules.attendance.domain.repositories.evidence_photo_upload_repository import (
-    EvidencePhotoUploadRepository,
 )
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.session_status import SessionStatus
@@ -30,6 +30,7 @@ from shared.exceptions import (
     ResourceAlreadyExistsException,
     ResourceNotFoundException,
 )
+
 
 def is_mobile_user_agent(ua: str | None) -> bool:
     if not ua:

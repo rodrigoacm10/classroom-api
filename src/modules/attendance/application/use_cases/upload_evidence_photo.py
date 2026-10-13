@@ -4,7 +4,9 @@ from uuid import UUID
 from infra.storage.evidence_photo_service import upload_evidence_photo
 from infra.storage.storage_service import StorageService
 from modules.attendance.domain.entities.evidence_photo_upload import EvidencePhotoUpload
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
 from modules.attendance.domain.repositories.evidence_photo_upload_repository import (
     EvidencePhotoUploadRepository,
 )

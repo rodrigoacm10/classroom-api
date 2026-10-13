@@ -1,5 +1,5 @@
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,14 +62,14 @@ from modules.attendance.application.use_cases.upload_evidence_photo import (
     UploadEvidencePhotoInput,
     UploadEvidencePhotoUseCase,
 )
+from modules.attendance.infra.repositories.evidence_photo_upload_sqlalchemy_repository import (
+    EvidencePhotoUploadSQLAlchemyRepository,
+)
 from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
     RecordSQLAlchemyRepository,
 )
 from modules.attendance.infra.repositories.session_sqlalchemy_repository import (
     SessionSQLAlchemyRepository,
-)
-from modules.attendance.infra.repositories.evidence_photo_upload_sqlalchemy_repository import (
-    EvidencePhotoUploadSQLAlchemyRepository,
 )
 from modules.attendance.interface.schemas.record_schemas import (
     AttendanceRecordResponse,
@@ -107,7 +107,6 @@ from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.events.event_dispatcher import EventDispatcher
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
-
 
 router = APIRouter(
     prefix="/subject-classes/{subject_class_id}/attendance-sessions",
@@ -339,7 +338,7 @@ async def upload_session_evidence_photo(
             subject_class_id=subject_class_id,
             session_id=session_id,
             file_bytes=file_bytes,
-            content_type=photo.content_type,
+            content_type=photo.content_type or "application/octet-stream",
         )
     )
     return {"url": result.url}

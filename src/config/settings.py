@@ -74,7 +74,7 @@ class Settings(BaseSettings):
 
     @property
     def r2_endpoint_url(self) -> str:
-        return f"https://{self.cloudflare_r2_account_id}.r2.cloudflarestorage.com"    
+        return f"https://{self.cloudflare_r2_account_id}.r2.cloudflarestorage.com"
 
 
 settings = Settings()
