@@ -48,3 +48,10 @@ class RoomResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class RoomMetricsResponse(BaseModel):
+    total_rooms: int = Field(..., description="Total de salas cadastradas na instituição")
+    avg_radius: int = Field(..., description="Raio médio de presença em metros")
+    precisas_count: int = Field(..., description="Salas com raio de tolerância <= 30 metros")
+    amplas_count: int = Field(..., description="Salas com raio de tolerância > 75 metros")

@@ -100,14 +100,18 @@ async def list_subject_classes(
     pagination: PaginationParams = Depends(get_pagination_params),
     professor_id: UUID | None = Query(None, description="Filtrar por ID do professor responsável"),
     room_id: UUID | None = Query(None, description="Filtrar por ID da sala vinculada"),
-    search: str | None = Query(None, description="Busca por nome da turma, disciplina, professor ou sala"),
+    search: str | None = Query(None, description="Busca por nome da turma ou disciplina"),
     active: bool | None = Query(None, description="Filtrar por status ativo/inativo"),
-    has_active_session: bool | None = Query(None, description="Filtrar turmas com chamada aberta agora"),
-    sort_by: str | None = Query(None, description="Campo de ordenação (name, attendance_rate, student_count, created_at)"),
+    has_active_session: bool | None = Query(
+        None, description="Filtrar turmas com chamada aberta agora"
+    ),
+    sort_by: str | None = Query(
+        None, description="Campo de ordenação (name, student_count, created_at)"
+    ),
     order: str | None = Query("asc", description="Direção da ordenação (asc ou desc)"),
     db: AsyncSession = Depends(get_db),
 ) -> PageResponse[SubjectClassListItemResponse]:
-    """Lista turmas da Tenant com filtros, busca ampla, ordenação e taxa de presença."""
+    """Lista turmas da Tenant com filtros, busca por turma/disciplina e ordenação."""
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     use_case = ListSubjectClassesUseCase(
@@ -137,8 +141,12 @@ async def list_subject_classes(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
 )
 async def get_subject_class_metrics(
-    days: int | None = Query(30, ge=1, le=365, description="Janela de dias para taxa de presença média (padrão: 30)"),
-    professor_id: UUID | None = Query(None, description="Filtrar métricas por professor específico (apenas ADMIN/COORDENADOR)"),
+    days: int | None = Query(
+        30, ge=1, le=365, description="Janela de dias para taxa de presença média (padrão: 30)"
+    ),
+    professor_id: UUID | None = Query(
+        None, description="Filtrar métricas por professor específico (apenas ADMIN/COORDENADOR)"
+    ),
     tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),

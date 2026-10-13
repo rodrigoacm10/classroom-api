@@ -50,6 +50,7 @@ class AttendanceSessionRepository(Protocol):
         opened_after: datetime | None = None,
         opened_before: datetime | None = None,
         search: str | None = None,
+        sort: str = "recent",
     ) -> Page[AttendanceSession]: ...
 
     async def get_metrics_by_tenant(

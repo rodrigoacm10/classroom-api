@@ -237,6 +237,7 @@ class SessionSQLAlchemyRepository:
         opened_after: datetime | None = None,
         opened_before: datetime | None = None,
         search: str | None = None,
+        sort: str = "recent",
     ) -> Page[AttendanceSession]:
         from infra.database.models.subject_class import SubjectClassModel
         from infra.database.models.tenant import TenantMemberModel
@@ -306,9 +307,14 @@ class SessionSQLAlchemyRepository:
                 TenantMemberModel.id == SubjectClassModel.professor_id,
             )
 
+        if sort == "oldest":
+            order_criteria = [AttendanceSessionModel.opened_at.asc()]
+        else:
+            order_criteria = [AttendanceSessionModel.opened_at.desc()]
+
         items_stmt = (
             items_stmt.where(*conditions)
-            .order_by(AttendanceSessionModel.opened_at.desc())
+            .order_by(*order_criteria)
             .offset(pagination.offset)
             .limit(pagination.page_size)
         )

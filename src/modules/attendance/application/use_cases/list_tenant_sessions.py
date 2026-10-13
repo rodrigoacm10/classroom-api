@@ -25,6 +25,7 @@ class ListTenantAttendanceSessionsInput:
     opened_after: datetime | None = None
     opened_before: datetime | None = None
     search: str | None = None
+    sort: str = "recent"
 
 
 class ListTenantAttendanceSessionsUseCase:
@@ -58,4 +59,5 @@ class ListTenantAttendanceSessionsUseCase:
             opened_after=data.opened_after,
             opened_before=data.opened_before,
             search=data.search,
+            sort=data.sort,
         )

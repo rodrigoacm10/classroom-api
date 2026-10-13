@@ -1,17 +1,22 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
 from modules.room.application.use_cases.create_room import CreateRoomInput, CreateRoomUseCase
 from modules.room.application.use_cases.delete_room import DeleteRoomInput, DeleteRoomUseCase
 from modules.room.application.use_cases.get_room import GetRoomInput, GetRoomUseCase
+from modules.room.application.use_cases.get_room_metrics import (
+    GetRoomMetricsInput,
+    GetRoomMetricsUseCase,
+)
 from modules.room.application.use_cases.list_rooms import ListRoomsInput, ListRoomsUseCase
 from modules.room.application.use_cases.update_room import UpdateRoomInput, UpdateRoomUseCase
 from modules.room.infra.repositories.room_sqlalchemy_repository import RoomSQLAlchemyRepository
 from modules.room.interface.schemas.room_schemas import (
     CreateRoomRequest,
+    RoomMetricsResponse,
     RoomResponse,
     UpdateRoomRequest,
 )
@@ -22,6 +27,7 @@ from modules.user.domain.entities.user import User
 from security.dependencies.current_user import get_current_tenant_id, get_current_user
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
+from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
@@ -70,18 +76,26 @@ async def create_room(
     )
 
 
-@router.get("", response_model=list[RoomResponse])
+@router.get("", response_model=PageResponse[RoomResponse])
 async def list_rooms(
     tenant_id: UUID = Depends(get_current_tenant_id),
+    pagination: PaginationParams = Depends(get_pagination_params),
+    search: str | None = Query(None, description="Busca textual por nome da sala"),
     db: AsyncSession = Depends(get_db),
-) -> list[RoomResponse]:
-    """Lista todas as salas de uma Tenant/Instituição."""
+) -> PageResponse[RoomResponse]:
+    """Lista salas de uma Tenant/Instituição com suporte a paginação e busca textual."""
     room_repo = RoomSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     use_case = ListRoomsUseCase(room_repo=room_repo, tenant_repo=tenant_repo)
 
-    rooms = await use_case.execute(ListRoomsInput(tenant_id=tenant_id))
-    return [
+    page = await use_case.execute(
+        ListRoomsInput(
+            tenant_id=tenant_id,
+            pagination=pagination,
+            search=search,
+        )
+    )
+    items = [
         RoomResponse(
             id=r.id,
             tenant_id=r.tenant_id,
@@ -93,8 +107,28 @@ async def list_rooms(
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
-        for r in rooms
+        for r in page.items
     ]
+    return PageResponse.of(page, items)
+
+
+@router.get("/metrics", response_model=RoomMetricsResponse)
+async def get_room_metrics(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> RoomMetricsResponse:
+    """Retorna as métricas agregadas de salas da Tenant/Instituição."""
+    room_repo = RoomSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    use_case = GetRoomMetricsUseCase(room_repo=room_repo, tenant_repo=tenant_repo)
+
+    metrics = await use_case.execute(GetRoomMetricsInput(tenant_id=tenant_id))
+    return RoomMetricsResponse(
+        total_rooms=metrics.total_rooms,
+        avg_radius=metrics.avg_radius,
+        precisas_count=metrics.precisas_count,
+        amplas_count=metrics.amplas_count,
+    )
 
 
 @router.get("/{room_id}", response_model=RoomResponse)
