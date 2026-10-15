@@ -546,3 +546,140 @@ class TestActiveAttendanceSessionsRouter:
         items_oldest = res_oldest.json()["items"]
         assert items_oldest[0]["id"] == s1["id"]
         assert items_oldest[1]["id"] == s2["id"]
+
+    async def test_student_sees_only_active_sessions_of_enrolled_classes(self, client, session):
+        """GET /attendance-sessions/active/me -> Aluno vê apenas chamadas das turmas matriculadas."""
+        (
+            tenant,
+            admin_headers,
+            prof1_headers,
+            prof2_headers,
+            student_headers,
+            sc1_id,
+            sc2_id,
+            room1_id,
+            _,
+        ) = await self._setup_fixtures(session, client)
+
+        # 1. Sem chamadas abertas -> retorna lista vazia
+        empty_res = await client.get("/attendance-sessions/active/me", headers=student_headers)
+        assert empty_res.status_code == 200
+        assert empty_res.json() == []
+
+        # 2. Prof 1 abre chamada na turma 1 (onde aluno está matriculado)
+        p1_res = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"room_id": room1_id, "duration_minutes": 15},
+            headers=prof1_headers,
+        )
+        assert p1_res.status_code == 201
+        session1_id = p1_res.json()["id"]
+
+        # 3. Prof 2 abre chamada na turma 2 (onde aluno NÃO está matriculado)
+        p2_res = await client.post(
+            f"/subject-classes/{sc2_id}/attendance-sessions",
+            json={"duration_minutes": 20},
+            headers=prof2_headers,
+        )
+        assert p2_res.status_code == 201
+
+        # 4. Aluno consulta suas chamadas ativas -> deve ver apenas a turma 1
+        me_res = await client.get("/attendance-sessions/active/me", headers=student_headers)
+        assert me_res.status_code == 200
+        items = me_res.json()
+        assert len(items) == 1
+        item = items[0]
+        assert item["session_id"] == session1_id
+        assert item["subject_class_id"] == sc1_id
+        assert item["subject_class_name"] == "T01"
+        assert item["discipline_name"] == "Algoritmos e Estruturas de Dados"
+        assert item["room_name"] == "Lab 204"
+        assert item["already_confirmed"] is False
+        assert item["record_id"] is None
+        assert item["duration_minutes"] == 15
+
+        # 5. Perfis que não são ALUNO recebem 403
+        admin_res = await client.get("/attendance-sessions/active/me", headers=admin_headers)
+        assert admin_res.status_code == 403
+
+        prof_res = await client.get("/attendance-sessions/active/me", headers=prof1_headers)
+        assert prof_res.status_code == 403
+
+        # 6. Ao fechar a sessão, ela deixa de aparecer na rota do aluno
+        close_res = await client.patch(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{session1_id}/close",
+            headers=prof1_headers,
+        )
+        assert close_res.status_code == 200
+        after_close_res = await client.get(
+            "/attendance-sessions/active/me", headers=student_headers
+        )
+        assert after_close_res.status_code == 200
+        assert after_close_res.json() == []
+
+        # 7. Abre nova sessão sem room_id na chamada -> usa room_name da turma ("Lab 204")
+        p1_fallback_res = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"duration_minutes": 10},
+            headers=prof1_headers,
+        )
+        assert p1_fallback_res.status_code == 201
+        fallback_session_id = p1_fallback_res.json()["id"]
+
+        me_fallback_res = await client.get(
+            "/attendance-sessions/active/me", headers=student_headers
+        )
+        assert me_fallback_res.status_code == 200
+        fb_items = me_fallback_res.json()
+        assert len(fb_items) == 1
+        assert fb_items[0]["session_id"] == fallback_session_id
+        assert fb_items[0]["room_name"] == "Lab 204"
+
+    async def test_student_active_session_already_confirmed_flag(self, client, session):
+        """GET /attendance-sessions/active/me -> already_confirmed torna-se True após confirmação."""
+        (
+            tenant,
+            admin_headers,
+            prof1_headers,
+            _,
+            student_headers,
+            sc1_id,
+            _,
+            room1_id,
+            _,
+        ) = await self._setup_fixtures(session, client)
+
+        # Abre sessão na turma do aluno
+        res = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"room_id": room1_id, "duration_minutes": 15},
+            headers=prof1_headers,
+        )
+        s_data = res.json()
+        session_id = s_data["id"]
+
+        # Antes de confirmar: already_confirmed == False
+        me_before = await client.get("/attendance-sessions/active/me", headers=student_headers)
+        assert me_before.status_code == 200
+        assert me_before.json()[0]["already_confirmed"] is False
+
+        # Aluno confirma presença
+        confirm_res = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{session_id}/confirm",
+            json={
+                "day_code": s_data["day_code"],
+                "latitude": -8.0476,
+                "longitude": -34.8770,
+                "gps_accuracy_meters": 5.0,
+            },
+            headers=student_headers,
+        )
+        assert confirm_res.status_code == 201
+
+        # Depois de confirmar: already_confirmed == True e record_id preenchido
+        me_after = await client.get("/attendance-sessions/active/me", headers=student_headers)
+        assert me_after.status_code == 200
+        data = me_after.json()[0]
+        assert data["already_confirmed"] is True
+        assert data["record_id"] is not None
+        assert data["record_status"] in ("regular", "irregular")

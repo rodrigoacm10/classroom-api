@@ -1,4 +1,5 @@
 import uuid
+
 import pytest
 
 from modules.tenant.application.use_cases.list_students import (
@@ -63,7 +64,9 @@ class TestListStudentsUseCase:
             await self.member_repo.save(m)
 
         result = await self.use_case.execute(
-            ListStudentsInput(tenant_id=tenant.id, pagination=PaginationParams(page=1, page_size=10))
+            ListStudentsInput(
+                tenant_id=tenant.id, pagination=PaginationParams(page=1, page_size=10)
+            )
         )
 
         assert result.total == 2

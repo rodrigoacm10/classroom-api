@@ -2,16 +2,21 @@ from datetime import datetime
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
-from modules.attendance.domain.repositories.attendance_session_repository import (
-    AttendanceSessionRepository,
-)
+from modules.attendance.domain.entities.student_active_session import StudentActiveSession
 from shared.enums.session_status import SessionStatus
 from shared.pagination import Page, PaginationParams, paginate_list
 
 
-class FakeAttendanceSessionRepository(AttendanceSessionRepository):
+class FakeAttendanceSessionRepository:
+    """
+    Implementação em memória do AttendanceSessionRepository.
+    Satisfaz o Protocol sem tocar em banco de dados.
+    Usado exclusivamente em testes unitários.
+    """
+
     def __init__(self) -> None:
         self.sessions: dict[UUID, AttendanceSession] = {}
+        self._student_active_sessions: list[StudentActiveSession] = []
 
     async def save(self, session: AttendanceSession) -> AttendanceSession:
         self.sessions[session.id] = session
@@ -91,3 +96,45 @@ class FakeAttendanceSessionRepository(AttendanceSessionRepository):
                 result.append(s)
         result.sort(key=lambda x: x.opened_at, reverse=True)
         return result
+
+    async def list_by_tenant_paginated(
+        self,
+        tenant_id: UUID,
+        pagination: PaginationParams,
+        professor_user_id: UUID | None = None,
+        subject_class_id: UUID | None = None,
+        status: SessionStatus | None = None,
+        exclude_status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+        search: str | None = None,
+        sort: str = "recent",
+    ) -> Page[AttendanceSession]:
+        items = list(self.sessions.values())
+        if subject_class_id is not None:
+            items = [s for s in items if s.subject_class_id == subject_class_id]
+        if status is not None:
+            items = [s for s in items if s.status == status]
+        if exclude_status is not None:
+            items = [s for s in items if s.status != exclude_status]
+        if opened_after is not None:
+            items = [s for s in items if s.opened_at >= opened_after]
+        if opened_before is not None:
+            items = [s for s in items if s.opened_at <= opened_before]
+        items.sort(key=lambda s: s.opened_at, reverse=(sort == "recent"))
+        return paginate_list(items, pagination)
+
+    async def get_metrics_by_tenant(
+        self,
+        tenant_id: UUID,
+        professor_user_id: UUID | None = None,
+        days: int = 30,
+    ) -> dict:
+        return {}
+
+    async def list_active_sessions_by_student(
+        self,
+        tenant_id: UUID,
+        tenant_member_id: UUID,
+    ) -> list[StudentActiveSession]:
+        return list(self._student_active_sessions)
