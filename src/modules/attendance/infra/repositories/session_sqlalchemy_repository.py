@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -9,6 +9,7 @@ from infra.database.models.attendance_record import AttendanceRecordModel
 from infra.database.models.attendance_session import AttendanceSessionModel
 from infra.database.models.enrollment import EnrollmentModel
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
+from modules.attendance.domain.entities.student_active_session import StudentActiveSession
 from modules.attendance.infra.mappers.attendance_session_mapper import AttendanceSessionMapper
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
@@ -225,6 +226,83 @@ class SessionSQLAlchemyRepository:
         sessions = [AttendanceSessionMapper.to_domain(m) for m in models]
         await self._apply_stats(sessions)
         return sessions
+
+    async def list_active_sessions_by_student(
+        self,
+        tenant_id: UUID,
+        tenant_member_id: UUID,
+    ) -> list[StudentActiveSession]:
+        from infra.database.models.room import RoomModel
+        from infra.database.models.subject_class import SubjectClassModel
+
+        now = datetime.now(timezone.utc)
+        target_room_id = func.coalesce(AttendanceSessionModel.room_id, SubjectClassModel.room_id)
+
+        stmt = (
+            select(
+                AttendanceSessionModel.id.label("session_id"),
+                AttendanceSessionModel.subject_class_id.label("subject_class_id"),
+                SubjectClassModel.name.label("subject_class_name"),
+                SubjectClassModel.discipline_name.label("discipline_name"),
+                target_room_id.label("room_id"),
+                RoomModel.name.label("room_name"),
+                AttendanceSessionModel.opened_at.label("opened_at"),
+                AttendanceSessionModel.expires_at.label("expires_at"),
+                AttendanceRecordModel.id.label("record_id"),
+                AttendanceRecordModel.record_status.label("record_status"),
+            )
+            .join(
+                SubjectClassModel,
+                SubjectClassModel.id == AttendanceSessionModel.subject_class_id,
+            )
+            .join(
+                EnrollmentModel,
+                and_(
+                    EnrollmentModel.subject_class_id == SubjectClassModel.id,
+                    EnrollmentModel.tenant_member_id == tenant_member_id,
+                    EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+                    EnrollmentModel.deleted.is_(False),
+                ),
+            )
+            .outerjoin(
+                RoomModel,
+                RoomModel.id == target_room_id,
+            )
+            .outerjoin(
+                AttendanceRecordModel,
+                and_(
+                    AttendanceRecordModel.session_id == AttendanceSessionModel.id,
+                    AttendanceRecordModel.tenant_member_id == tenant_member_id,
+                ),
+            )
+            .where(
+                SubjectClassModel.tenant_id == tenant_id,
+                SubjectClassModel.deleted.is_(False),
+                SubjectClassModel.active.is_(True),
+                AttendanceSessionModel.status == SessionStatus.OPEN,
+                AttendanceSessionModel.expires_at > now,
+            )
+            .order_by(AttendanceSessionModel.opened_at.desc())
+        )
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+        return [
+            StudentActiveSession(
+                session_id=row.session_id,
+                subject_class_id=row.subject_class_id,
+                subject_class_name=row.subject_class_name,
+                discipline_name=row.discipline_name,
+                opened_at=row.opened_at,
+                expires_at=row.expires_at,
+                already_confirmed=row.record_id is not None,
+                room_id=row.room_id,
+                room_name=row.room_name,
+                record_id=row.record_id,
+                record_status=row.record_status,
+            )
+            for row in rows
+        ]
 
     async def list_by_tenant_paginated(
         self,

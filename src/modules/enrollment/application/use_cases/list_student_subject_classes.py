@@ -7,13 +7,18 @@ from modules.enrollment.domain.entities.student_subject_class_summary import (
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
 from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository
 from shared.enums.enrollment_status import EnrollmentStatus
-from shared.exceptions import BusinessRuleException, ResourceNotFoundException
+from shared.exceptions import (
+    BusinessRuleException,
+    ForbiddenException,
+    ResourceNotFoundException,
+)
 
 
 @dataclass
 class ListStudentSubjectClassesInput:
     tenant_id: UUID
-    tenant_member_id: UUID
+    tenant_member_id: UUID | None = None
+    user_id: UUID | None = None
     status: EnrollmentStatus | None = None
     include_deleted: bool = False
 
@@ -30,16 +35,29 @@ class ListStudentSubjectClassesUseCase:
     async def execute(
         self, data: ListStudentSubjectClassesInput
     ) -> list[StudentSubjectClassSummary]:
-        member = await self.member_repo.find_by_id(data.tenant_member_id, include_deleted=False)
-        if not member:
-            raise ResourceNotFoundException("Membro não encontrado.")
+        if data.user_id is not None:
+            member = await self.member_repo.find_by_tenant_and_user(
+                tenant_id=data.tenant_id,
+                user_id=data.user_id,
+                include_deleted=False,
+            )
+            if not member or getattr(member, "deleted", False):
+                raise ForbiddenException("Aluno não encontrado nesta instituição.")
+            resolved_member_id = member.id
+        elif data.tenant_member_id is not None:
+            member = await self.member_repo.find_by_id(data.tenant_member_id, include_deleted=False)
+            if not member:
+                raise ResourceNotFoundException("Membro não encontrado.")
 
-        if member.tenant_id != data.tenant_id:
-            raise BusinessRuleException("O membro não pertence a esta instituição.")
+            if member.tenant_id != data.tenant_id:
+                raise BusinessRuleException("O membro não pertence a esta instituição.")
+            resolved_member_id = data.tenant_member_id
+        else:
+            raise BusinessRuleException("É necessário informar tenant_member_id ou user_id.")
 
         return await self.enrollment_repo.list_summaries_by_member(
             tenant_id=data.tenant_id,
-            tenant_member_id=data.tenant_member_id,
+            tenant_member_id=resolved_member_id,
             status=data.status,
             include_deleted=data.include_deleted,
         )
