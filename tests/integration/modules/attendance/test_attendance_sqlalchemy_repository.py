@@ -561,3 +561,242 @@ class TestAttendanceSQLAlchemyRepository:
         )
         assert page_period.total == 1
         assert page_period.items[0].day_code == "OPEN01"
+
+    async def test_list_active_sessions_by_student(self, session) -> None:
+        """Deve listar apenas sessões abertas e não expiradas das turmas matriculadas do aluno, com status de confirmação."""
+        from modules.enrollment.domain.entities.enrollment import Enrollment
+        from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+            EnrollmentSQLAlchemyRepository,
+        )
+
+        tenant = await TenantFactory.create(session)
+        student_user = await UserFactory.create(session, name="Estudante Carlos")
+        student_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student_user.id, role=UserRole.ALUNO
+        )
+
+        room_repo = RoomSQLAlchemyRepository(session)
+        class_room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Auditório Central", latitude=-8.0, longitude=-34.0)
+        )
+        session_room = await room_repo.save(
+            Room(tenant_id=tenant.id, name="Lab 305", latitude=-8.0, longitude=-34.0)
+        )
+
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        class1 = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                name="T01",
+                discipline_name="Algoritmos",
+                room_id=class_room.id,
+                active=True,
+            )
+        )
+        class2 = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                name="T02",
+                discipline_name="Estrutura de Dados",
+                room_id=class_room.id,
+                active=True,
+            )
+        )
+        class_other = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                name="T99",
+                discipline_name="Física Moderna",
+                room_id=class_room.id,
+                active=True,
+            )
+        )
+
+        enrollment_repo = EnrollmentSQLAlchemyRepository(session)
+        await enrollment_repo.save(
+            Enrollment(subject_class_id=class1.id, tenant_member_id=student_member.id)
+        )
+        await enrollment_repo.save(
+            Enrollment(subject_class_id=class2.id, tenant_member_id=student_member.id)
+        )
+        # Aluno não matriculado na class_other
+
+        session_repo = SessionSQLAlchemyRepository(session)
+        record_repo = RecordSQLAlchemyRepository(session)
+        now = datetime.now(timezone.utc)
+
+        # 1. Sessão aberta na Turma 1 com sala própria e presença confirmada pelo aluno
+        s1 = await session_repo.save(
+            AttendanceSession(
+                subject_class_id=class1.id,
+                room_id=session_room.id,
+                day_code="ACT01",
+                opened_at=now - timedelta(minutes=5),
+                expires_at=now + timedelta(minutes=20),
+                status=SessionStatus.OPEN,
+            )
+        )
+        rec = await record_repo.save(
+            AttendanceRecord(
+                session_id=s1.id,
+                tenant_member_id=student_member.id,
+                latitude=-8.0,
+                longitude=-34.0,
+                distance_meters=2.0,
+                within_radius=True,
+                record_status=RecordStatus.REGULAR,
+            )
+        )
+
+        # 2. Sessão aberta na Turma 2 sem sala específica (deve cair no fallback da turma) e sem confirmação
+        s2 = await session_repo.save(
+            AttendanceSession(
+                subject_class_id=class2.id,
+                room_id=None,
+                day_code="ACT02",
+                opened_at=now - timedelta(minutes=1),
+                expires_at=now + timedelta(minutes=15),
+                status=SessionStatus.OPEN,
+            )
+        )
+
+        # 3. Sessão fechada na Turma 1 (deve ser ignorada)
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=class1.id,
+                room_id=session_room.id,
+                day_code="CLOSED1",
+                opened_at=now - timedelta(hours=2),
+                expires_at=now - timedelta(hours=1),
+                status=SessionStatus.CLOSED,
+            )
+        )
+
+        # 4. Sessão expirada na Turma 1 (expires_at no passado, deve ser ignorada)
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=class1.id,
+                room_id=session_room.id,
+                day_code="EXP01",
+                opened_at=now - timedelta(minutes=40),
+                expires_at=now - timedelta(minutes=10),
+                status=SessionStatus.OPEN,
+            )
+        )
+
+        # 5. Sessão aberta em turma que o aluno não está matriculado (deve ser ignorada)
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=class_other.id,
+                room_id=class_room.id,
+                day_code="OTHER1",
+                opened_at=now,
+                expires_at=now + timedelta(minutes=30),
+                status=SessionStatus.OPEN,
+            )
+        )
+
+        # Executa consulta
+        active_sessions = await session_repo.list_active_sessions_by_student(
+            tenant_id=tenant.id,
+            tenant_member_id=student_member.id,
+        )
+
+        assert len(active_sessions) == 2
+        # Ordenação por opened_at DESC -> s2 (opened_at mais recente) vem antes de s1
+        res_s2 = active_sessions[0]
+        assert res_s2.session_id == s2.id
+        assert res_s2.subject_class_id == class2.id
+        assert res_s2.subject_class_name == "T02"
+        assert res_s2.discipline_name == "Estrutura de Dados"
+        assert res_s2.room_id == class_room.id
+        assert res_s2.room_name == "Auditório Central"
+        assert res_s2.already_confirmed is False
+        assert res_s2.record_id is None
+        assert res_s2.record_status is None
+        assert res_s2.duration_minutes == 16
+
+        res_s1 = active_sessions[1]
+        assert res_s1.session_id == s1.id
+        assert res_s1.subject_class_id == class1.id
+        assert res_s1.room_id == session_room.id
+        assert res_s1.room_name == "Lab 305"
+        assert res_s1.already_confirmed is True
+        assert res_s1.record_id == rec.id
+        assert res_s1.record_status == RecordStatus.REGULAR
+        assert res_s1.duration_minutes == 25
+
+    async def test_list_active_sessions_by_student_filters_dropped_and_inactive(
+        self, session
+    ) -> None:
+        """Garante que matrículas canceladas e turmas inativas/deletadas não apareçam nas chamadas ativas."""
+        from modules.enrollment.domain.entities.enrollment import Enrollment
+        from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+            EnrollmentSQLAlchemyRepository,
+        )
+        from shared.enums.enrollment_status import EnrollmentStatus
+
+        tenant = await TenantFactory.create(session)
+        student_user = await UserFactory.create(session)
+        student_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=student_user.id, role=UserRole.ALUNO
+        )
+
+        sc_repo = SubjectClassSQLAlchemyRepository(session)
+        # Turma inativa
+        inactive_class = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                name="Inativa",
+                discipline_name="Disc Inativa",
+                active=False,
+            )
+        )
+        # Turma com matrícula dropped
+        dropped_class = await sc_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                name="Dropped",
+                discipline_name="Disc Dropped",
+                active=True,
+            )
+        )
+
+        enrollment_repo = EnrollmentSQLAlchemyRepository(session)
+        await enrollment_repo.save(
+            Enrollment(subject_class_id=inactive_class.id, tenant_member_id=student_member.id)
+        )
+        await enrollment_repo.save(
+            Enrollment(
+                subject_class_id=dropped_class.id,
+                tenant_member_id=student_member.id,
+                status=EnrollmentStatus.DROPPED,
+            )
+        )
+
+        session_repo = SessionSQLAlchemyRepository(session)
+        now = datetime.now(timezone.utc)
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=inactive_class.id,
+                day_code="INACT1",
+                opened_at=now,
+                expires_at=now + timedelta(minutes=15),
+                status=SessionStatus.OPEN,
+            )
+        )
+        await session_repo.save(
+            AttendanceSession(
+                subject_class_id=dropped_class.id,
+                day_code="DROP1",
+                opened_at=now,
+                expires_at=now + timedelta(minutes=15),
+                status=SessionStatus.OPEN,
+            )
+        )
+
+        active_sessions = await session_repo.list_active_sessions_by_student(
+            tenant_id=tenant.id,
+            tenant_member_id=student_member.id,
+        )
+        assert len(active_sessions) == 0
