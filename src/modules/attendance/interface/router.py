@@ -46,6 +46,10 @@ from modules.attendance.application.use_cases.list_sessions import (
     ListAttendanceSessionsInput,
     ListAttendanceSessionsUseCase,
 )
+from modules.attendance.application.use_cases.list_student_active_sessions import (
+    ListStudentActiveSessionsInput,
+    ListStudentActiveSessionsUseCase,
+)
 from modules.attendance.application.use_cases.list_tenant_sessions import (
     ListTenantAttendanceSessionsInput,
     ListTenantAttendanceSessionsUseCase,
@@ -82,6 +86,7 @@ from modules.attendance.interface.schemas.session_schemas import (
     AttendanceMetricsResponse,
     AttendanceSessionResponse,
     CreateAttendanceSessionRequest,
+    StudentActiveAttendanceSessionResponse,
 )
 from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
     EnrollmentSQLAlchemyRepository,
@@ -553,6 +558,38 @@ active_sessions_router = APIRouter(
     prefix="/attendance-sessions",
     tags=["attendance"],
 )
+
+
+@active_sessions_router.get(
+    "/active/me",
+    response_model=list[StudentActiveAttendanceSessionResponse],
+    dependencies=[Depends(require_role(UserRole.ALUNO))],
+)
+async def list_my_active_attendance_sessions(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> list[StudentActiveAttendanceSessionResponse]:
+    """Consulta chamadas abertas no momento para o aluno autenticado nas turmas em que está matriculado."""
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+
+    use_case = ListStudentActiveSessionsUseCase(
+        session_repo=session_repo,
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
+    )
+
+    sessions = await use_case.execute(
+        ListStudentActiveSessionsInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+            user_role=auth.role,
+        )
+    )
+
+    return [StudentActiveAttendanceSessionResponse.model_validate(s) for s in sessions]
 
 
 @active_sessions_router.get(

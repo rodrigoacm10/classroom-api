@@ -409,6 +409,17 @@ class TestEnrollmentSQLAlchemyRepository:
         assert calc.room_name == "Lab 101"
         assert calc.professor_name == "Prof Ana"
         assert calc.attendance_rate == 0.0
+        assert calc.total_sessions == 0
+        assert calc.absences_count == 0
+
+        poo = by_class[attended.id]
+        assert poo.name == "POO"
+        assert poo.room_name == "Lab 101"
+        assert poo.professor_name == "Prof Ana"
+        # 2 sessões válidas (1 cancelada ignorada), 1 presença registrada -> taxa 0.5, 1 falta
+        assert poo.total_sessions == 2
+        assert poo.absences_count == 1
+        assert poo.attendance_rate == 0.5
 
     async def test_find_by_class_paginated_with_status_and_deleted_filters(self, session) -> None:
         """Deve paginar matrículas por offset e aplicar filtros de status e include_deleted."""

@@ -3,6 +3,7 @@ from typing import Protocol
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
+from modules.attendance.domain.entities.student_active_session import StudentActiveSession
 from shared.enums.session_status import SessionStatus
 from shared.pagination import Page, PaginationParams
 
@@ -59,3 +60,9 @@ class AttendanceSessionRepository(Protocol):
         professor_user_id: UUID | None = None,
         days: int = 30,
     ) -> dict: ...
+
+    async def list_active_sessions_by_student(
+        self,
+        tenant_id: UUID,
+        tenant_member_id: UUID,
+    ) -> list[StudentActiveSession]: ...

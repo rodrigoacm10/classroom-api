@@ -126,12 +126,19 @@ class EnrollmentSQLAlchemyRepository:
         status: EnrollmentStatus | None = None,
         include_deleted: bool = False,
     ) -> list[StudentSubjectClassSummary]:
+        student_classes_subquery = select(EnrollmentModel.subject_class_id).where(
+            EnrollmentModel.tenant_member_id == tenant_member_id,
+            EnrollmentModel.deleted.is_(False),
+        )
         session_count = (
             select(
                 AttendanceSessionModel.subject_class_id.label("subject_class_id"),
                 func.count(AttendanceSessionModel.id).label("session_count"),
             )
-            .where(AttendanceSessionModel.status != SessionStatus.CANCELLED)
+            .where(
+                AttendanceSessionModel.status != SessionStatus.CANCELLED,
+                AttendanceSessionModel.subject_class_id.in_(student_classes_subquery),
+            )
             .group_by(AttendanceSessionModel.subject_class_id)
             .subquery()
         )
@@ -215,6 +222,9 @@ class EnrollmentSQLAlchemyRepository:
             sessions,
             presents,
         ) in result.all():
+            total_sessions = int(sessions)
+            total_presents = int(presents)
+            absences = max(total_sessions - total_presents, 0)
             summaries.append(
                 StudentSubjectClassSummary(
                     enrollment_id=enrollment_id,
@@ -226,9 +236,11 @@ class EnrollmentSQLAlchemyRepository:
                     professor_id=professor_id,
                     professor_name=professor_name,
                     attendance_rate=StudentSubjectClassSummary.compute_attendance_rate(
-                        int(presents), int(sessions)
+                        total_presents, total_sessions
                     ),
                     status=enrollment_status,
+                    total_sessions=total_sessions,
+                    absences_count=absences,
                 )
             )
         return summaries

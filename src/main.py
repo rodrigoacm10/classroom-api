@@ -26,6 +26,9 @@ from modules.attendance.interface.router import (
 from modules.auth.interface.router import router as auth_router
 from modules.enrollment.interface.router import (
     member_enrollments_router,
+    my_student_metrics_router,
+    my_student_subject_classes_router,
+    student_metrics_router,
     student_subject_classes_router,
 )
 from modules.enrollment.interface.router import (
@@ -102,7 +105,10 @@ app.include_router(room_router)
 app.include_router(subject_class_router)
 app.include_router(enrollment_router)
 app.include_router(member_enrollments_router)
+app.include_router(my_student_subject_classes_router)
 app.include_router(student_subject_classes_router)
+app.include_router(my_student_metrics_router)
+app.include_router(student_metrics_router)
 app.include_router(tenant_invites_router)
 app.include_router(invites_router)
 app.include_router(attendance_router)

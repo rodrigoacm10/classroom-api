@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
 
 
@@ -68,6 +69,23 @@ class ActiveAttendanceSessionResponse(BaseModel):
     duration_minutes: int
     present_count: int
     total_students: int
+
+    model_config = {"from_attributes": True}
+
+
+class StudentActiveAttendanceSessionResponse(BaseModel):
+    session_id: UUID
+    subject_class_id: UUID
+    subject_class_name: str
+    discipline_name: str
+    room_id: UUID | None = None
+    room_name: str | None = None
+    opened_at: datetime
+    expires_at: datetime
+    duration_minutes: int
+    already_confirmed: bool
+    record_id: UUID | None = None
+    record_status: RecordStatus | None = None
 
     model_config = {"from_attributes": True}
 
