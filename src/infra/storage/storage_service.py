@@ -10,3 +10,7 @@ class StorageService(Protocol):
     ) -> str:
         """Faz upload do arquivo e retorna a URL pública."""
         ...
+
+    async def delete(self, key: str) -> None:
+        """Remove o objeto do storage. Apagar uma chave inexistente não é erro."""
+        ...

@@ -41,3 +41,16 @@ class R2StorageService:
         )
         await loop.run_in_executor(None, put_fn)
         return f"{self._public_url}/{key}"
+
+    async def delete(self, key: str) -> None:
+        """
+        Remove o objeto do bucket R2. Como o upload, roda o boto3 (síncrono)
+        em uma thread separada para não bloquear o event loop.
+        """
+        loop = asyncio.get_running_loop()
+        delete_fn = partial(
+            self._client.delete_object,
+            Bucket=self._bucket,
+            Key=key,
+        )
+        await loop.run_in_executor(None, delete_fn)
