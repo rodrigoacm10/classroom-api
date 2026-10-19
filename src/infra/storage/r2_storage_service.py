@@ -1,10 +1,14 @@
 import asyncio
+import logging
 from functools import partial
 
 import boto3
 from botocore.config import Config
 
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
+
 
 
 class R2StorageService:
@@ -53,4 +57,8 @@ class R2StorageService:
             Bucket=self._bucket,
             Key=key,
         )
-        await loop.run_in_executor(None, delete_fn)
+        try:
+            await loop.run_in_executor(None, delete_fn)
+        except Exception as exc:
+            logger.error("Erro ao apagar objeto %s do R2: %s", key, exc)
+            raise
