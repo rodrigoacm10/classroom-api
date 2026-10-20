@@ -22,6 +22,7 @@ class AttendanceRecordRepository(Protocol):
         ip_address: str | None = None,
         user_agent: str | None = None,
         device_info: dict | None = None,
+        evidence_photo_url: str | None = None,
     ) -> AttendanceRecord: ...
 
     async def save(self, record: AttendanceRecord) -> AttendanceRecord: ...

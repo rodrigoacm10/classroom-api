@@ -80,4 +80,9 @@ jobs:
         env:
           DATABASE_URL: "postgresql+psycopg://classroom:classroom@localhost:5432/classroom_test"
           REDIS_URL: "redis://localhost:6379/0"
+          CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+          CLOUDFLARE_R2_PUBLIC_URL: ${{ secrets.CLOUDFLARE_R2_PUBLIC_URL }}
         run: uv run pytest
