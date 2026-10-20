@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     cloudflare_r2_bucket_name: str = "classroom-evidence"
     cloudflare_r2_public_url: str = ""          # Ex: https://pub-XXXX.r2.dev
 
+    # Limpeza de uploads de evidência: tempo máximo que uma foto pode ficar `pending`
+    # (enviada, mas sem confirmação de presença) antes de ser apagada do storage.
+    evidence_upload_ttl_minutes: int = 120
+
     # Módulo de relatórios — estratégia de paralelismo
     report_strategy: str = "process_pool"  # "sequential" | "process_pool" | "thread_pool_numpy"
     report_max_workers: int = 0  # 0 = usar cpu_budget() automaticamente

@@ -36,6 +36,10 @@ celery_app.conf.update(
             "task": "attendance.close_expired_sessions",
             "schedule": crontab(minute="*"),
         },
+        "cleanup-expired-evidence-uploads-hourly": {
+            "task": "attendance.cleanup_expired_evidence_uploads",
+            "schedule": crontab(minute=0),
+        },
     },
 )
 
