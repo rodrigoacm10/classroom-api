@@ -60,6 +60,40 @@ class TestSendInviteUseCase:
         assert invite.invited_by == admin_user.id
         assert invite.is_pending is True
 
+    async def test_send_invite_with_subject_classes(self):
+        """Deve criar convite persistindo subject_class_ids associados."""
+        import uuid
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        invite_repo = FakeTenantInviteRepository()
+
+        admin_user = UserFactory.make(name="Admin User")
+        tenant = TenantFactory.make(name="Escola Beta")
+        tenant_repo.seed(tenant)
+
+        use_case = SendInviteUseCase(
+            tenant_repo=tenant_repo,
+            member_repo=member_repo,
+            invite_repo=invite_repo,
+        )
+
+        class_id_1 = uuid.uuid4()
+        class_id_2 = uuid.uuid4()
+
+        with patch("modules.tenant.application.use_cases.send_invite.send_invite_email"):
+            invite = await use_case.execute(
+                SendInviteInput(
+                    tenant_id=tenant.id,
+                    email="aluno@escola.com",
+                    role=UserRole.ALUNO,
+                    invited_by=admin_user,
+                    subject_class_ids=[class_id_1, class_id_2],
+                )
+            )
+
+        assert invite.subject_class_ids == [class_id_1, class_id_2]
+
     async def test_send_invite_tenant_not_found_raises(self):
         """Deve lançar ResourceNotFoundException se a tenant informada não existir."""
         tenant_repo = FakeTenantRepository()
@@ -238,6 +272,45 @@ class TestAcceptInviteUseCase:
         updated_invite = await invite_repo.find_by_token(invite.token)
         assert updated_invite is not None
         assert updated_invite.is_accepted is True
+
+    async def test_accept_invite_auto_enrolls_in_subject_classes(self):
+        """Deve matricular o aluno nas turmas do convite ao aceitar."""
+        import uuid
+
+        from tests.unit.fakes.fake_enrollment_repository import FakeEnrollmentRepository
+
+        invite_repo = FakeTenantInviteRepository()
+        member_repo = FakeTenantMemberRepository()
+        enrollment_repo = FakeEnrollmentRepository()
+
+        invited_user = UserFactory.make(email="aluno_novo@escola.com")
+        tenant_id = TenantFactory.make().id
+        class_id_1 = uuid.uuid4()
+        class_id_2 = uuid.uuid4()
+
+        invite = TenantInvite(
+            tenant_id=tenant_id,
+            email="aluno_novo@escola.com",
+            role=UserRole.ALUNO,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            subject_class_ids=[class_id_1, class_id_2],
+        )
+        invite_repo.seed(invite)
+
+        use_case = AcceptInviteUseCase(
+            invite_repo=invite_repo,
+            member_repo=member_repo,
+            enrollment_repo=enrollment_repo,
+        )
+        member = await use_case.execute(token=invite.token, user=invited_user)
+
+        assert member.role == UserRole.ALUNO
+
+        # Verifica se as duas turmas foram matriculadas
+        e1 = await enrollment_repo.find_by_class_and_member(class_id_1, member.id)
+        e2 = await enrollment_repo.find_by_class_and_member(class_id_2, member.id)
+        assert e1 is not None
+        assert e2 is not None
 
     async def test_accept_invite_expired_raises(self):
         """Deve lançar BusinessRuleException ao tentar aceitar um convite que já expirou."""

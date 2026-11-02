@@ -4,6 +4,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
+from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+    EnrollmentSQLAlchemyRepository,
+)
 from modules.tenant.application.use_cases.accept_invite import AcceptInviteUseCase
 from modules.tenant.application.use_cases.get_invite import GetInviteUseCase
 from modules.tenant.application.use_cases.list_tenant_invites import (
@@ -34,7 +37,7 @@ from modules.tenant.interface.schemas.tenant_schemas import (
 )
 from modules.user.domain.entities.user import User
 from modules.user.infra.repositories.user_sqlalchemy_repository import UserSQLAlchemyRepository
-from security.dependencies.current_user import get_current_user
+from security.dependencies.current_user import get_current_tenant_id, get_current_user
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
@@ -77,6 +80,7 @@ async def send_invite(
             email=body.email,
             role=body.role,
             invited_by=current_user,
+            subject_class_ids=body.subject_class_ids,
         )
     )
 
@@ -91,6 +95,7 @@ async def send_invite(
         role=invite.role,
         token=invite.token,
         status="pending",
+        subject_class_ids=invite.subject_class_ids,
         expires_at=invite.expires_at,
         created_at=invite.created_at,
     )
@@ -143,6 +148,7 @@ async def list_tenant_invites(
             role=invite.role,
             token=invite.token,
             status=invite.status,
+            subject_class_ids=invite.subject_class_ids,
             expires_at=invite.expires_at,
             created_at=invite.created_at,
         )
@@ -188,6 +194,62 @@ async def revoke_invite(
         role=invite.role,
         token=invite.token,
         status="revoked",
+        subject_class_ids=invite.subject_class_ids,
+        expires_at=invite.expires_at,
+        created_at=invite.created_at,
+    )
+
+
+@invites_router.post(
+    "",
+    response_model=InviteStatusResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
+)
+async def send_invite_current_tenant(
+    body: SendInviteRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> InviteStatusResponse:
+    """
+    Envia um convite por e-mail para um novo membro da instituição ativa.
+    Requer perfil de ADMIN na tenant ativa.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    invite_repo = TenantInviteSQLAlchemyRepository(session=db)
+    user_repo = UserSQLAlchemyRepository(session=db)
+
+    use_case = SendInviteUseCase(
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
+        invite_repo=invite_repo,
+        user_repo=user_repo,
+    )
+
+    invite = await use_case.execute(
+        SendInviteInput(
+            tenant_id=tenant_id,
+            email=body.email,
+            role=body.role,
+            invited_by=current_user,
+            subject_class_ids=body.subject_class_ids,
+        )
+    )
+
+    tenant = await tenant_repo.find_by_id(tenant_id)
+    tenant_name = tenant.name if tenant else ""
+
+    return InviteStatusResponse(
+        id=invite.id,
+        tenant_id=invite.tenant_id,
+        tenant_name=tenant_name,
+        email=invite.email,
+        role=invite.role,
+        token=invite.token,
+        status="pending",
+        subject_class_ids=invite.subject_class_ids,
         expires_at=invite.expires_at,
         created_at=invite.created_at,
     )
@@ -218,6 +280,7 @@ async def get_invite(
         role=result.invite.role,
         token=result.invite.token,
         status=result.status,
+        subject_class_ids=result.invite.subject_class_ids,
         expires_at=result.invite.expires_at,
         created_at=result.invite.created_at,
     )
@@ -238,8 +301,13 @@ async def accept_invite(
     """
     invite_repo = TenantInviteSQLAlchemyRepository(session=db)
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
 
-    use_case = AcceptInviteUseCase(invite_repo=invite_repo, member_repo=member_repo)
+    use_case = AcceptInviteUseCase(
+        invite_repo=invite_repo,
+        member_repo=member_repo,
+        enrollment_repo=enrollment_repo,
+    )
     member = await use_case.execute(token=token, user=current_user)
 
     return TenantMemberResponse(

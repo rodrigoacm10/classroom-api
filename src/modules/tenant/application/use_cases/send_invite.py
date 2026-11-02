@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -22,6 +22,7 @@ class SendInviteInput:
     email: str
     role: UserRole
     invited_by: User
+    subject_class_ids: list[UUID] = field(default_factory=list)
 
 
 class SendInviteUseCase:
@@ -75,6 +76,7 @@ class SendInviteUseCase:
             email=data.email,
             role=data.role,
             expires_at=expires_at,
+            subject_class_ids=data.subject_class_ids,
         )
 
         saved_invite = await self.invite_repo.save(invite)
