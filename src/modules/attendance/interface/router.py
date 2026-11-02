@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.database.session import get_db
@@ -49,6 +49,10 @@ from modules.attendance.application.use_cases.list_student_active_sessions impor
     ListStudentActiveSessionsInput,
     ListStudentActiveSessionsUseCase,
 )
+from modules.attendance.application.use_cases.list_student_attendance_history import (
+    ListStudentAttendanceHistoryInput,
+    ListStudentAttendanceHistoryUseCase,
+)
 from modules.attendance.application.use_cases.list_tenant_sessions import (
     ListTenantAttendanceSessionsInput,
     ListTenantAttendanceSessionsUseCase,
@@ -79,6 +83,7 @@ from modules.attendance.interface.schemas.session_schemas import (
     AttendanceSessionResponse,
     CreateAttendanceSessionRequest,
     StudentActiveAttendanceSessionResponse,
+    StudentAttendanceHistoryItemResponse,
 )
 from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
     EnrollmentSQLAlchemyRepository,
@@ -543,6 +548,129 @@ async def list_my_active_attendance_sessions(
     )
 
     return [StudentActiveAttendanceSessionResponse.model_validate(s) for s in sessions]
+
+
+@active_sessions_router.get(
+    "/history/me",
+    response_model=PageResponse[StudentAttendanceHistoryItemResponse],
+    dependencies=[Depends(require_role(UserRole.ALUNO))],
+)
+async def list_my_attendance_history(
+    pagination: PaginationParams = Depends(get_pagination_params),
+    subject_class_id: UUID | None = Query(
+        None, description="Filtrar por ID de uma turma específica (opcional)"
+    ),
+    session_status: SessionStatus | None = Query(
+        None, alias="status", description="Filtrar por status da chamada (open, closed, cancelled)"
+    ),
+    opened_after: datetime | None = Query(
+        None, description="Filtrar por chamadas abertas a partir desta data (ISO-8601)"
+    ),
+    opened_before: datetime | None = Query(
+        None, description="Filtrar por chamadas abertas até esta data (ISO-8601)"
+    ),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> PageResponse[StudentAttendanceHistoryItemResponse]:
+    """Consulta o histórico paginado de chamadas do aluno autenticado com status de presença."""
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+
+    use_case = ListStudentAttendanceHistoryUseCase(
+        session_repo=session_repo,
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
+    )
+
+    page = await use_case.execute(
+        ListStudentAttendanceHistoryInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+            user_role=auth.role,
+            pagination=pagination,
+            subject_class_id=subject_class_id,
+            status=session_status,
+            opened_after=opened_after,
+            opened_before=opened_before,
+        )
+    )
+
+    items = [StudentAttendanceHistoryItemResponse.model_validate(item) for item in page.items]
+    return PageResponse.of(page, items)
+
+
+student_attendance_history_router = APIRouter(
+    prefix="/members/{member_id}/attendance-history",
+    tags=["attendance"],
+)
+
+
+@student_attendance_history_router.get(
+    "",
+    response_model=PageResponse[StudentAttendanceHistoryItemResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+@active_sessions_router.get(
+    "/history/student/{tenant_member_id}",
+    response_model=PageResponse[StudentAttendanceHistoryItemResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def list_member_attendance_history(
+    member_id: UUID | None = None,
+    tenant_member_id: UUID | None = None,
+    pagination: PaginationParams = Depends(get_pagination_params),
+    subject_class_id: UUID | None = Query(
+        None, description="Filtrar por ID de uma turma específica (opcional)"
+    ),
+    session_status: SessionStatus | None = Query(
+        None, alias="status", description="Filtrar por status da chamada (open, closed, cancelled)"
+    ),
+    opened_after: datetime | None = Query(
+        None, description="Filtrar por chamadas abertas a partir desta data (ISO-8601)"
+    ),
+    opened_before: datetime | None = Query(
+        None, description="Filtrar por chamadas abertas até esta data (ISO-8601)"
+    ),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> PageResponse[StudentAttendanceHistoryItemResponse]:
+    """Consulta o histórico paginado de chamadas de um aluno específico no tenant ativo."""
+    target_id = member_id or tenant_member_id
+    if not target_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ID do membro da instituição não informado.",
+        )
+
+    session_repo = SessionSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+
+    use_case = ListStudentAttendanceHistoryUseCase(
+        session_repo=session_repo,
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
+    )
+
+    page = await use_case.execute(
+        ListStudentAttendanceHistoryInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+            user_role=auth.role,
+            target_tenant_member_id=target_id,
+            pagination=pagination,
+            subject_class_id=subject_class_id,
+            status=session_status,
+            opened_after=opened_after,
+            opened_before=opened_before,
+        )
+    )
+
+    items = [StudentAttendanceHistoryItemResponse.model_validate(item) for item in page.items]
+    return PageResponse.of(page, items)
 
 
 @active_sessions_router.get(

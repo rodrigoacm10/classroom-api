@@ -90,6 +90,22 @@ class StudentActiveAttendanceSessionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class StudentAttendanceHistoryItemResponse(BaseModel):
+    session_id: UUID
+    subject_class_id: UUID
+    subject_class_name: str
+    discipline_name: str
+    room_id: UUID | None = None
+    room_name: str | None = None
+    opened_at: datetime
+    session_status: SessionStatus
+    record_status: RecordStatus | None = None
+    confirmed_at: datetime | None = None
+    record_id: UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class LastSessionSummaryResponse(BaseModel):
     id: UUID
     subject_class_id: UUID

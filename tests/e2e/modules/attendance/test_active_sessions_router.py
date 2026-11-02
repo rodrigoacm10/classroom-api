@@ -683,3 +683,227 @@ class TestActiveAttendanceSessionsRouter:
         assert data["already_confirmed"] is True
         assert data["record_id"] is not None
         assert data["record_status"] in ("regular", "irregular")
+
+    async def test_student_attendance_history_ordering_and_fields(self, client, session):
+        """GET /attendance-sessions/history/me -> Retorna histórico ordenado por opened_at DESC com status de presença."""
+        (
+            tenant,
+            admin_headers,
+            prof1_headers,
+            _,
+            student_headers,
+            sc1_id,
+            _,
+            room1_id,
+            _,
+        ) = await self._setup_fixtures(session, client)
+
+        # 1. Abre primeira chamada (mais antiga)
+        res1 = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"room_id": room1_id, "duration_minutes": 15},
+            headers=prof1_headers,
+        )
+        s1 = res1.json()
+        # Fecha chamada 1 sem confirmação do aluno (falta)
+        await client.patch(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{s1['id']}/close",
+            headers=prof1_headers,
+        )
+
+        # 2. Abre segunda chamada (mais recente)
+        res2 = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"room_id": room1_id, "duration_minutes": 20},
+            headers=prof1_headers,
+        )
+        s2 = res2.json()
+        # Aluno confirma presença na chamada 2
+        confirm_res = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{s2['id']}/confirm",
+            json={
+                "day_code": s2["day_code"],
+                "latitude": -8.0476,
+                "longitude": -34.8770,
+                "gps_accuracy_meters": 5.0,
+            },
+            headers=student_headers,
+        )
+        assert confirm_res.status_code == 201
+        await client.patch(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{s2['id']}/close",
+            headers=prof1_headers,
+        )
+
+        # 3. Consulta histórico do aluno
+        history_res = await client.get("/attendance-sessions/history/me", headers=student_headers)
+        assert history_res.status_code == 200
+        data = history_res.json()
+
+        assert data["total"] == 2
+        assert len(data["items"]) == 2
+
+        # Mais recente primeiro (s2)
+        item_recent = data["items"][0]
+        assert item_recent["session_id"] == s2["id"]
+        assert item_recent["subject_class_id"] == sc1_id
+        assert item_recent["subject_class_name"] == "T01"
+        assert item_recent["discipline_name"] == "Algoritmos e Estruturas de Dados"
+        assert item_recent["room_name"] == "Lab 204"
+        assert item_recent["session_status"] == "closed"
+        assert item_recent["record_status"] in ("regular", "irregular")
+        assert item_recent["confirmed_at"] is not None
+        assert item_recent["record_id"] is not None
+
+        # Mais antiga depois (s1)
+        item_older = data["items"][1]
+        assert item_older["session_id"] == s1["id"]
+        assert item_older["session_status"] == "closed"
+        assert item_older["record_status"] is None
+        assert item_older["confirmed_at"] is None
+        assert item_older["record_id"] is None
+
+    async def test_student_attendance_history_filters_and_isolation(self, client, session):
+        """GET /attendance-sessions/history/me -> Filtra por turma, status da chamada e isola turmas não matriculadas."""
+        (
+            tenant,
+            admin_headers,
+            prof1_headers,
+            prof2_headers,
+            student_headers,
+            sc1_id,
+            sc2_id,
+            room1_id,
+            _,
+        ) = await self._setup_fixtures(session, client)
+
+        # Turma 1 (aluno matriculado): cria 1 sessão encerrada e 1 cancelada
+        res1 = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"room_id": room1_id, "duration_minutes": 15},
+            headers=prof1_headers,
+        )
+        s1 = res1.json()
+        await client.patch(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{s1['id']}/close",
+            headers=prof1_headers,
+        )
+
+        res_cancel = await client.post(
+            f"/subject-classes/{sc1_id}/attendance-sessions",
+            json={"room_id": room1_id, "duration_minutes": 15},
+            headers=prof1_headers,
+        )
+        s_cancel = res_cancel.json()
+        await client.patch(
+            f"/subject-classes/{sc1_id}/attendance-sessions/{s_cancel['id']}/cancel",
+            headers=prof1_headers,
+        )
+
+        # Turma 2 (aluno NÃO matriculado): cria sessão
+        await client.post(
+            f"/subject-classes/{sc2_id}/attendance-sessions",
+            json={"duration_minutes": 20},
+            headers=prof2_headers,
+        )
+
+        # 1. Consulta geral: aluno só vê as 2 sessões da Turma 1 (não vê Turma 2)
+        h_all = await client.get("/attendance-sessions/history/me", headers=student_headers)
+        assert h_all.status_code == 200
+        assert h_all.json()["total"] == 2
+
+        # 2. Filtro por status=cancelled
+        h_cancelled = await client.get(
+            "/attendance-sessions/history/me?status=cancelled", headers=student_headers
+        )
+        assert h_cancelled.status_code == 200
+        c_data = h_cancelled.json()
+        assert c_data["total"] == 1
+        assert c_data["items"][0]["session_id"] == s_cancel["id"]
+        assert c_data["items"][0]["session_status"] == "cancelled"
+
+        # 3. Filtro por subject_class_id da Turma 1
+        h_class = await client.get(
+            f"/attendance-sessions/history/me?subject_class_id={sc1_id}", headers=student_headers
+        )
+        assert h_class.status_code == 200
+        assert h_class.json()["total"] == 2
+
+        # 4. Filtro por subject_class_id da Turma 2 (não matriculado) -> retorna vazio
+        h_other = await client.get(
+            f"/attendance-sessions/history/me?subject_class_id={sc2_id}", headers=student_headers
+        )
+        assert h_other.status_code == 200
+        assert h_other.json()["total"] == 0
+
+    async def test_student_attendance_history_pagination(self, client, session):
+        """GET /attendance-sessions/history/me -> Suporta paginação offset corretamente."""
+        (
+            tenant,
+            _,
+            prof1_headers,
+            _,
+            student_headers,
+            sc1_id,
+            _,
+            room1_id,
+            _,
+        ) = await self._setup_fixtures(session, client)
+
+        # Cria 3 chamadas na Turma 1
+        for _ in range(3):
+            r = await client.post(
+                f"/subject-classes/{sc1_id}/attendance-sessions",
+                json={"room_id": room1_id, "duration_minutes": 15},
+                headers=prof1_headers,
+            )
+            await client.patch(
+                f"/subject-classes/{sc1_id}/attendance-sessions/{r.json()['id']}/close",
+                headers=prof1_headers,
+            )
+
+        # Página 1 com page_size=2
+        p1 = await client.get(
+            "/attendance-sessions/history/me?page=1&page_size=2", headers=student_headers
+        )
+        assert p1.status_code == 200
+        p1_data = p1.json()
+        assert p1_data["total"] == 3
+        assert p1_data["page"] == 1
+        assert p1_data["page_size"] == 2
+        assert p1_data["pages"] == 2
+        assert len(p1_data["items"]) == 2
+
+        # Página 2 com page_size=2
+        p2 = await client.get(
+            "/attendance-sessions/history/me?page=2&page_size=2", headers=student_headers
+        )
+        assert p2.status_code == 200
+        p2_data = p2.json()
+        assert len(p2_data["items"]) == 1
+
+    async def test_non_student_cannot_access_history_me(self, client, session):
+        """Apenas usuários com perfil ALUNO têm acesso a GET /attendance-sessions/history/me."""
+        (
+            tenant,
+            admin_headers,
+            prof1_headers,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+        ) = await self._setup_fixtures(session, client)
+
+        # Admin -> 403
+        r_admin = await client.get("/attendance-sessions/history/me", headers=admin_headers)
+        assert r_admin.status_code == 403
+
+        # Professor -> 403
+        r_prof = await client.get("/attendance-sessions/history/me", headers=prof1_headers)
+        assert r_prof.status_code == 403
+
+        # Sem auth -> 401
+        r_anon = await client.get("/attendance-sessions/history/me")
+        assert r_anon.status_code == 401
