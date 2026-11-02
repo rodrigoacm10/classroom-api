@@ -1,6 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
+from modules.tenant.domain.entities.students_metrics import StudentsMetrics
 from modules.tenant.domain.entities.tenant_member import TenantMember
 from shared.enums.user_role import UserRole
 from shared.pagination import Page, PaginationParams, paginate_list
@@ -86,6 +87,95 @@ class FakeTenantMemberRepository:
                     continue
             results.append(m)
         return paginate_list(results, pagination)
+
+    async def find_students_with_metrics_paginated(
+        self,
+        tenant_id: UUID,
+        pagination: PaginationParams,
+        search: str | None = None,
+        subject_class_id: UUID | None = None,
+        professor_user_id: UUID | None = None,
+        status: str | None = None,
+        sort_by: str = "name",
+        order: str = "asc",
+        include_deleted: bool = False,
+    ) -> Page[TenantMember]:
+        results = []
+        for m in self._store.values():
+            if m.tenant_id != tenant_id:
+                continue
+            if not include_deleted and m.deleted:
+                continue
+            if m.role != UserRole.ALUNO:
+                continue
+            if (
+                subject_class_id is not None
+                and getattr(m, "_subject_class_id", None) != subject_class_id
+            ):
+                continue
+            if search is not None:
+                search_lower = search.lower()
+                user_name = (m.name or getattr(m, "_user_name", "")).lower()
+                user_email = (m.email or getattr(m, "_user_email", "")).lower()
+                if search_lower not in user_name and search_lower not in user_email:
+                    continue
+            turmas_count = getattr(m, "turmas_count", 0)
+            if status == "regular" and turmas_count <= 0:
+                continue
+            if status == "sem_turma" and turmas_count > 0:
+                continue
+            results.append(m)
+
+        is_asc = order.lower() == "asc"
+        if sort_by == "name":
+            results.sort(
+                key=lambda x: (x.name or getattr(x, "_user_name", "")).lower(),
+                reverse=not is_asc,
+            )
+        elif sort_by == "turmas_count":
+            results.sort(
+                key=lambda x: getattr(x, "turmas_count", 0),
+                reverse=not is_asc,
+            )
+
+        return paginate_list(results, pagination)
+
+    async def find_student_with_metrics_by_id(
+        self,
+        tenant_id: UUID,
+        student_id: UUID,
+        professor_user_id: UUID | None = None,
+        include_deleted: bool = False,
+    ) -> TenantMember | None:
+        m = self._store.get(student_id)
+        if not m or m.tenant_id != tenant_id or m.role != UserRole.ALUNO:
+            return None
+        if not include_deleted and m.deleted:
+            return None
+        return m
+
+    async def get_students_metrics(
+        self,
+        tenant_id: UUID,
+        professor_user_id: UUID | None = None,
+    ) -> StudentsMetrics:
+        students = [
+            m
+            for m in self._store.values()
+            if m.tenant_id == tenant_id and m.role == UserRole.ALUNO and not m.deleted
+        ]
+        total_students = len(students)
+        total_enrollments = sum(getattr(m, "turmas_count", 0) for m in students)
+        avg_classes = total_enrollments / total_students if total_students > 0 else 0.0
+        students_no_class = sum(1 for m in students if getattr(m, "turmas_count", 0) == 0)
+        return StudentsMetrics(
+            total_students=total_students,
+            avg_classes_per_student=avg_classes,
+            total_enrollments=total_enrollments,
+            average_attendance_rate=0.0,
+            students_at_risk=0,
+            students_no_class=students_no_class,
+        )
 
     async def count_active_admins(self, tenant_id: UUID) -> int:
         return len(

@@ -131,4 +131,3 @@ class TestTenantMemberSQLAlchemyRepository:
         assert item.email == "carla.aluna@faculdade.edu"
         assert item.role == UserRole.ALUNO
         assert item.id == member.id
-
