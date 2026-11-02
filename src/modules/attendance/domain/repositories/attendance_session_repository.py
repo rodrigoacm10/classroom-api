@@ -2,13 +2,27 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from modules.attendance.domain.entities.attendance_confirmation_context import (
+    AttendanceConfirmationContext,
+)
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.entities.student_active_session import StudentActiveSession
+from modules.attendance.domain.entities.student_attendance_history_item import (
+    StudentAttendanceHistoryItem,
+)
 from shared.enums.session_status import SessionStatus
 from shared.pagination import Page, PaginationParams
 
 
 class AttendanceSessionRepository(Protocol):
+    async def find_confirmation_context(
+        self,
+        tenant_id: UUID,
+        subject_class_id: UUID,
+        session_id: UUID,
+        user_id: UUID,
+        device_id: str | None = None,
+    ) -> AttendanceConfirmationContext | None: ...
     async def save(self, session: AttendanceSession) -> AttendanceSession: ...
 
     async def find_by_id(self, session_id: UUID) -> AttendanceSession | None: ...
@@ -66,3 +80,14 @@ class AttendanceSessionRepository(Protocol):
         tenant_id: UUID,
         tenant_member_id: UUID,
     ) -> list[StudentActiveSession]: ...
+
+    async def list_history_by_student_paginated(
+        self,
+        tenant_id: UUID,
+        tenant_member_id: UUID,
+        pagination: PaginationParams,
+        subject_class_id: UUID | None = None,
+        status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+    ) -> Page[StudentAttendanceHistoryItem]: ...

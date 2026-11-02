@@ -3,6 +3,9 @@ from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.entities.student_active_session import StudentActiveSession
+from modules.attendance.domain.entities.student_attendance_history_item import (
+    StudentAttendanceHistoryItem,
+)
 from shared.enums.session_status import SessionStatus
 from shared.pagination import Page, PaginationParams, paginate_list
 
@@ -17,6 +20,7 @@ class FakeAttendanceSessionRepository:
     def __init__(self) -> None:
         self.sessions: dict[UUID, AttendanceSession] = {}
         self._student_active_sessions: list[StudentActiveSession] = []
+        self._student_history_items: list[StudentAttendanceHistoryItem] = []
 
     async def save(self, session: AttendanceSession) -> AttendanceSession:
         self.sessions[session.id] = session
@@ -138,3 +142,37 @@ class FakeAttendanceSessionRepository:
         tenant_member_id: UUID,
     ) -> list[StudentActiveSession]:
         return list(self._student_active_sessions)
+
+    async def list_history_by_student_paginated(
+        self,
+        tenant_id: UUID,
+        tenant_member_id: UUID,
+        pagination: PaginationParams,
+        subject_class_id: UUID | None = None,
+        status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+    ) -> Page[StudentAttendanceHistoryItem]:
+        items = list(self._student_history_items)
+        if subject_class_id is not None:
+            items = [s for s in items if s.subject_class_id == subject_class_id]
+        if status is not None:
+            items = [s for s in items if s.session_status == status]
+        else:
+            items = [s for s in items if s.session_status != SessionStatus.CANCELLED]
+        if opened_after is not None:
+            items = [s for s in items if s.opened_at >= opened_after]
+        if opened_before is not None:
+            items = [s for s in items if s.opened_at <= opened_before]
+        items.sort(key=lambda s: s.opened_at, reverse=True)
+        return paginate_list(items, pagination)
+
+    async def find_confirmation_context(
+        self,
+        tenant_id: UUID,
+        subject_class_id: UUID,
+        session_id: UUID,
+        user_id: UUID,
+        device_id: str | None = None,
+    ):
+        return None
