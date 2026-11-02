@@ -45,9 +45,14 @@ class SubjectClassMetricsResponse(BaseModel):
     active_classes: int = Field(..., description="Total de turmas ativas")
     inactive_classes: int = Field(..., description="Total de turmas inativas")
     total_students: int = Field(..., description="Total de alunos matriculados nas turmas")
-    average_attendance_rate: float = Field(..., description="Taxa de frequência média das turmas ativas (0.0 a 1.0)")
-    at_risk_classes_count: int = Field(..., description="Quantidade de turmas com frequência abaixo de 75%")
-    live_classes_count: int = Field(..., description="Quantidade de turmas com sessão de chamada aberta agora")
+    average_attendance_rate: float = Field(
+        ..., description="Taxa de frequência média das turmas ativas (0.0 a 1.0)"
+    )
+    at_risk_classes_count: int = Field(
+        ..., description="Quantidade de turmas com frequência abaixo de 75%"
+    )
+    live_classes_count: int = Field(
+        ..., description="Quantidade de turmas com sessão de chamada aberta agora"
+    )
 
     model_config = {"from_attributes": True}
-
