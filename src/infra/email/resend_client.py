@@ -79,17 +79,18 @@ def send_invite_email(
     role: str,
     invite_link: str,
     expires_in_hours: int = 72,
-) -> None:
+) -> str | None:
     """
     Dispara o e-mail de convite para o usuário via Resend utilizando o template HTML.
     Em desenvolvimento (ou sem chave configurada), simula o envio via log sem lançar exceção.
+    Retorna o ID da mensagem no Resend se enviado, ou None em caso de simulação/falha.
     """
     if _is_placeholder_api_key(settings.resend_api_key):
         logger.warning(
             f"[EMAIL SIMULATION] RESEND_API_KEY não configurada ou placeholder. "
             f"Convite para: {to_email} | Instituição: {tenant_name} | Papel: {role} | Link: {invite_link}"
         )
-        return
+        return None
 
     resend.api_key = settings.resend_api_key
 
@@ -104,7 +105,7 @@ def send_invite_email(
             expires_in_hours=expires_in_hours,
         )
 
-        resend.Emails.send(
+        response = resend.Emails.send(
             {
                 "from": settings.email_from,
                 "to": [to_email],
@@ -112,14 +113,20 @@ def send_invite_email(
                 "html": html_content,
             }
         )
-        logger.info(
-            f"E-mail de convite enviado com sucesso para {to_email} (instituição: {tenant_name})"
+        email_id = (
+            response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
         )
+        logger.info(
+            f"E-mail de convite enviado com sucesso para {to_email} "
+            f"(remetente: {settings.email_from}, instituição: {tenant_name}, Resend ID: {email_id})"
+        )
+        return str(email_id) if email_id else None
     except Exception as exc:
         logger.error(
             f"Erro ao disparar e-mail de convite para {to_email} via Resend: {exc}. "
-            f"Link de convite: {invite_link}"
+            f"Remetente: {settings.email_from} | Link de convite: {invite_link}"
         )
+        return None
 
 
 def send_password_reset_email(
@@ -127,17 +134,18 @@ def send_password_reset_email(
     user_name: str,
     code: str,
     expires_in_minutes: int = 15,
-) -> None:
+) -> str | None:
     """
     Dispara o e-mail com código OTP de recuperação de senha via Resend.
     Em desenvolvimento (ou sem chave configurada), simula o envio via log com o código OTP.
+    Retorna o ID da mensagem no Resend se enviado, ou None em caso de simulação/falha.
     """
     if _is_placeholder_api_key(settings.resend_api_key):
         logger.warning(
             f"[EMAIL SIMULATION] RESEND_API_KEY não configurada ou placeholder. "
             f"Recuperação de senha para: {to_email} ({user_name}) | Código OTP: {code} | Expira em: {expires_in_minutes} min"
         )
-        return
+        return None
 
     resend.api_key = settings.resend_api_key
 
@@ -148,7 +156,7 @@ def send_password_reset_email(
             expires_in_minutes=expires_in_minutes,
         )
 
-        resend.Emails.send(
+        response = resend.Emails.send(
             {
                 "from": settings.email_from,
                 "to": [to_email],
@@ -156,9 +164,17 @@ def send_password_reset_email(
                 "html": html_content,
             }
         )
-        logger.info(f"E-mail de recuperação de senha enviado com sucesso para {to_email}")
+        email_id = (
+            response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
+        )
+        logger.info(
+            f"E-mail de recuperação de senha enviado com sucesso para {to_email} "
+            f"(remetente: {settings.email_from}, Resend ID: {email_id})"
+        )
+        return str(email_id) if email_id else None
     except Exception as exc:
         logger.error(
             f"Erro ao disparar e-mail de recuperação de senha para {to_email} via Resend: {exc}. "
-            f"Código OTP gerado: {code}"
+            f"Remetente: {settings.email_from} | Código OTP: {code}"
         )
+        return None
