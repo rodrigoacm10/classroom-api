@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
@@ -22,6 +22,8 @@ class AttendanceRecordRepository(Protocol):
         ip_address: str | None = None,
         user_agent: str | None = None,
         device_info: dict | None = None,
+        room_location: Any | None = None,
+        distance_meters: float | None = None,
     ) -> AttendanceRecord: ...
 
     async def save(self, record: AttendanceRecord) -> AttendanceRecord: ...
