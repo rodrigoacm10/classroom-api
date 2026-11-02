@@ -48,4 +48,3 @@ class ListSubjectClassesUseCase:
             sort_by=data.sort_by,
             order=data.order,
         )
-

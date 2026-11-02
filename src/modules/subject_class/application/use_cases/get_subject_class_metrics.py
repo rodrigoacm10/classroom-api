@@ -51,7 +51,9 @@ class GetSubjectClassMetricsUseCase:
                 user_id=data.user_id,
             )
             if not member or member.deleted:
-                raise ResourceNotFoundException("Vínculo do professor não encontrado nesta instituição.")
+                raise ResourceNotFoundException(
+                    "Vínculo do professor não encontrado nesta instituição."
+                )
             scoped_professor_id = member.id
 
         return await self.subject_class_repo.get_metrics_by_tenant(

@@ -114,3 +114,77 @@ class TestListStudentsUseCase:
     async def test_list_students_raises_when_tenant_not_found(self):
         with pytest.raises(ResourceNotFoundException):
             await self.use_case.execute(ListStudentsInput(tenant_id=uuid.uuid4()))
+
+    async def test_list_students_filter_by_status(self):
+        tenant = Tenant(name="Universidade Teste", slug="univ-teste")
+        await self.tenant_repo.save(tenant)
+
+        aluno_regular = TenantMember(
+            tenant_id=tenant.id,
+            user_id=uuid.uuid4(),
+            role=UserRole.ALUNO,
+            name="Aluno Regular",
+            email="regular@aluno.com",
+            turmas_count=2,
+        )
+        aluno_sem_turma = TenantMember(
+            tenant_id=tenant.id,
+            user_id=uuid.uuid4(),
+            role=UserRole.ALUNO,
+            name="Aluno Sem Turma",
+            email="semturma@aluno.com",
+            turmas_count=0,
+        )
+        await self.member_repo.save(aluno_regular)
+        await self.member_repo.save(aluno_sem_turma)
+
+        # Filtro regular
+        res_regular = await self.use_case.execute(
+            ListStudentsInput(tenant_id=tenant.id, status="regular")
+        )
+        assert res_regular.total == 1
+        assert res_regular.items[0].email == "regular@aluno.com"
+
+        # Filtro sem_turma
+        res_sem_turma = await self.use_case.execute(
+            ListStudentsInput(tenant_id=tenant.id, status="sem_turma")
+        )
+        assert res_sem_turma.total == 1
+        assert res_sem_turma.items[0].email == "semturma@aluno.com"
+
+    async def test_list_students_sorting(self):
+        tenant = Tenant(name="Universidade Teste", slug="univ-teste")
+        await self.tenant_repo.save(tenant)
+
+        aluno_a = TenantMember(
+            tenant_id=tenant.id,
+            user_id=uuid.uuid4(),
+            role=UserRole.ALUNO,
+            name="Ana Beatriz",
+            email="ana@aluno.com",
+            turmas_count=1,
+        )
+        aluno_z = TenantMember(
+            tenant_id=tenant.id,
+            user_id=uuid.uuid4(),
+            role=UserRole.ALUNO,
+            name="Zeca Pagodinho",
+            email="zeca@aluno.com",
+            turmas_count=5,
+        )
+        await self.member_repo.save(aluno_a)
+        await self.member_repo.save(aluno_z)
+
+        # Ordenar Nome DESC (Z -> A)
+        res_desc = await self.use_case.execute(
+            ListStudentsInput(tenant_id=tenant.id, sort_by="name", order="desc")
+        )
+        assert res_desc.items[0].name == "Zeca Pagodinho"
+        assert res_desc.items[1].name == "Ana Beatriz"
+
+        # Ordenar Turmas DESC (Mais turmas -> Menos turmas)
+        res_turmas = await self.use_case.execute(
+            ListStudentsInput(tenant_id=tenant.id, sort_by="turmas_count", order="desc")
+        )
+        assert res_turmas.items[0].name == "Zeca Pagodinho"
+        assert res_turmas.items[1].name == "Ana Beatriz"

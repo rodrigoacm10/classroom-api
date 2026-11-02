@@ -15,3 +15,9 @@ class TenantMember:
     name: str = ""
     email: str = ""
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    turmas_count: int = 0
+    attendance_rate: float = 0.0
+    total_sessions: int = 0
+    total_present: int = 0
+    total_absent: int = 0
+    status: str = "sem_turma"
