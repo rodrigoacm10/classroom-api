@@ -635,3 +635,42 @@ class TestConfirmAttendanceUseCase:
                     user_agent="okhttp/4.9.0",
                 )
             )
+
+    async def test_confirm_attendance_with_custom_professor_location_success(self):
+        """Deve confirmar presença com sucesso baseando-se na geolocalização do professor da sessão."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room,
+            _,
+            session_repo,
+        ) = await self._setup_fixtures()
+
+        # Sem sala vinculada, apenas localização customizada da sessão
+        session.room_id = None
+        session.custom_latitude = -8.0512
+        session.custom_longitude = -34.8812
+        session.custom_tolerance_radius_meters = 80
+        await session_repo.save(session)
+        subject_class.room_id = None
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.051210,
+                longitude=-34.881210,
+                user_agent="okhttp/4.9.0",
+            )
+        )
+
+        assert record.within_radius is True
+        assert record.record_status == RecordStatus.REGULAR
+        assert record.distance_meters < 80.0

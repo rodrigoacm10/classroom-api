@@ -9,10 +9,12 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,6 +30,12 @@ class AttendanceRecordModel(Base):
             "session_id",
             "tenant_member_id",
             name="uq_attendance_record_session_member",
+        ),
+        Index(
+            "ix_attendance_records_session_device",
+            "session_id",
+            "device_id",
+            postgresql_where=text("device_id IS NOT NULL"),
         ),
     )
 

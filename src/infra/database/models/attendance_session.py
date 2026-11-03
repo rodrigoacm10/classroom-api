@@ -2,7 +2,8 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, func, text
+from geoalchemy2 import Geography
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,6 +39,12 @@ class AttendanceSessionModel(Base):
     room_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True
     )
+    custom_location: Mapped[str | None] = mapped_column(
+        Geography(geometry_type="POINT", srid=4326), nullable=True
+    )
+    custom_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    custom_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    custom_tolerance_radius_meters: Mapped[int | None] = mapped_column(Integer, nullable=True)
     day_code: Mapped[str] = mapped_column(String(10), nullable=False)
     opened_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
