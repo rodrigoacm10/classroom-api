@@ -26,7 +26,7 @@ class TestForgotPasswordEndpoint:
         )
 
         with patch(
-            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email_task.delay"
         ) as mock_email:
             response = await client.post(
                 "/auth/forgot-password",
@@ -52,7 +52,7 @@ class TestForgotPasswordEndpoint:
     ) -> None:
         """E-mail inexistente -> retorna exatamente 200 com a mesma mensagem (anti-enumeração)."""
         with patch(
-            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email_task.delay"
         ) as mock_email:
             response = await client.post(
                 "/auth/forgot-password",
@@ -180,7 +180,9 @@ class TestResetPasswordEndpoint:
         old_access_token = login_res.json()["access_token"]
 
         # 2. Solicita código
-        with patch("modules.auth.application.use_cases.forgot_password.send_password_reset_email"):
+        with patch(
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email_task.delay"
+        ):
             forgot_res = await client.post("/auth/forgot-password", json={"email": email})
         assert forgot_res.status_code == 200
 

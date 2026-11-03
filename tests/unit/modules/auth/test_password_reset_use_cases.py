@@ -65,7 +65,7 @@ class TestForgotPasswordUseCase:
         self.user_repo.seed(user)
 
         with patch(
-            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email_task.delay"
         ) as mock_email:
             await self.use_case.execute(ForgotPasswordInput(email="aluno@escola.com"))
 
@@ -87,7 +87,7 @@ class TestForgotPasswordUseCase:
     async def test_forgot_password_unknown_email_silently_returns_without_error(self) -> None:
         """E-mail não cadastrado -> não lança exceção, não armazena no Redis e não dispara e-mail."""
         with patch(
-            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email_task.delay"
         ) as mock_email:
             await self.use_case.execute(ForgotPasswordInput(email="fantasma@escola.com"))
 
