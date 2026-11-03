@@ -6,13 +6,18 @@ from modules.tenant.domain.entities.tenant_invite import TenantInvite
 
 class TenantInviteMapper:
     @staticmethod
-    def to_domain(model: TenantInviteModel) -> TenantInvite:
+    def to_domain(
+        model: TenantInviteModel,
+        invited_by_name: str | None = None,
+        subject_class_names: list[str] | None = None,
+    ) -> TenantInvite:
         raw_classes = model.subject_class_ids or []
         subject_class_ids = [UUID(str(cid)) for cid in raw_classes]
         return TenantInvite(
             id=model.id,
             tenant_id=model.tenant_id,
             invited_by=model.invited_by,
+            invited_by_name=invited_by_name,
             email=model.email,
             role=model.role,
             token=model.token,
@@ -20,6 +25,7 @@ class TenantInviteMapper:
             accepted_at=model.accepted_at,
             revoked_at=model.revoked_at,
             subject_class_ids=subject_class_ids,
+            subject_class_names=subject_class_names or [],
             created_at=model.created_at,
         )
 

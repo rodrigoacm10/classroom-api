@@ -100,7 +100,23 @@ class InviteStatusResponse(BaseModel):
     token: str
     status: Literal["pending", "accepted", "expired", "revoked"]
     subject_class_ids: list[UUID] = []
+    subject_class_names: list[str] = []
     expires_at: datetime
     created_at: datetime
+    accepted_at: datetime | None = None
+    revoked_at: datetime | None = None
+    invited_by_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TenantInvitesMetricsResponse(BaseModel):
+    total: int
+    pending: int
+    accepted: int
+    expired: int
+    revoked: int
+    acceptance_rate: float
+    days: int
 
     model_config = {"from_attributes": True}
