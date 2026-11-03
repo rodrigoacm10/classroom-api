@@ -19,6 +19,7 @@ celery_app = Celery(
     include=[
         "infra.tasks.notification_tasks",
         "infra.tasks.attendance_tasks",
+        "infra.tasks.email_tasks",
     ],
 )
 

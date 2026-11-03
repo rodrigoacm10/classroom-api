@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 import resend
@@ -17,6 +18,12 @@ ROLE_MAP = {
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 INVITE_TEMPLATE_PATH = TEMPLATES_DIR / "invite.html"
 PASSWORD_RESET_TEMPLATE_PATH = TEMPLATES_DIR / "password_reset.html"
+
+
+@lru_cache(maxsize=4)
+def _read_template_cached(path: Path) -> str:
+    """Lê e armazena o conteúdo do template HTML em memória para evitar I/O de disco repetitivo."""
+    return path.read_text(encoding="utf-8")
 
 
 def _is_placeholder_api_key(api_key: str | None) -> bool:
@@ -39,13 +46,13 @@ def _render_invite_template(
     invite_link: str,
     expires_in_hours: int,
 ) -> str:
-    """Lê e substitui as variáveis no template HTML de convite."""
+    """Lê (via cache em memória) e substitui as variáveis no template HTML de convite."""
     if not INVITE_TEMPLATE_PATH.exists():
         raise FileNotFoundError(
             f"Template HTML de convite não encontrado em: {INVITE_TEMPLATE_PATH}"
         )
 
-    content = INVITE_TEMPLATE_PATH.read_text(encoding="utf-8")
+    content = _read_template_cached(INVITE_TEMPLATE_PATH)
     content = content.replace("{{ inviter_name }}", inviter_name)
     content = content.replace("{{ tenant_name }}", tenant_name)
     content = content.replace("{{ role_display }}", role_display)
@@ -59,13 +66,13 @@ def _render_password_reset_template(
     code: str,
     expires_in_minutes: int,
 ) -> str:
-    """Lê e substitui as variáveis no template HTML de recuperação de senha."""
+    """Lê (via cache em memória) e substitui as variáveis no template HTML de recuperação de senha."""
     if not PASSWORD_RESET_TEMPLATE_PATH.exists():
         raise FileNotFoundError(
             f"Template HTML de recuperação de senha não encontrado em: {PASSWORD_RESET_TEMPLATE_PATH}"
         )
 
-    content = PASSWORD_RESET_TEMPLATE_PATH.read_text(encoding="utf-8")
+    content = _read_template_cached(PASSWORD_RESET_TEMPLATE_PATH)
     content = content.replace("{{ user_name }}", user_name)
     content = content.replace("{{ code }}", code)
     content = content.replace("{{ expires_in_minutes }}", str(expires_in_minutes))
@@ -79,6 +86,8 @@ def send_invite_email(
     role: str,
     invite_link: str,
     expires_in_hours: int = 72,
+    *,
+    raise_on_error: bool = False,
 ) -> str | None:
     """
     Dispara o e-mail de convite para o usuário via Resend utilizando o template HTML.
@@ -126,6 +135,8 @@ def send_invite_email(
             f"Erro ao disparar e-mail de convite para {to_email} via Resend: {exc}. "
             f"Remetente: {settings.email_from} | Link de convite: {invite_link}"
         )
+        if raise_on_error:
+            raise
         return None
 
 
@@ -134,6 +145,8 @@ def send_password_reset_email(
     user_name: str,
     code: str,
     expires_in_minutes: int = 15,
+    *,
+    raise_on_error: bool = False,
 ) -> str | None:
     """
     Dispara o e-mail com código OTP de recuperação de senha via Resend.
@@ -177,4 +190,6 @@ def send_password_reset_email(
             f"Erro ao disparar e-mail de recuperação de senha para {to_email} via Resend: {exc}. "
             f"Remetente: {settings.email_from} | Código OTP: {code}"
         )
+        if raise_on_error:
+            raise
         return None

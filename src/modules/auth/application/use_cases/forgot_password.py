@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from config.settings import settings
 from infra.cache.redis_client import redis_client
-from infra.email.resend_client import send_password_reset_email
+from infra.tasks.email_tasks import send_password_reset_email_task
 from modules.user.domain.repositories.user_repository import UserRepository
 
 
@@ -52,7 +52,7 @@ class ForgotPasswordUseCase:
         redis_key = f"password_reset:{email_clean}"
         await self.redis.set(redis_key, payload, ex=ttl_seconds)
 
-        send_password_reset_email(
+        send_password_reset_email_task.delay(
             to_email=user.email,
             user_name=user.name,
             code=code,

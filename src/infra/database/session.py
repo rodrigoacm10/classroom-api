@@ -36,15 +36,19 @@ AsyncSessionLocal = async_sessionmaker(
 async def session_scope() -> AsyncGenerator[AsyncSession, None]:
     """
     Uma transação por unidade de trabalho: commit se terminar bem, rollback se falhar.
+    Evita adquirir conexão do pool para commit/rollback caso nenhuma operação
+    tenha iniciado transação na sessão.
 
     Use em requests HTTP (`get_db`), tasks Celery e qualquer script fora do FastAPI.
     """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
+            if not isinstance(session, AsyncSession) or session.in_transaction():
+                await session.commit()
         except Exception:
-            await session.rollback()
+            if not isinstance(session, AsyncSession) or session.in_transaction():
+                await session.rollback()
             raise
 
 

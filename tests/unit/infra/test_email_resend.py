@@ -1,8 +1,16 @@
+from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from config.settings import Settings
 from infra.email.resend_client import (
+    INVITE_TEMPLATE_PATH,
+    PASSWORD_RESET_TEMPLATE_PATH,
     _is_placeholder_api_key,
+    _read_template_cached,
+    _render_invite_template,
+    _render_password_reset_template,
     send_invite_email,
     send_password_reset_email,
 )
@@ -131,3 +139,43 @@ class TestResendClient:
         )
         # Não deve estourar erro para o chamador, apenas logar e retornar None
         assert result is None
+
+    @patch("infra.email.resend_client.resend.Emails.send")
+    @patch("infra.email.resend_client.settings")
+    def test_resend_api_error_raises_when_raise_on_error_true(
+        self, mock_settings, mock_send
+    ) -> None:
+        mock_settings.resend_api_key = "re_valid_key"
+        mock_settings.email_from = "Classroom <noreply@rodrigoacm.com>"
+        mock_send.side_effect = RuntimeError("Temporary Resend outage")
+
+        with pytest.raises(RuntimeError, match="Temporary Resend outage"):
+            send_password_reset_email(
+                to_email="aluno@escola.com",
+                user_name="Aluno João",
+                code="123456",
+                raise_on_error=True,
+            )
+
+    def test_template_caching_avoids_repeated_disk_io(self) -> None:
+        _read_template_cached.cache_clear()
+        with patch.object(
+            Path, "read_text", return_value="<p>{{ user_name }} - {{ code }}</p>"
+        ) as mock_read:
+            html_1 = _render_password_reset_template("Maria", "111222", 15)
+            html_2 = _render_password_reset_template("João", "333444", 15)
+
+        assert "Maria - 111222" in html_1
+        assert "João - 333444" in html_2
+        assert mock_read.call_count == 1
+        assert INVITE_TEMPLATE_PATH.exists()
+        assert PASSWORD_RESET_TEMPLATE_PATH.exists()
+        _read_template_cached.cache_clear()
+        rendered_invite = _render_invite_template(
+            inviter_name="Prof",
+            tenant_name="IFSP",
+            role_display="Aluno",
+            invite_link="https://app/invite",
+            expires_in_hours=72,
+        )
+        assert "IFSP" in rendered_invite
