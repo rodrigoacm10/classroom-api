@@ -9,7 +9,7 @@ from infra.cache.redis_client import redis_client
 from modules.user.domain.repositories.user_repository import UserRepository
 from security.blacklist import revoke_user_sessions
 from security.jwt import decode_reset_password_token
-from security.password import hash_password
+from security.password import hash_password_async
 from shared.exceptions import BusinessRuleException, ResourceNotFoundException
 
 
@@ -64,8 +64,8 @@ class ResetPasswordUseCase:
         if not user:
             raise ResourceNotFoundException("Usuário não encontrado.")
 
-        # Atualiza a senha
-        user.password_hash = hash_password(data.new_password)
+        # Atualiza a senha sem bloquear o Event Loop
+        user.password_hash = await hash_password_async(data.new_password)
         await self.user_repo.save(user)
 
         # Adiciona o JTI na blacklist até o término do tempo de vida do token (single-use)

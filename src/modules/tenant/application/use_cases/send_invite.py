@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from config.settings import settings
-from infra.email.resend_client import send_invite_email
+from infra.tasks.email_tasks import send_invite_email_task
 from modules.tenant.domain.entities.tenant_invite import TenantInvite
 from modules.tenant.domain.repositories.tenant_invite_repository import TenantInviteRepository
 from modules.tenant.domain.repositories.tenant_repository import (
@@ -80,10 +80,11 @@ class SendInviteUseCase:
         )
 
         saved_invite = await self.invite_repo.save(invite)
+        saved_invite.tenant_name = tenant.name
 
-        # 5. Monta o link e dispara o e-mail de convite
+        # 5. Monta o link e enfileira o disparo assíncrono do e-mail de convite via Celery
         invite_link = f"{self.frontend_url}/invites/accept?token={saved_invite.token}"
-        send_invite_email(
+        send_invite_email_task.delay(
             to_email=data.email,
             tenant_name=tenant.name,
             inviter_name=data.invited_by.name,

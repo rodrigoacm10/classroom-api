@@ -165,3 +165,44 @@ class TestListTenantInvitesUseCase:
         )
         assert res_search.total == 1
         assert res_search.items[0].email == "aluno_carlos@escola.com"
+
+    async def test_list_tenant_invites_sort_by_email_and_date(self):
+        """Deve ordenar convites por e-mail ou data de criação com ordem asc/desc."""
+        tenant_repo = FakeTenantRepository()
+        invite_repo = FakeTenantInviteRepository()
+        use_case = ListTenantInvitesUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
+
+        tenant = TenantFactory.make(name="Escola Sort")
+        tenant_repo.seed(tenant)
+
+        now = datetime.now(timezone.utc)
+        inv1 = TenantInvite(
+            tenant_id=tenant.id,
+            email="beta@escola.com",
+            role=UserRole.ALUNO,
+            expires_at=now + timedelta(hours=24),
+            created_at=now - timedelta(hours=2),
+        )
+        inv2 = TenantInvite(
+            tenant_id=tenant.id,
+            email="alpha@escola.com",
+            role=UserRole.ALUNO,
+            expires_at=now + timedelta(hours=24),
+            created_at=now - timedelta(hours=1),
+        )
+        invite_repo.seed(inv1)
+        invite_repo.seed(inv2)
+
+        # Ordenar por email ASC
+        res_asc = await use_case.execute(
+            ListTenantInvitesInput(tenant_id=tenant.id, sort_by="email", order="asc")
+        )
+        assert res_asc.items[0].email == "alpha@escola.com"
+        assert res_asc.items[1].email == "beta@escola.com"
+
+        # Ordenar por email DESC
+        res_desc = await use_case.execute(
+            ListTenantInvitesInput(tenant_id=tenant.id, sort_by="email", order="desc")
+        )
+        assert res_desc.items[0].email == "beta@escola.com"
+        assert res_desc.items[1].email == "alpha@escola.com"

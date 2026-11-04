@@ -131,7 +131,7 @@ class ConfirmAttendanceUseCase:
         if context.already_confirmed:
             raise ResourceAlreadyExistsException("Presença já confirmada nesta sessão.")
 
-        if not context.room_id:
+        if not context.room_id and context.room_location is None:
             raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
 
         flags: list[str] = []
@@ -233,13 +233,26 @@ class ConfirmAttendanceUseCase:
 
         # 10. Obter sala e raio de tolerância (sessão ou turma)
         room_id_to_use = session.room_id or subject_class.room_id
-        if not room_id_to_use:
-            raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
-
         tolerance_radius = 50.0
-        room = await self.room_repo.find_by_id(room_id_to_use)
-        if room:
-            tolerance_radius = float(room.tolerance_radius_meters)
+        distance_meters: float | None = None
+        if session.custom_latitude is not None and session.custom_longitude is not None:
+            tolerance_radius = float(session.custom_tolerance_radius_meters or 50.0)
+            from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
+                haversine_distance,
+            )
+
+            distance_meters = haversine_distance(
+                data.latitude,
+                data.longitude,
+                session.custom_latitude,
+                session.custom_longitude,
+            )
+        elif room_id_to_use:
+            room = await self.room_repo.find_by_id(room_id_to_use)
+            if room:
+                tolerance_radius = float(room.tolerance_radius_meters)
+        else:
+            raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
 
         # 11. Calcular flags de irregularidade pré-inserção
         flags: list[str] = []
@@ -278,4 +291,5 @@ class ConfirmAttendanceUseCase:
             ip_address=data.ip_address,
             user_agent=data.user_agent,
             device_info=data.device_info,
+            distance_meters=distance_meters,
         )

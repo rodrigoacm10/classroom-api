@@ -736,6 +736,7 @@ class SessionSQLAlchemyRepository:
                 select(AttendanceRecordModel.id)
                 .where(
                     AttendanceRecordModel.session_id == session_id,
+                    AttendanceRecordModel.device_id.is_not(None),
                     AttendanceRecordModel.device_id == device_id,
                     AttendanceRecordModel.tenant_member_id != TenantMemberModel.id,
                 )
@@ -762,10 +763,15 @@ class SessionSQLAlchemyRepository:
                 EnrollmentModel.status.label("enrollment_status"),
                 EnrollmentModel.deleted.label("enrollment_deleted"),
                 room_id_expr.label("room_id"),
-                func.coalesce(RoomModel.tolerance_radius_meters, 50.0).label(
-                    "room_tolerance_radius"
-                ),
-                RoomModel.location.label("room_location"),
+                func.coalesce(
+                    AttendanceSessionModel.custom_tolerance_radius_meters,
+                    RoomModel.tolerance_radius_meters,
+                    50.0,
+                ).label("room_tolerance_radius"),
+                func.coalesce(
+                    AttendanceSessionModel.custom_location,
+                    RoomModel.location,
+                ).label("room_location"),
                 existing_record_sub.label("existing_record_id"),
                 (
                     shared_device_sub.label("shared_device_id")

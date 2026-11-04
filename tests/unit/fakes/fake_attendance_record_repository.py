@@ -1,4 +1,5 @@
 import math
+from typing import Any
 from uuid import UUID, uuid4
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
@@ -51,8 +52,8 @@ class FakeAttendanceRecordRepository(AttendanceRecordRepository):
         tenant_member_id: UUID,
         latitude: float,
         longitude: float,
-        room_id: UUID,
-        tolerance_radius_meters: float,
+        room_id: UUID | None = None,
+        tolerance_radius_meters: float = 50.0,
         gps_accuracy_meters: float | None = None,
         record_status: RecordStatus = RecordStatus.REGULAR,
         irregularity_flags: list[str] | None = None,
@@ -60,14 +61,22 @@ class FakeAttendanceRecordRepository(AttendanceRecordRepository):
         ip_address: str | None = None,
         user_agent: str | None = None,
         device_info: dict | None = None,
+        room_location: Any | None = None,
+        distance_meters: float | None = None,
     ) -> AttendanceRecord:
         # Verificar duplicidade de sessão + membro
         for r in self.records.values():
             if r.session_id == session_id and r.tenant_member_id == tenant_member_id:
                 raise BusinessRuleException("Presença já confirmada nesta sessão.")
 
-        room_coords = self.room_coordinates.get(room_id, (latitude, longitude))
-        distance_meters = haversine_distance(latitude, longitude, room_coords[0], room_coords[1])
+        if distance_meters is None:
+            room_coords = (self.room_coordinates.get(room_id) if room_id is not None else None) or (
+                latitude,
+                longitude,
+            )
+            distance_meters = haversine_distance(
+                latitude, longitude, room_coords[0], room_coords[1]
+            )
         within_radius = distance_meters <= tolerance_radius_meters
 
         flags = list(irregularity_flags or [])

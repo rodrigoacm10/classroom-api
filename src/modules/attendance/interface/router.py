@@ -102,6 +102,7 @@ from security.dependencies.current_user import (
     AuthContext,
     get_auth_context,
     get_current_tenant_id,
+    get_tenant_token_auth_context,
 )
 from security.dependencies.require_role import require_role
 from shared.enums.record_status import RecordStatus
@@ -155,6 +156,10 @@ async def open_attendance_session(
             user_role=auth.role,
             room_id=body.room_id,
             duration_minutes=body.duration_minutes,
+            use_professor_location=body.use_professor_location,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            tolerance_radius_meters=body.tolerance_radius_meters,
         )
     )
     return AttendanceSessionResponse.model_validate(session)
@@ -320,11 +325,12 @@ async def confirm_attendance(
     session_id: UUID,
     body: ConfirmAttendanceRequest,
     request: Request,
-    tenant_id: UUID = Depends(get_current_tenant_id),
-    auth: AuthContext = Depends(get_auth_context),
+    auth: AuthContext = Depends(get_tenant_token_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceRecordResponse:
     """Confirma presença de um aluno matriculado validando código e geolocalização."""
+    assert auth.tenant_id is not None
+    tenant_id = auth.tenant_id
     session_repo = SessionSQLAlchemyRepository(session=db)
     record_repo = RecordSQLAlchemyRepository(session=db)
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
