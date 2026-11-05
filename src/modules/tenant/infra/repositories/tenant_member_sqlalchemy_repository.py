@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
@@ -348,7 +349,7 @@ class TenantMemberSQLAlchemyRepository:
         elif status == "sem_turma":
             items_stmt = items_stmt.where(func.coalesce(turmas_count_sub.c.turmas_count, 0) == 0)
 
-        order_clauses = []
+        order_clauses: list[Any] = []
         is_asc = order.lower() == "asc"
         if sort_by == "name":
             order_clauses.append(UserModel.name.asc() if is_asc else UserModel.name.desc())
