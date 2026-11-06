@@ -85,6 +85,17 @@ class StudentsMetricsResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MembersMetricsResponse(BaseModel):
+    total_members: int
+    professors_count: int
+    coordinators_count: int
+    admins_count: int
+    management_count: int
+    assigned_classes_count: int
+
+    model_config = {"from_attributes": True}
+
+
 class SendInviteRequest(BaseModel):
     email: EmailStr
     role: UserRole
