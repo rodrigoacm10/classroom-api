@@ -12,6 +12,7 @@ from infra.database.models.enrollment import EnrollmentModel
 from infra.database.models.subject_class import SubjectClassModel
 from infra.database.models.tenant import TenantMemberModel
 from infra.database.models.user import UserModel
+from modules.tenant.domain.entities.members_metrics import MembersMetrics
 from modules.tenant.domain.entities.students_metrics import StudentsMetrics
 from modules.tenant.domain.entities.tenant_member import TenantMember
 from modules.tenant.infra.mappers.tenant_member_mapper import TenantMemberMapper
@@ -91,6 +92,7 @@ class TenantMemberSQLAlchemyRepository:
         tenant_id: UUID,
         pagination: PaginationParams,
         role: UserRole | None = None,
+        exclude_role: UserRole | None = None,
         search: str | None = None,
         subject_class_id: UUID | None = None,
         created_after: datetime | None = None,
@@ -100,6 +102,8 @@ class TenantMemberSQLAlchemyRepository:
         conditions = [TenantMemberModel.tenant_id == tenant_id]
         if role is not None:
             conditions.append(TenantMemberModel.role == role)
+        if exclude_role is not None:
+            conditions.append(TenantMemberModel.role != exclude_role)
         if created_after is not None:
             conditions.append(TenantMemberModel.created_at >= created_after)
         if created_before is not None:
@@ -740,6 +744,48 @@ class TenantMemberSQLAlchemyRepository:
             average_attendance_rate=avg_rate,
             students_at_risk=students_at_risk,
             students_no_class=students_no_class,
+        )
+
+    async def get_members_metrics(self, tenant_id: UUID) -> MembersMetrics:
+        # Contagem por papel no tenant_members (excluindo alunos e deletados)
+        member_counts_stmt = (
+            select(
+                TenantMemberModel.role,
+                func.count(TenantMemberModel.id),
+            )
+            .where(
+                TenantMemberModel.tenant_id == tenant_id,
+                TenantMemberModel.deleted.is_(False),
+                TenantMemberModel.role != UserRole.ALUNO,
+            )
+            .group_by(TenantMemberModel.role)
+        )
+        rows = (await self.session.execute(member_counts_stmt)).all()
+
+        role_counts = {role: int(count) for role, count in rows}
+        professors_count = role_counts.get(UserRole.PROFESSOR, 0)
+        coordinators_count = role_counts.get(UserRole.COORDENADOR, 0)
+        admins_count = role_counts.get(UserRole.ADMIN, 0)
+        management_count = admins_count + coordinators_count
+        total_members = professors_count + management_count
+
+        # Contagem de turmas ativas com professor atribuído no tenant
+        assigned_classes_stmt = select(func.count(SubjectClassModel.id)).where(
+            SubjectClassModel.tenant_id == tenant_id,
+            SubjectClassModel.deleted.is_(False),
+            SubjectClassModel.professor_id.isnot(None),
+        )
+        assigned_classes = int(
+            (await self.session.execute(assigned_classes_stmt)).scalar() or 0
+        )
+
+        return MembersMetrics(
+            total_members=total_members,
+            professors_count=professors_count,
+            coordinators_count=coordinators_count,
+            admins_count=admins_count,
+            management_count=management_count,
+            assigned_classes_count=assigned_classes,
         )
 
     async def count_active_admins(self, tenant_id: UUID) -> int:
