@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from modules.tenant.domain.entities.members_metrics import MembersMetrics
 from modules.tenant.domain.entities.students_metrics import StudentsMetrics
 from modules.tenant.domain.entities.tenant import Tenant
 from modules.tenant.domain.entities.tenant_member import TenantMember
@@ -69,6 +70,11 @@ class TenantMemberRepository(Protocol):
         tenant_id: UUID,
         professor_user_id: UUID | None = None,
     ) -> StudentsMetrics: ...
+
+    async def get_members_metrics(
+        self,
+        tenant_id: UUID,
+    ) -> MembersMetrics: ...
 
     async def count_active_admins(self, tenant_id: UUID) -> int: ...
 
