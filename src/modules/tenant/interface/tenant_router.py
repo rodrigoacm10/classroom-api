@@ -23,6 +23,10 @@ from modules.tenant.application.use_cases.create_tenant import (
 )
 from modules.tenant.application.use_cases.deactivate_tenant import DeactivateTenantUseCase
 from modules.tenant.application.use_cases.delete_tenant import DeleteTenantUseCase
+from modules.tenant.application.use_cases.get_members_metrics import (
+    GetMembersMetricsInput,
+    GetMembersMetricsUseCase,
+)
 from modules.tenant.application.use_cases.get_student import (
     GetStudentInput,
     GetStudentUseCase,
@@ -57,6 +61,7 @@ from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
 from modules.tenant.interface.schemas.tenant_schemas import (
     AddTenantMemberRequest,
     CreateTenantRequest,
+    MembersMetricsResponse,
     MyTenantResponse,
     StudentResponse,
     StudentsMetricsResponse,
@@ -143,12 +148,15 @@ async def list_my_tenants(
 @router.get(
     "/{tenant_id}/members",
     response_model=PageResponse[TenantMemberResponse],
-    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
 )
 async def list_tenant_members(
     tenant_id: UUID,
     pagination: PaginationParams = Depends(get_pagination_params),
     role: UserRole | None = Query(None, description="Filtrar por papel (role)"),
+    exclude_role: UserRole | None = Query(
+        None, description="Excluir membros com este papel (ex: aluno)"
+    ),
     search: str | None = Query(None, description="Busca por nome ou e-mail"),
     subject_class_id: UUID | None = Query(None, description="Filtrar por ID da turma"),
     created_after: datetime | None = Query(None, description="Membros criados a partir desta data"),
@@ -158,7 +166,7 @@ async def list_tenant_members(
 ) -> PageResponse[TenantMemberResponse]:
     """
     Lista membros de uma Tenant/Instituição com suporte a paginação offset, total de registros e filtros avançados.
-    Requer papel de ADMIN ou COORDENADOR na tenant ativa.
+    Requer papel de ADMIN, COORDENADOR ou PROFESSOR na tenant ativa.
     """
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
@@ -169,6 +177,7 @@ async def list_tenant_members(
             tenant_id=tenant_id,
             pagination=pagination,
             role=role,
+            exclude_role=exclude_role,
             search=search,
             subject_class_id=subject_class_id,
             created_after=created_after,
@@ -191,6 +200,107 @@ async def list_tenant_members(
     ]
 
     return PageResponse.of(page, items)
+
+
+@members_router.get(
+    "",
+    response_model=PageResponse[TenantMemberResponse],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def list_current_tenant_members(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    pagination: PaginationParams = Depends(get_pagination_params),
+    role: UserRole | None = Query(None, description="Filtrar por papel (role)"),
+    exclude_role: UserRole | None = Query(
+        None, description="Excluir membros com este papel (ex: aluno)"
+    ),
+    search: str | None = Query(None, description="Busca por nome ou e-mail"),
+    subject_class_id: UUID | None = Query(None, description="Filtrar por ID da turma"),
+    created_after: datetime | None = Query(None, description="Membros criados a partir desta data"),
+    created_before: datetime | None = Query(None, description="Membros criados até esta data"),
+    include_deleted: bool = Query(False, description="Incluir membros inativos/deletados"),
+    db: AsyncSession = Depends(get_db),
+) -> PageResponse[TenantMemberResponse]:
+    """
+    Lista os membros institucionais do tenant ativo no token JWT (/members).
+    Acessível por ADMIN, COORDENADOR e PROFESSOR.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    page = await use_case.execute(
+        ListTenantMembersInput(
+            tenant_id=tenant_id,
+            pagination=pagination,
+            role=role,
+            exclude_role=exclude_role,
+            search=search,
+            subject_class_id=subject_class_id,
+            created_after=created_after,
+            created_before=created_before,
+            include_deleted=include_deleted,
+        )
+    )
+
+    items = [
+        TenantMemberResponse(
+            id=member.id,
+            tenant_id=member.tenant_id,
+            user_id=member.user_id,
+            name=member.name,
+            email=member.email,
+            role=member.role,
+            created_at=member.created_at,
+        )
+        for member in page.items
+    ]
+
+    return PageResponse.of(page, items)
+
+
+@members_router.get(
+    "/metrics",
+    response_model=MembersMetricsResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_current_tenant_members_metrics(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> MembersMetricsResponse:
+    """
+    Retorna os indicadores consolidados dos membros institucionais do tenant ativo no JWT (/members/metrics):
+    total de membros (sem alunos), professores, coordenadores, administradores e turmas atribuídas.
+    Acessível por ADMIN, COORDENADOR e PROFESSOR.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = GetMembersMetricsUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    metrics = await use_case.execute(GetMembersMetricsInput(tenant_id=tenant_id))
+
+    return MembersMetricsResponse.model_validate(metrics)
+
+
+@router.get(
+    "/{tenant_id}/members/metrics",
+    response_model=MembersMetricsResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_tenant_members_metrics(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> MembersMetricsResponse:
+    """
+    Retorna os indicadores consolidados dos membros institucionais para a tenant informada no path.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = GetMembersMetricsUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    metrics = await use_case.execute(GetMembersMetricsInput(tenant_id=tenant_id))
+
+    return MembersMetricsResponse.model_validate(metrics)
 
 
 @members_router.get(
