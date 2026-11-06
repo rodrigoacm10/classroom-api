@@ -1,6 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
+from modules.tenant.domain.entities.members_metrics import MembersMetrics
 from modules.tenant.domain.entities.students_metrics import StudentsMetrics
 from modules.tenant.domain.entities.tenant_member import TenantMember
 from shared.enums.user_role import UserRole
@@ -178,6 +179,26 @@ class FakeTenantMemberRepository:
             average_attendance_rate=0.0,
             students_at_risk=0,
             students_no_class=students_no_class,
+        )
+
+    async def get_members_metrics(self, tenant_id: UUID) -> MembersMetrics:
+        members = [
+            m
+            for m in self._store.values()
+            if m.tenant_id == tenant_id and m.role != UserRole.ALUNO and not m.deleted
+        ]
+        professors = sum(1 for m in members if m.role == UserRole.PROFESSOR)
+        coordinators = sum(1 for m in members if m.role == UserRole.COORDENADOR)
+        admins = sum(1 for m in members if m.role == UserRole.ADMIN)
+        assigned_classes = sum(getattr(m, "assigned_classes_count", 0) for m in members)
+
+        return MembersMetrics(
+            total_members=len(members),
+            professors_count=professors,
+            coordinators_count=coordinators,
+            admins_count=admins,
+            management_count=admins + coordinators,
+            assigned_classes_count=assigned_classes,
         )
 
     async def count_active_admins(self, tenant_id: UUID) -> int:
