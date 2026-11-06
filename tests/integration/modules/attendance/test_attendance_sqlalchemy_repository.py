@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
@@ -800,3 +801,146 @@ class TestAttendanceSQLAlchemyRepository:
             tenant_member_id=student_member.id,
         )
         assert len(active_sessions) == 0
+
+    async def test_find_confirmation_context_consolidated_query(self, session):
+        """Valida que a query consolidada find_confirmation_context extrai todo o contexto em 1 round-trip."""
+        from modules.enrollment.domain.entities.enrollment import Enrollment
+        from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+            EnrollmentSQLAlchemyRepository,
+        )
+        from shared.enums.enrollment_status import EnrollmentStatus
+
+        tenant = await TenantFactory.create(session)
+        user = await UserFactory.create(session)
+        student_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
+
+        room_repo = RoomSQLAlchemyRepository(session)
+        room = await room_repo.save(
+            Room(
+                tenant_id=tenant.id,
+                name="Sala Context Test",
+                latitude=-8.0476,
+                longitude=-34.8770,
+                tolerance_radius_meters=45,
+            )
+        )
+
+        class_repo = SubjectClassSQLAlchemyRepository(session)
+        sc = await class_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                name="Turma Context",
+                discipline_name="Discipline Context",
+                room_id=room.id,
+                active=True,
+            )
+        )
+
+        enrollment_repo = EnrollmentSQLAlchemyRepository(session)
+        enrollment = await enrollment_repo.save(
+            Enrollment(
+                subject_class_id=sc.id,
+                tenant_member_id=student_member.id,
+                status=EnrollmentStatus.ACTIVE,
+            )
+        )
+
+        session_repo = SessionSQLAlchemyRepository(session)
+        now = datetime.now(timezone.utc)
+        att_session = await session_repo.save(
+            AttendanceSession(
+                subject_class_id=sc.id,
+                room_id=room.id,
+                day_code="CTX789",
+                opened_at=now,
+                expires_at=now + timedelta(minutes=20),
+                status=SessionStatus.OPEN,
+            )
+        )
+
+        # 1. Consulta inicial sem presença gravada
+        ctx = await session_repo.find_confirmation_context(
+            tenant_id=tenant.id,
+            subject_class_id=sc.id,
+            session_id=att_session.id,
+            user_id=user.id,
+            device_id="device-student-1",
+        )
+
+        assert ctx is not None
+        assert ctx.tenant_id == tenant.id
+        assert ctx.tenant_deleted is False
+        assert ctx.subject_class_id == sc.id
+        assert ctx.session_id == att_session.id
+        assert ctx.session_day_code == "CTX789"
+        assert ctx.session_status == SessionStatus.OPEN
+        assert ctx.member_id == student_member.id
+        assert ctx.enrollment_id == enrollment.id
+        assert ctx.enrollment_status == EnrollmentStatus.ACTIVE
+        assert ctx.room_id == room.id
+        assert ctx.room_tolerance_radius == 45.0
+        assert ctx.room_location is not None
+        assert ctx.already_confirmed is False
+        assert ctx.shared_device_conflict is False
+
+        # 2. Grava presença de outro aluno com device_id compartilhado
+        user2 = await UserFactory.create(session)
+        other_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user2.id, role=UserRole.ALUNO
+        )
+        record_repo = RecordSQLAlchemyRepository(session)
+        await record_repo.create_record(
+            session_id=att_session.id,
+            tenant_member_id=other_member.id,
+            latitude=-8.0476,
+            longitude=-34.8770,
+            room_id=room.id,
+            tolerance_radius_meters=45.0,
+            device_id="device-student-1",
+            room_location=ctx.room_location,
+        )
+
+        # Agora a consulta do student 1 com o mesmo device deve acusar shared_device_conflict
+        ctx_shared = await session_repo.find_confirmation_context(
+            tenant_id=tenant.id,
+            subject_class_id=sc.id,
+            session_id=att_session.id,
+            user_id=user.id,
+            device_id="device-student-1",
+        )
+        assert ctx_shared is not None
+        assert ctx_shared.already_confirmed is False
+        assert ctx_shared.shared_device_conflict is True
+
+        # 3. Grava presença do aluno 1 -> already_confirmed vira True
+        await record_repo.create_record(
+            session_id=att_session.id,
+            tenant_member_id=student_member.id,
+            latitude=-8.0476,
+            longitude=-34.8770,
+            room_id=room.id,
+            tolerance_radius_meters=45.0,
+            device_id="device-student-1",
+            room_location=ctx.room_location,
+        )
+
+        ctx_confirmed = await session_repo.find_confirmation_context(
+            tenant_id=tenant.id,
+            subject_class_id=sc.id,
+            session_id=att_session.id,
+            user_id=user.id,
+            device_id="device-student-1",
+        )
+        assert ctx_confirmed is not None
+        assert ctx_confirmed.already_confirmed is True
+
+        # 4. Sessão inexistente retorna None
+        ctx_none = await session_repo.find_confirmation_context(
+            tenant_id=tenant.id,
+            subject_class_id=sc.id,
+            session_id=uuid4(),
+            user_id=user.id,
+        )
+        assert ctx_none is None

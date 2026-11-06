@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
+from modules.attendance.domain.entities.attendance_confirmation_context import (
+    AttendanceConfirmationContext,
+)
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
 from modules.attendance.domain.repositories.attendance_record_repository import (
     AttendanceRecordRepository,
@@ -80,6 +83,98 @@ class ConfirmAttendanceUseCase:
         self.upload_repo = upload_repo
 
     async def execute(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
+        # Caminho otimizado: 1 única query consolidada de validação
+        if hasattr(self.session_repo, "find_confirmation_context"):
+            context = await self.session_repo.find_confirmation_context(
+                tenant_id=data.tenant_id,
+                subject_class_id=data.subject_class_id,
+                session_id=data.session_id,
+                user_id=data.user_id,
+                device_id=data.device_id,
+            )
+            if context is not None:
+                return await self._execute_from_context(context, data)
+
+        # Fallback para fakes sem o método ou resolução precisa de 404
+        return await self._execute_legacy(data)
+
+    async def _execute_from_context(
+        self, context: AttendanceConfirmationContext, data: ConfirmAttendanceInput
+    ) -> AttendanceRecord:
+        if context.tenant_deleted:
+            raise ResourceNotFoundException("Instituição/tenant não encontrada.")
+
+        if context.subject_class_deleted:
+            raise ResourceNotFoundException("Turma não encontrada.")
+
+        if context.session_status == SessionStatus.CANCELLED:
+            raise ResourceAlreadyExistsException("A chamada foi cancelada.")
+        if context.session_status != SessionStatus.OPEN:
+            raise ResourceAlreadyExistsException("A chamada está encerrada.")
+
+        now = datetime.now(timezone.utc)
+        expires_at_utc = (
+            context.session_expires_at
+            if context.session_expires_at.tzinfo
+            else context.session_expires_at.replace(tzinfo=timezone.utc)
+        )
+        if now >= expires_at_utc:
+            raise ResourceAlreadyExistsException("A chamada está expirada.")
+
+        if data.day_code.strip().upper() != context.session_day_code.strip().upper():
+            raise BusinessRuleException("Código da chamada inválido.")
+
+        if not context.member_id or context.member_deleted:
+            raise ForbiddenException("Usuário não é membro desta instituição.")
+
+        if (
+            not context.enrollment_id
+            or context.enrollment_status != EnrollmentStatus.ACTIVE
+            or context.enrollment_deleted
+        ):
+            raise ForbiddenException("Aluno não possui matrícula ativa nesta turma.")
+
+        if context.already_confirmed:
+            raise ResourceAlreadyExistsException("Presença já confirmada nesta sessão.")
+
+        if not context.room_id and context.room_location is None:
+            raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
+
+        flags: list[str] = []
+
+        if (
+            data.gps_accuracy_meters is not None
+            and data.gps_accuracy_meters > context.room_tolerance_radius
+        ):
+            flags.append("low_gps_accuracy")
+
+        remaining_seconds = (expires_at_utc - now).total_seconds()
+        if remaining_seconds < 30:
+            flags.append("confirmed_near_expiry")
+
+        if not is_mobile_user_agent(data.user_agent):
+            flags.append("non_mobile_client")
+
+        if context.shared_device_conflict:
+            flags.append("shared_device")
+
+        return await self.record_repo.create_record(
+            session_id=data.session_id,
+            tenant_member_id=context.member_id,
+            latitude=data.latitude,
+            longitude=data.longitude,
+            room_id=context.room_id,
+            tolerance_radius_meters=context.room_tolerance_radius,
+            gps_accuracy_meters=data.gps_accuracy_meters,
+            irregularity_flags=flags,
+            device_id=data.device_id,
+            ip_address=data.ip_address,
+            user_agent=data.user_agent,
+            device_info=data.device_info,
+            room_location=context.room_location,
+        )
+
+    async def _execute_legacy(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
         # 1. Tenant
         tenant = await self.tenant_repo.find_by_id(data.tenant_id)
         if not tenant or getattr(tenant, "deleted", False):
@@ -144,13 +239,26 @@ class ConfirmAttendanceUseCase:
 
         # 10. Obter sala e raio de tolerância (sessão ou turma)
         room_id_to_use = session.room_id or subject_class.room_id
-        if not room_id_to_use:
-            raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
-
         tolerance_radius = 50.0
-        room = await self.room_repo.find_by_id(room_id_to_use)
-        if room:
-            tolerance_radius = float(room.tolerance_radius_meters)
+        distance_meters: float | None = None
+        if session.custom_latitude is not None and session.custom_longitude is not None:
+            tolerance_radius = float(session.custom_tolerance_radius_meters or 50.0)
+            from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
+                haversine_distance,
+            )
+
+            distance_meters = haversine_distance(
+                data.latitude,
+                data.longitude,
+                session.custom_latitude,
+                session.custom_longitude,
+            )
+        elif room_id_to_use:
+            room = await self.room_repo.find_by_id(room_id_to_use)
+            if room:
+                tolerance_radius = float(room.tolerance_radius_meters)
+        else:
+            raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
 
         # 11. Calcular flags de irregularidade pré-inserção
         flags: list[str] = []
@@ -200,6 +308,7 @@ class ConfirmAttendanceUseCase:
             ip_address=data.ip_address,
             user_agent=data.user_agent,
             device_info=data.device_info,
+            distance_meters=distance_meters,
             evidence_photo_url=data.evidence_photo_url,
         )
 

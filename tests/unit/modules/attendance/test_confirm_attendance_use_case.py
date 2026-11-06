@@ -641,6 +641,45 @@ class TestConfirmAttendanceUseCase:
                 )
             )
 
+    async def test_confirm_attendance_with_custom_professor_location_success(self):
+        """Deve confirmar presença com sucesso baseando-se na geolocalização do professor da sessão."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room,
+            _,
+            session_repo,
+        ) = await self._setup_fixtures()
+
+        # Sem sala vinculada, apenas localização customizada da sessão
+        session.room_id = None
+        session.custom_latitude = -8.0512
+        session.custom_longitude = -34.8812
+        session.custom_tolerance_radius_meters = 80
+        await session_repo.save(session)
+        subject_class.room_id = None
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.051210,
+                longitude=-34.881210,
+                user_agent="okhttp/4.9.0",
+            )
+        )
+
+        assert record.within_radius is True
+        assert record.record_status == RecordStatus.REGULAR
+        assert record.distance_meters < 80.0
+
     async def test_confirm_attendance_with_evidence_photo_url(self):
         """URL de um upload pending é aceita, persistida e o upload vira confirmed."""
         (
@@ -678,6 +717,7 @@ class TestConfirmAttendanceUseCase:
         assert record.evidence_photo_url == photo_url
 
         saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved is not None
         assert saved.status == UploadStatus.CONFIRMED
         assert saved.attendance_record_id == record.id
         assert saved.confirmed_at is not None
@@ -708,7 +748,7 @@ class TestConfirmAttendanceUseCase:
         )
 
         assert record.evidence_photo_url is None
-    
+
     async def test_confirm_attendance_rejects_unknown_evidence_photo_url(self):
         """URL que não veio do endpoint de upload deve ser rejeitada."""
         (
@@ -737,7 +777,10 @@ class TestConfirmAttendanceUseCase:
             )
 
         # A validação acontece antes de criar a presença
-        assert await use_case.record_repo.find_by_session_and_member(session.id, student_member.id) is None
+        assert (
+            await use_case.record_repo.find_by_session_and_member(session.id, student_member.id)
+            is None
+        )
 
     async def test_confirm_attendance_rejects_evidence_photo_from_another_session(self):
         """Foto enviada para outra sessão não pode ser usada nesta confirmação."""
@@ -761,20 +804,20 @@ class TestConfirmAttendanceUseCase:
         )
 
         with pytest.raises(BusinessRuleException, match="Foto de evidência inválida"):
-          await use_case.execute(
-              ConfirmAttendanceInput(
-                  tenant_id=tenant.id,
-                  subject_class_id=subject_class.id,
-                  session_id=session.id,
-                  user_id=user_id,
-                  day_code="X3KP7Q",
-                  latitude=-8.047610,
-                  longitude=-34.877010,
-                  user_agent="okhttp/4.9.0",
-                  evidence_photo_url=photo_url,
-              )
-          )
-    
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                    evidence_photo_url=photo_url,
+                )
+            )
+
     async def test_confirm_attendance_rejects_already_used_evidence_photo(self):
         """Foto já confirmada em outra presença não pode ser reaproveitada."""
         (

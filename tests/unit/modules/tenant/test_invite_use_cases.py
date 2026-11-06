@@ -43,7 +43,7 @@ class TestSendInviteUseCase:
             invite_repo=invite_repo,
         )
 
-        with patch("modules.tenant.application.use_cases.send_invite.send_invite_email"):
+        with patch("modules.tenant.application.use_cases.send_invite.send_invite_email_task.delay"):
             invite = await use_case.execute(
                 SendInviteInput(
                     tenant_id=tenant.id,
@@ -59,6 +59,40 @@ class TestSendInviteUseCase:
         assert invite.role == UserRole.PROFESSOR
         assert invite.invited_by == admin_user.id
         assert invite.is_pending is True
+
+    async def test_send_invite_with_subject_classes(self):
+        """Deve criar convite persistindo subject_class_ids associados."""
+        import uuid
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        invite_repo = FakeTenantInviteRepository()
+
+        admin_user = UserFactory.make(name="Admin User")
+        tenant = TenantFactory.make(name="Escola Beta")
+        tenant_repo.seed(tenant)
+
+        use_case = SendInviteUseCase(
+            tenant_repo=tenant_repo,
+            member_repo=member_repo,
+            invite_repo=invite_repo,
+        )
+
+        class_id_1 = uuid.uuid4()
+        class_id_2 = uuid.uuid4()
+
+        with patch("modules.tenant.application.use_cases.send_invite.send_invite_email_task.delay"):
+            invite = await use_case.execute(
+                SendInviteInput(
+                    tenant_id=tenant.id,
+                    email="aluno@escola.com",
+                    role=UserRole.ALUNO,
+                    invited_by=admin_user,
+                    subject_class_ids=[class_id_1, class_id_2],
+                )
+            )
+
+        assert invite.subject_class_ids == [class_id_1, class_id_2]
 
     async def test_send_invite_tenant_not_found_raises(self):
         """Deve lançar ResourceNotFoundException se a tenant informada não existir."""
@@ -239,6 +273,45 @@ class TestAcceptInviteUseCase:
         assert updated_invite is not None
         assert updated_invite.is_accepted is True
 
+    async def test_accept_invite_auto_enrolls_in_subject_classes(self):
+        """Deve matricular o aluno nas turmas do convite ao aceitar."""
+        import uuid
+
+        from tests.unit.fakes.fake_enrollment_repository import FakeEnrollmentRepository
+
+        invite_repo = FakeTenantInviteRepository()
+        member_repo = FakeTenantMemberRepository()
+        enrollment_repo = FakeEnrollmentRepository()
+
+        invited_user = UserFactory.make(email="aluno_novo@escola.com")
+        tenant_id = TenantFactory.make().id
+        class_id_1 = uuid.uuid4()
+        class_id_2 = uuid.uuid4()
+
+        invite = TenantInvite(
+            tenant_id=tenant_id,
+            email="aluno_novo@escola.com",
+            role=UserRole.ALUNO,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            subject_class_ids=[class_id_1, class_id_2],
+        )
+        invite_repo.seed(invite)
+
+        use_case = AcceptInviteUseCase(
+            invite_repo=invite_repo,
+            member_repo=member_repo,
+            enrollment_repo=enrollment_repo,
+        )
+        member = await use_case.execute(token=invite.token, user=invited_user)
+
+        assert member.role == UserRole.ALUNO
+
+        # Verifica se as duas turmas foram matriculadas
+        e1 = await enrollment_repo.find_by_class_and_member(class_id_1, member.id)
+        e2 = await enrollment_repo.find_by_class_and_member(class_id_2, member.id)
+        assert e1 is not None
+        assert e2 is not None
+
     async def test_accept_invite_expired_raises(self):
         """Deve lançar BusinessRuleException ao tentar aceitar um convite que já expirou."""
         invite_repo = FakeTenantInviteRepository()
@@ -336,3 +409,139 @@ class TestRevokeInviteUseCase:
         use_case = RevokeInviteUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
         with pytest.raises(BusinessRuleException, match="já foi aceito"):
             await use_case.execute(RevokeInviteInput(tenant_id=tenant.id, invite_id=invite.id))
+
+
+@pytest.mark.asyncio
+class TestResendInviteUseCase:
+    async def test_resend_invite_success(self):
+        """Deve renovar a expiração e reenviar o e-mail de um convite pendente ou expirado."""
+        from modules.tenant.application.use_cases.resend_invite import (
+            ResendInviteInput,
+            ResendInviteUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        invite_repo = FakeTenantInviteRepository()
+
+        admin_user = UserFactory.make(name="Admin Gestor")
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        old_token = "old_token_xyz"
+        invite = TenantInvite(
+            tenant_id=tenant.id,
+            email="reenvio@escola.com",
+            role=UserRole.PROFESSOR,
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=10),  # expirado
+            token=old_token,
+        )
+        invite_repo.seed(invite)
+
+        use_case = ResendInviteUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
+
+        with patch(
+            "modules.tenant.application.use_cases.resend_invite.send_invite_email_task.delay"
+        ) as mock_email:
+            resumed = await use_case.execute(
+                ResendInviteInput(
+                    tenant_id=tenant.id,
+                    invite_id=invite.id,
+                    resender=admin_user,
+                )
+            )
+
+        assert resumed.is_pending is True
+        assert resumed.is_expired is False
+        assert resumed.token != old_token
+        assert mock_email.called
+        assert mock_email.call_args[1]["to_email"] == "reenvio@escola.com"
+
+    async def test_resend_already_accepted_raises(self):
+        """Deve lançar erro ao tentar reenviar convite já aceito."""
+        from modules.tenant.application.use_cases.resend_invite import (
+            ResendInviteInput,
+            ResendInviteUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        invite_repo = FakeTenantInviteRepository()
+
+        admin_user = UserFactory.make()
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        invite = TenantInvite(
+            tenant_id=tenant.id,
+            email="aceito@escola.com",
+            role=UserRole.ALUNO,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            accepted_at=datetime.now(timezone.utc),
+        )
+        invite_repo.seed(invite)
+
+        use_case = ResendInviteUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
+
+        with pytest.raises(BusinessRuleException, match="já foi aceito"):
+            await use_case.execute(
+                ResendInviteInput(
+                    tenant_id=tenant.id,
+                    invite_id=invite.id,
+                    resender=admin_user,
+                )
+            )
+
+
+@pytest.mark.asyncio
+class TestGetTenantInvitesMetricsUseCase:
+    async def test_get_metrics_calculates_correctly(self):
+        """Deve calcular métricas de convites com contagem por status e taxa de adesão."""
+        from modules.tenant.application.use_cases.get_tenant_invites_metrics import (
+            GetTenantInvitesMetricsInput,
+            GetTenantInvitesMetricsUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        invite_repo = FakeTenantInviteRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        # 1 pendente
+        invite_repo.seed(
+            TenantInvite(
+                tenant_id=tenant.id,
+                email="pendente@escola.com",
+                role=UserRole.ALUNO,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            )
+        )
+        # 1 aceito
+        invite_repo.seed(
+            TenantInvite(
+                tenant_id=tenant.id,
+                email="aceito@escola.com",
+                role=UserRole.PROFESSOR,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+                accepted_at=datetime.now(timezone.utc),
+            )
+        )
+        # 1 expirado
+        invite_repo.seed(
+            TenantInvite(
+                tenant_id=tenant.id,
+                email="expirado@escola.com",
+                role=UserRole.ALUNO,
+                expires_at=datetime.now(timezone.utc) - timedelta(hours=10),
+            )
+        )
+
+        use_case = GetTenantInvitesMetricsUseCase(tenant_repo=tenant_repo, invite_repo=invite_repo)
+        metrics = await use_case.execute(GetTenantInvitesMetricsInput(tenant_id=tenant.id, days=30))
+
+        assert metrics.total == 3
+        assert metrics.pending == 1
+        assert metrics.accepted == 1
+        assert metrics.expired == 1
+        assert metrics.revoked == 0
+        assert metrics.days == 30
+        assert metrics.acceptance_rate == 50.0  # 1 aceito / (1 aceito + 1 expirado) = 50%

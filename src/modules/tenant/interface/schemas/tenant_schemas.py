@@ -64,6 +64,23 @@ class StudentResponse(BaseModel):
     email: str
     role: UserRole = UserRole.ALUNO
     created_at: datetime
+    turmas_count: int = 0
+    attendance_rate: float = 0.0
+    total_sessions: int = 0
+    total_present: int = 0
+    total_absent: int = 0
+    status: Literal["regular", "at_risk", "sem_turma"] = "sem_turma"
+
+    model_config = {"from_attributes": True}
+
+
+class StudentsMetricsResponse(BaseModel):
+    total_students: int
+    avg_classes_per_student: float
+    total_enrollments: int
+    average_attendance_rate: float
+    students_at_risk: int
+    students_no_class: int
 
     model_config = {"from_attributes": True}
 
@@ -71,6 +88,7 @@ class StudentResponse(BaseModel):
 class SendInviteRequest(BaseModel):
     email: EmailStr
     role: UserRole
+    subject_class_ids: list[UUID] = []
 
 
 class InviteStatusResponse(BaseModel):
@@ -81,7 +99,24 @@ class InviteStatusResponse(BaseModel):
     role: UserRole
     token: str
     status: Literal["pending", "accepted", "expired", "revoked"]
+    subject_class_ids: list[UUID] = []
+    subject_class_names: list[str] = []
     expires_at: datetime
     created_at: datetime
+    accepted_at: datetime | None = None
+    revoked_at: datetime | None = None
+    invited_by_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TenantInvitesMetricsResponse(BaseModel):
+    total: int
+    pending: int
+    accepted: int
+    expired: int
+    revoked: int
+    acceptance_rate: float
+    days: int
 
     model_config = {"from_attributes": True}

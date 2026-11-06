@@ -8,6 +8,12 @@ class TenantMemberMapper:
         model: TenantMemberModel,
         user_name: str | None = None,
         user_email: str | None = None,
+        turmas_count: int = 0,
+        attendance_rate: float = 0.0,
+        total_sessions: int = 0,
+        total_present: int = 0,
+        total_absent: int = 0,
+        status: str = "sem_turma",
     ) -> TenantMember:
         return TenantMember(
             id=model.id,
@@ -18,6 +24,12 @@ class TenantMemberMapper:
             name=user_name or "",
             email=user_email or "",
             created_at=model.created_at,
+            turmas_count=turmas_count,
+            attendance_rate=attendance_rate,
+            total_sessions=total_sessions,
+            total_present=total_present,
+            total_absent=total_absent,
+            status=status,
         )
 
     @staticmethod

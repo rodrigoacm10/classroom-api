@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 import resend
@@ -17,6 +18,12 @@ ROLE_MAP = {
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 INVITE_TEMPLATE_PATH = TEMPLATES_DIR / "invite.html"
 PASSWORD_RESET_TEMPLATE_PATH = TEMPLATES_DIR / "password_reset.html"
+
+
+@lru_cache(maxsize=4)
+def _read_template_cached(path: Path) -> str:
+    """Lê e armazena o conteúdo do template HTML em memória para evitar I/O de disco repetitivo."""
+    return path.read_text(encoding="utf-8")
 
 
 def _is_placeholder_api_key(api_key: str | None) -> bool:
@@ -39,13 +46,13 @@ def _render_invite_template(
     invite_link: str,
     expires_in_hours: int,
 ) -> str:
-    """Lê e substitui as variáveis no template HTML de convite."""
+    """Lê (via cache em memória) e substitui as variáveis no template HTML de convite."""
     if not INVITE_TEMPLATE_PATH.exists():
         raise FileNotFoundError(
             f"Template HTML de convite não encontrado em: {INVITE_TEMPLATE_PATH}"
         )
 
-    content = INVITE_TEMPLATE_PATH.read_text(encoding="utf-8")
+    content = _read_template_cached(INVITE_TEMPLATE_PATH)
     content = content.replace("{{ inviter_name }}", inviter_name)
     content = content.replace("{{ tenant_name }}", tenant_name)
     content = content.replace("{{ role_display }}", role_display)
@@ -59,13 +66,13 @@ def _render_password_reset_template(
     code: str,
     expires_in_minutes: int,
 ) -> str:
-    """Lê e substitui as variáveis no template HTML de recuperação de senha."""
+    """Lê (via cache em memória) e substitui as variáveis no template HTML de recuperação de senha."""
     if not PASSWORD_RESET_TEMPLATE_PATH.exists():
         raise FileNotFoundError(
             f"Template HTML de recuperação de senha não encontrado em: {PASSWORD_RESET_TEMPLATE_PATH}"
         )
 
-    content = PASSWORD_RESET_TEMPLATE_PATH.read_text(encoding="utf-8")
+    content = _read_template_cached(PASSWORD_RESET_TEMPLATE_PATH)
     content = content.replace("{{ user_name }}", user_name)
     content = content.replace("{{ code }}", code)
     content = content.replace("{{ expires_in_minutes }}", str(expires_in_minutes))
@@ -79,17 +86,20 @@ def send_invite_email(
     role: str,
     invite_link: str,
     expires_in_hours: int = 72,
-) -> None:
+    *,
+    raise_on_error: bool = False,
+) -> str | None:
     """
     Dispara o e-mail de convite para o usuário via Resend utilizando o template HTML.
     Em desenvolvimento (ou sem chave configurada), simula o envio via log sem lançar exceção.
+    Retorna o ID da mensagem no Resend se enviado, ou None em caso de simulação/falha.
     """
     if _is_placeholder_api_key(settings.resend_api_key):
         logger.warning(
             f"[EMAIL SIMULATION] RESEND_API_KEY não configurada ou placeholder. "
             f"Convite para: {to_email} | Instituição: {tenant_name} | Papel: {role} | Link: {invite_link}"
         )
-        return
+        return None
 
     resend.api_key = settings.resend_api_key
 
@@ -104,7 +114,7 @@ def send_invite_email(
             expires_in_hours=expires_in_hours,
         )
 
-        resend.Emails.send(
+        response = resend.Emails.send(
             {
                 "from": settings.email_from,
                 "to": [to_email],
@@ -112,14 +122,22 @@ def send_invite_email(
                 "html": html_content,
             }
         )
-        logger.info(
-            f"E-mail de convite enviado com sucesso para {to_email} (instituição: {tenant_name})"
+        email_id = (
+            response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
         )
+        logger.info(
+            f"E-mail de convite enviado com sucesso para {to_email} "
+            f"(remetente: {settings.email_from}, instituição: {tenant_name}, Resend ID: {email_id})"
+        )
+        return str(email_id) if email_id else None
     except Exception as exc:
         logger.error(
             f"Erro ao disparar e-mail de convite para {to_email} via Resend: {exc}. "
-            f"Link de convite: {invite_link}"
+            f"Remetente: {settings.email_from} | Link de convite: {invite_link}"
         )
+        if raise_on_error:
+            raise
+        return None
 
 
 def send_password_reset_email(
@@ -127,17 +145,20 @@ def send_password_reset_email(
     user_name: str,
     code: str,
     expires_in_minutes: int = 15,
-) -> None:
+    *,
+    raise_on_error: bool = False,
+) -> str | None:
     """
     Dispara o e-mail com código OTP de recuperação de senha via Resend.
     Em desenvolvimento (ou sem chave configurada), simula o envio via log com o código OTP.
+    Retorna o ID da mensagem no Resend se enviado, ou None em caso de simulação/falha.
     """
     if _is_placeholder_api_key(settings.resend_api_key):
         logger.warning(
             f"[EMAIL SIMULATION] RESEND_API_KEY não configurada ou placeholder. "
             f"Recuperação de senha para: {to_email} ({user_name}) | Código OTP: {code} | Expira em: {expires_in_minutes} min"
         )
-        return
+        return None
 
     resend.api_key = settings.resend_api_key
 
@@ -148,7 +169,7 @@ def send_password_reset_email(
             expires_in_minutes=expires_in_minutes,
         )
 
-        resend.Emails.send(
+        response = resend.Emails.send(
             {
                 "from": settings.email_from,
                 "to": [to_email],
@@ -156,9 +177,19 @@ def send_password_reset_email(
                 "html": html_content,
             }
         )
-        logger.info(f"E-mail de recuperação de senha enviado com sucesso para {to_email}")
+        email_id = (
+            response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
+        )
+        logger.info(
+            f"E-mail de recuperação de senha enviado com sucesso para {to_email} "
+            f"(remetente: {settings.email_from}, Resend ID: {email_id})"
+        )
+        return str(email_id) if email_id else None
     except Exception as exc:
         logger.error(
             f"Erro ao disparar e-mail de recuperação de senha para {to_email} via Resend: {exc}. "
-            f"Código OTP gerado: {code}"
+            f"Remetente: {settings.email_from} | Código OTP: {code}"
         )
+        if raise_on_error:
+            raise
+        return None

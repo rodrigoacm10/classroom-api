@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
@@ -22,6 +23,14 @@ from modules.tenant.application.use_cases.create_tenant import (
 )
 from modules.tenant.application.use_cases.deactivate_tenant import DeactivateTenantUseCase
 from modules.tenant.application.use_cases.delete_tenant import DeleteTenantUseCase
+from modules.tenant.application.use_cases.get_student import (
+    GetStudentInput,
+    GetStudentUseCase,
+)
+from modules.tenant.application.use_cases.get_students_metrics import (
+    GetStudentsMetricsInput,
+    GetStudentsMetricsUseCase,
+)
 from modules.tenant.application.use_cases.list_my_tenants import ListMyTenantsUseCase
 from modules.tenant.application.use_cases.list_students import (
     ListStudentsInput,
@@ -50,12 +59,18 @@ from modules.tenant.interface.schemas.tenant_schemas import (
     CreateTenantRequest,
     MyTenantResponse,
     StudentResponse,
+    StudentsMetricsResponse,
     TenantMemberResponse,
     TenantResponse,
     UpdateTenantMemberRoleRequest,
 )
 from modules.user.domain.entities.user import User
-from security.dependencies.current_user import get_current_tenant_id, get_current_user
+from security.dependencies.current_user import (
+    AuthContext,
+    get_auth_context,
+    get_current_tenant_id,
+    get_current_user,
+)
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
@@ -178,6 +193,62 @@ async def list_tenant_members(
     return PageResponse.of(page, items)
 
 
+@members_router.get(
+    "/students/metrics",
+    response_model=StudentsMetricsResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_students_metrics_current_tenant(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> StudentsMetricsResponse:
+    """
+    Retorna os indicadores consolidados dos alunos no tenant ativo:
+    total de alunos, média de turmas por aluno, matrículas totais,
+    taxa consolidada de frequência e alunos em atenção pedagógica (em risco).
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = GetStudentsMetricsUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    metrics = await use_case.execute(
+        GetStudentsMetricsInput(
+            tenant_id=tenant_id,
+            professor_user_id=auth.user.id if auth.role == UserRole.PROFESSOR else None,
+        )
+    )
+
+    return StudentsMetricsResponse.model_validate(metrics)
+
+
+@router.get(
+    "/{tenant_id}/students/metrics",
+    response_model=StudentsMetricsResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_tenant_students_metrics(
+    tenant_id: UUID,
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> StudentsMetricsResponse:
+    """
+    Retorna os indicadores consolidados dos alunos para a tenant informada no path.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = GetStudentsMetricsUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    metrics = await use_case.execute(
+        GetStudentsMetricsInput(
+            tenant_id=tenant_id,
+            professor_user_id=auth.user.id if auth.role == UserRole.PROFESSOR else None,
+        )
+    )
+
+    return StudentsMetricsResponse.model_validate(metrics)
+
+
 @router.get(
     "/{tenant_id}/students",
     response_model=PageResponse[StudentResponse],
@@ -193,13 +264,21 @@ async def list_tenant_students(
     pagination: PaginationParams = Depends(get_pagination_params),
     search: str | None = Query(None, description="Busca por nome ou e-mail"),
     subject_class_id: UUID | None = Query(None, description="Filtrar por ID da turma"),
+    status_filter: Literal["regular", "sem_turma"] | None = Query(
+        None, alias="status", description="Filtrar por status: regular (matriculado) ou sem_turma"
+    ),
+    sort_by: Literal["name", "turmas_count", "created_at"] = Query(
+        "name", description="Campo para ordenação (name, turmas_count, created_at)"
+    ),
+    order: Literal["asc", "desc"] = Query("asc", description="Direção da ordenação (asc ou desc)"),
     include_deleted: bool = Query(False, description="Incluir alunos inativos/deletados"),
+    auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> PageResponse[StudentResponse]:
     """
-    Lista todos os alunos (papel ALUNO) da Tenant/Instituição informada no path.
+    Lista todos os alunos (papel ALUNO) da Tenant/Instituição informada no path,
+    com contagem de turmas, taxa de presença, presenças, faltas e status pedagógico.
     Acessível por ADMIN, COORDENADOR e PROFESSOR.
-    Retorna campos flat (id, tenant_member_id, user_id, name, email, role, created_at).
     """
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
@@ -211,6 +290,10 @@ async def list_tenant_students(
             pagination=pagination,
             search=search,
             subject_class_id=subject_class_id,
+            professor_user_id=auth.user.id if auth.role == UserRole.PROFESSOR else None,
+            status=status_filter,
+            sort_by=sort_by,
+            order=order,
             include_deleted=include_deleted,
         )
     )
@@ -224,6 +307,12 @@ async def list_tenant_students(
             email=member.email,
             role=member.role,
             created_at=member.created_at,
+            turmas_count=getattr(member, "turmas_count", 0),
+            attendance_rate=getattr(member, "attendance_rate", 0.0),
+            total_sessions=getattr(member, "total_sessions", 0),
+            total_present=getattr(member, "total_present", 0),
+            total_absent=getattr(member, "total_absent", 0),
+            status=getattr(member, "status", "sem_turma"),
         )
         for member in page.items
     ]
@@ -241,13 +330,21 @@ async def list_students_current_tenant(
     pagination: PaginationParams = Depends(get_pagination_params),
     search: str | None = Query(None, description="Busca por nome ou e-mail"),
     subject_class_id: UUID | None = Query(None, description="Filtrar por ID da turma"),
+    status_filter: Literal["regular", "sem_turma"] | None = Query(
+        None, alias="status", description="Filtrar por status: regular (matriculado) ou sem_turma"
+    ),
+    sort_by: Literal["name", "turmas_count", "created_at"] = Query(
+        "name", description="Campo para ordenação (name, turmas_count, created_at)"
+    ),
+    order: Literal["asc", "desc"] = Query("asc", description="Direção da ordenação (asc ou desc)"),
     include_deleted: bool = Query(False, description="Incluir alunos inativos/deletados"),
+    auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> PageResponse[StudentResponse]:
     """
-    Lista todos os alunos (papel ALUNO) da instituição ativa no token JWT (/members/students).
+    Lista todos os alunos (papel ALUNO) da instituição ativa no token JWT (/members/students),
+    com contagem de turmas, taxa de presença, presenças, faltas e status pedagógico.
     Acessível por ADMIN, COORDENADOR e PROFESSOR.
-    Retorna campos flat (id, tenant_member_id, user_id, name, email, role, created_at).
     """
     tenant_repo = TenantSQLAlchemyRepository(session=db)
     member_repo = TenantMemberSQLAlchemyRepository(session=db)
@@ -259,6 +356,10 @@ async def list_students_current_tenant(
             pagination=pagination,
             search=search,
             subject_class_id=subject_class_id,
+            professor_user_id=auth.user.id if auth.role == UserRole.PROFESSOR else None,
+            status=status_filter,
+            sort_by=sort_by,
+            order=order,
             include_deleted=include_deleted,
         )
     )
@@ -272,12 +373,109 @@ async def list_students_current_tenant(
             email=member.email,
             role=member.role,
             created_at=member.created_at,
+            turmas_count=getattr(member, "turmas_count", 0),
+            attendance_rate=getattr(member, "attendance_rate", 0.0),
+            total_sessions=getattr(member, "total_sessions", 0),
+            total_present=getattr(member, "total_present", 0),
+            total_absent=getattr(member, "total_absent", 0),
+            status=getattr(member, "status", "sem_turma"),
         )
         for member in page.items
     ]
 
     return PageResponse.of(page, items)
 
+
+@members_router.get(
+    "/students/{student_id}",
+    response_model=StudentResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_student_detail(
+    student_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> StudentResponse:
+    """
+    Retorna a ficha cadastral enriquecida de um aluno específico da instituição ativa no JWT.
+    Acessível por ADMIN, COORDENADOR e PROFESSOR.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = GetStudentUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    member = await use_case.execute(
+        GetStudentInput(
+            tenant_id=tenant_id,
+            student_id=student_id,
+            professor_user_id=auth.user.id if auth.role == UserRole.PROFESSOR else None,
+        )
+    )
+
+    return StudentResponse(
+        id=member.id,
+        tenant_member_id=member.id,
+        user_id=member.user_id,
+        name=member.name,
+        email=member.email,
+        role=member.role,
+        created_at=member.created_at,
+        turmas_count=getattr(member, "turmas_count", 0),
+        attendance_rate=getattr(member, "attendance_rate", 0.0),
+        total_sessions=getattr(member, "total_sessions", 0),
+        total_present=getattr(member, "total_present", 0),
+        total_absent=getattr(member, "total_absent", 0),
+        status=getattr(member, "status", "sem_turma"),
+    )
+
+
+@router.get(
+    "/{tenant_id}/students/{student_id}",
+    response_model=StudentResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+@router.get(
+    "/{tenant_id}/members/students/{student_id}",
+    response_model=StudentResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_tenant_student_detail(
+    tenant_id: UUID,
+    student_id: UUID,
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> StudentResponse:
+    """
+    Retorna a ficha cadastral enriquecida de um aluno específico de uma instituição.
+    """
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = GetStudentUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+    member = await use_case.execute(
+        GetStudentInput(
+            tenant_id=tenant_id,
+            student_id=student_id,
+            professor_user_id=auth.user.id if auth.role == UserRole.PROFESSOR else None,
+        )
+    )
+
+    return StudentResponse(
+        id=member.id,
+        tenant_member_id=member.id,
+        user_id=member.user_id,
+        name=member.name,
+        email=member.email,
+        role=member.role,
+        created_at=member.created_at,
+        turmas_count=getattr(member, "turmas_count", 0),
+        attendance_rate=getattr(member, "attendance_rate", 0.0),
+        total_sessions=getattr(member, "total_sessions", 0),
+        total_present=getattr(member, "total_present", 0),
+        total_absent=getattr(member, "total_absent", 0),
+        status=getattr(member, "status", "sem_turma"),
+    )
 
 
 @router.post(

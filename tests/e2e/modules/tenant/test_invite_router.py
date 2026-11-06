@@ -14,7 +14,7 @@ from tests.factories.user_factory import UserFactory
 class TestInviteRouterEndpoints:
     """Testes E2E para as rotas do sistema de convites (Invites)."""
 
-    @patch("modules.tenant.application.use_cases.send_invite.send_invite_email")
+    @patch("modules.tenant.application.use_cases.send_invite.send_invite_email_task.delay")
     async def test_send_invite_success(self, mock_send_email, client, session):
         """POST /tenants/{id}/invites -> Deve enviar convite e disparar e-mail com sucesso quando for ADMIN."""
         user = await UserFactory.create(session)

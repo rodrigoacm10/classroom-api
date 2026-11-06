@@ -18,6 +18,28 @@ class CreateAttendanceSessionRequest(BaseModel):
         le=1440,
         description="Duração da chamada em minutos (de 1 a 1440 - máximo 24 horas)",
     )
+    use_professor_location: bool = Field(
+        default=False,
+        description="Define se a chamada utilizará a localização GPS atual do professor",
+    )
+    latitude: float | None = Field(
+        default=None,
+        ge=-90.0,
+        le=90.0,
+        description="Latitude atual do professor (WGS84)",
+    )
+    longitude: float | None = Field(
+        default=None,
+        ge=-180.0,
+        le=180.0,
+        description="Longitude atual do professor (WGS84)",
+    )
+    tolerance_radius_meters: int | None = Field(
+        default=None,
+        ge=10,
+        le=1000,
+        description="Raio de tolerância em metros a partir da posição do professor",
+    )
 
 
 class SubjectClassSummaryResponse(BaseModel):
@@ -39,6 +61,9 @@ class AttendanceSessionResponse(BaseModel):
     id: UUID
     subject_class_id: UUID
     room_id: UUID | None
+    custom_latitude: float | None = None
+    custom_longitude: float | None = None
+    custom_tolerance_radius_meters: int | None = None
     subject_class: SubjectClassSummaryResponse | None = None
     room: RoomSummaryResponse | None = None
     day_code: str
@@ -86,6 +111,22 @@ class StudentActiveAttendanceSessionResponse(BaseModel):
     already_confirmed: bool
     record_id: UUID | None = None
     record_status: RecordStatus | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class StudentAttendanceHistoryItemResponse(BaseModel):
+    session_id: UUID
+    subject_class_id: UUID
+    subject_class_name: str
+    discipline_name: str
+    room_id: UUID | None = None
+    room_name: str | None = None
+    opened_at: datetime
+    session_status: SessionStatus
+    record_status: RecordStatus | None = None
+    confirmed_at: datetime | None = None
+    record_id: UUID | None = None
 
     model_config = {"from_attributes": True}
 

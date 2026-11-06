@@ -19,6 +19,7 @@ from modules.attendance.application.handlers.attendance_notification_handler imp
 )
 from modules.attendance.interface.router import (
     active_sessions_router,
+    student_attendance_history_router,
 )
 from modules.attendance.interface.router import (
     router as attendance_router,
@@ -113,6 +114,7 @@ app.include_router(tenant_invites_router)
 app.include_router(invites_router)
 app.include_router(attendance_router)
 app.include_router(active_sessions_router)
+app.include_router(student_attendance_history_router)
 app.include_router(notification_router)
 app.include_router(report_router)
 app.include_router(dashboard_router)

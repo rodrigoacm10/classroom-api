@@ -45,3 +45,37 @@ async def is_user_session_revoked(user_id: UUID | str, token_iat: int | float | 
         return True
 
     return float(token_iat) < float(revoked_before)
+
+
+async def check_token_and_session_revocation(
+    jti: str | None,
+    user_id: UUID | str,
+    token_iat: int | float | None,
+) -> tuple[bool, bool]:
+    """
+    Verifica em um único round-trip (MGET) no Redis se:
+    1. O JTI do token está na blacklist (logout).
+    2. A sessão do usuário foi invalidada globalmente (ex: redefinição de senha).
+
+    Retorna `(is_blacklisted, is_session_revoked)`.
+    """
+    session_key = f"user_revoked_before:{user_id}"
+
+    if jti:
+        blacklist_val, revoked_before = await redis_client.mget(
+            f"blacklist:{jti}",
+            session_key,
+        )
+        is_blacklisted = blacklist_val is not None
+    else:
+        is_blacklisted = False
+        revoked_before = await redis_client.get(session_key)
+
+    if not revoked_before:
+        is_session_revoked = False
+    elif token_iat is None:
+        is_session_revoked = True
+    else:
+        is_session_revoked = float(token_iat) < float(revoked_before)
+
+    return is_blacklisted, is_session_revoked

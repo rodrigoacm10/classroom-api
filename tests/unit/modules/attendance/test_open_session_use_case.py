@@ -382,3 +382,98 @@ class TestOpenAttendanceSessionUseCase:
                     room_id=room.id,
                 )
             )
+
+    async def test_open_session_with_professor_location_success(self):
+        """Deve abrir chamada usando a geolocalização do professor sem exigir sala física."""
+        session_repo = FakeAttendanceSessionRepository()
+        subject_class_repo = FakeSubjectClassRepository()
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        room_repo = FakeRoomRepository()
+
+        tenant = TenantFactory.make()
+        await tenant_repo.save(tenant)
+
+        user_id = uuid4()
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
+        await member_repo.save(professor_member)
+
+        # Turma sem sala vinculada
+        subject_class = SubjectClass(
+            tenant_id=tenant.id,
+            name="Aula de Campo",
+            discipline_name="Ecologia",
+            professor_id=professor_member.id,
+            room_id=None,
+        )
+        await subject_class_repo.save(subject_class)
+
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo
+        )
+
+        session = await use_case.execute(
+            OpenAttendanceSessionInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                user_id=user_id,
+                user_role=UserRole.PROFESSOR,
+                use_professor_location=True,
+                latitude=-8.0512,
+                longitude=-34.8812,
+                tolerance_radius_meters=80,
+                duration_minutes=20,
+            )
+        )
+
+        assert session.status == SessionStatus.OPEN
+        assert session.custom_latitude == -8.0512
+        assert session.custom_longitude == -34.8812
+        assert session.custom_tolerance_radius_meters == 80
+
+    async def test_open_session_with_professor_location_missing_coordinates(self):
+        """Deve lançar BusinessRuleException quando faltam coordenadas com use_professor_location."""
+        session_repo = FakeAttendanceSessionRepository()
+        subject_class_repo = FakeSubjectClassRepository()
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        room_repo = FakeRoomRepository()
+
+        tenant = TenantFactory.make()
+        await tenant_repo.save(tenant)
+
+        user_id = uuid4()
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
+        await member_repo.save(professor_member)
+
+        subject_class = SubjectClass(
+            tenant_id=tenant.id,
+            name="Aula Externa",
+            discipline_name="Artes",
+            professor_id=professor_member.id,
+            room_id=None,
+        )
+        await subject_class_repo.save(subject_class)
+
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, room_repo
+        )
+
+        with pytest.raises(
+            BusinessRuleException, match="Coordenadas de geolocalização são obrigatórias"
+        ):
+            await use_case.execute(
+                OpenAttendanceSessionInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    user_id=user_id,
+                    user_role=UserRole.PROFESSOR,
+                    use_professor_location=True,
+                    latitude=None,
+                    longitude=None,
+                )
+            )

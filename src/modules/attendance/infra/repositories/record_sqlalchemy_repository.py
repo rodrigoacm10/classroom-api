@@ -2,7 +2,6 @@ import math
 from typing import Any, cast
 from uuid import UUID
 
-from geoalchemy2.functions import ST_Distance, ST_GeographyFromText
 from geoalchemy2.shape import to_shape
 from shapely.geometry import Point
 from sqlalchemy import and_, select
@@ -45,8 +44,8 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
         tenant_member_id: UUID,
         latitude: float,
         longitude: float,
-        room_id: UUID,
-        tolerance_radius_meters: float,
+        room_id: UUID | None = None,
+        tolerance_radius_meters: float = 50.0,
         gps_accuracy_meters: float | None = None,
         record_status: RecordStatus = RecordStatus.REGULAR,
         irregularity_flags: list[str] | None = None,
@@ -54,24 +53,31 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
         ip_address: str | None = None,
         user_agent: str | None = None,
         device_info: dict | None = None,
+        room_location: Any | None = None,
+        distance_meters: float | None = None,
         evidence_photo_url: str | None = None,
     ) -> AttendanceRecord:
-        student_point = ST_GeographyFromText(f"SRID=4326;POINT({longitude} {latitude})")
-
-        room_stmt = select(RoomModel.location).where(RoomModel.id == room_id)
-        room_res = await self.session.execute(room_stmt)
-        room_location = room_res.scalar_one_or_none()
-
-        if room_location is not None:
-            try:
-                dist_stmt = select(ST_Distance(room_location, student_point))
-                dist_res = await self.session.execute(dist_stmt)
-                distance_meters = float(dist_res.scalar_one())
-            except Exception:
-                point = cast(Point, to_shape(cast(Any, room_location)))
-                distance_meters = haversine_distance(latitude, longitude, point.y, point.x)
-        else:
-            distance_meters = 0.0
+        if distance_meters is None:
+            if room_location is not None:
+                try:
+                    point = cast(Point, to_shape(cast(Any, room_location)))
+                    distance_meters = haversine_distance(latitude, longitude, point.y, point.x)
+                except Exception:
+                    distance_meters = 0.0
+            elif room_id is not None:
+                room_stmt = select(RoomModel.location).where(RoomModel.id == room_id)
+                room_res = await self.session.execute(room_stmt)
+                loc = room_res.scalar_one_or_none()
+                if loc is not None:
+                    try:
+                        point = cast(Point, to_shape(cast(Any, loc)))
+                        distance_meters = haversine_distance(latitude, longitude, point.y, point.x)
+                    except Exception:
+                        distance_meters = 0.0
+                else:
+                    distance_meters = 0.0
+            else:
+                distance_meters = 0.0
 
         within_radius = distance_meters <= tolerance_radius_meters
 
@@ -103,7 +109,9 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
             async with self.session.begin_nested():
                 self.session.add(model)
                 await self.session.flush()
-            return AttendanceRecordMapper.to_domain(model)
+            if model.confirmed_at is not None:
+                record_entity.confirmed_at = model.confirmed_at
+            return record_entity
         except IntegrityError:
             raise ResourceAlreadyExistsException("Presença já confirmada nesta sessão.")
 
@@ -146,6 +154,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
     ) -> AttendanceRecord | None:
         stmt = select(AttendanceRecordModel).where(
             AttendanceRecordModel.session_id == session_id,
+            AttendanceRecordModel.device_id.is_not(None),
             AttendanceRecordModel.device_id == device_id,
         )
         result = await self.session.execute(stmt)

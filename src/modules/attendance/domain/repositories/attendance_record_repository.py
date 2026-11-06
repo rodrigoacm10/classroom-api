@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
@@ -13,8 +13,8 @@ class AttendanceRecordRepository(Protocol):
         tenant_member_id: UUID,
         latitude: float,
         longitude: float,
-        room_id: UUID,
-        tolerance_radius_meters: float,
+        room_id: UUID | None = None,
+        tolerance_radius_meters: float = 50.0,
         gps_accuracy_meters: float | None = None,
         record_status: RecordStatus = RecordStatus.REGULAR,
         irregularity_flags: list[str] | None = None,
@@ -22,6 +22,8 @@ class AttendanceRecordRepository(Protocol):
         ip_address: str | None = None,
         user_agent: str | None = None,
         device_info: dict | None = None,
+        room_location: Any | None = None,
+        distance_meters: float | None = None,
         evidence_photo_url: str | None = None,
     ) -> AttendanceRecord: ...
 

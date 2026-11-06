@@ -24,6 +24,9 @@ class AttendanceSession:
     day_code: str
     expires_at: datetime
     room_id: UUID | None = None
+    custom_latitude: float | None = None
+    custom_longitude: float | None = None
+    custom_tolerance_radius_meters: int | None = None
     subject_class: SubjectClassInfo | None = None
     room: RoomInfo | None = None
     opened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

@@ -1,15 +1,21 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from infra.database.models.attendance_record import AttendanceRecordModel
 from infra.database.models.attendance_session import AttendanceSessionModel
 from infra.database.models.enrollment import EnrollmentModel
+from modules.attendance.domain.entities.attendance_confirmation_context import (
+    AttendanceConfirmationContext,
+)
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.entities.student_active_session import StudentActiveSession
+from modules.attendance.domain.entities.student_attendance_history_item import (
+    StudentAttendanceHistoryItem,
+)
 from modules.attendance.infra.mappers.attendance_session_mapper import AttendanceSessionMapper
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
@@ -304,6 +310,127 @@ class SessionSQLAlchemyRepository:
             for row in rows
         ]
 
+    async def list_history_by_student_paginated(
+        self,
+        tenant_id: UUID,
+        tenant_member_id: UUID,
+        pagination: PaginationParams,
+        subject_class_id: UUID | None = None,
+        status: SessionStatus | None = None,
+        opened_after: datetime | None = None,
+        opened_before: datetime | None = None,
+    ) -> Page[StudentAttendanceHistoryItem]:
+        from infra.database.models.room import RoomModel
+        from infra.database.models.subject_class import SubjectClassModel
+
+        target_room_id = func.coalesce(AttendanceSessionModel.room_id, SubjectClassModel.room_id)
+
+        conditions = [
+            SubjectClassModel.tenant_id == tenant_id,
+            SubjectClassModel.deleted.is_(False),
+            EnrollmentModel.tenant_member_id == tenant_member_id,
+            EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+            EnrollmentModel.deleted.is_(False),
+        ]
+
+        if subject_class_id is not None:
+            conditions.append(AttendanceSessionModel.subject_class_id == subject_class_id)
+
+        if status is not None:
+            conditions.append(AttendanceSessionModel.status == status)
+
+        if opened_after is not None:
+            conditions.append(AttendanceSessionModel.opened_at >= opened_after)
+
+        if opened_before is not None:
+            conditions.append(AttendanceSessionModel.opened_at <= opened_before)
+
+        count_stmt = (
+            select(func.count(AttendanceSessionModel.id))
+            .join(
+                SubjectClassModel,
+                SubjectClassModel.id == AttendanceSessionModel.subject_class_id,
+            )
+            .join(
+                EnrollmentModel,
+                and_(
+                    EnrollmentModel.subject_class_id == SubjectClassModel.id,
+                    EnrollmentModel.tenant_member_id == tenant_member_id,
+                    EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+                    EnrollmentModel.deleted.is_(False),
+                ),
+            )
+            .where(*conditions)
+        )
+        total_result = await self.session.execute(count_stmt)
+        total = total_result.scalar_one()
+
+        stmt = (
+            select(
+                AttendanceSessionModel.id.label("session_id"),
+                AttendanceSessionModel.subject_class_id.label("subject_class_id"),
+                SubjectClassModel.name.label("subject_class_name"),
+                SubjectClassModel.discipline_name.label("discipline_name"),
+                target_room_id.label("room_id"),
+                RoomModel.name.label("room_name"),
+                AttendanceSessionModel.opened_at.label("opened_at"),
+                AttendanceSessionModel.status.label("session_status"),
+                AttendanceRecordModel.id.label("record_id"),
+                AttendanceRecordModel.record_status.label("record_status"),
+                AttendanceRecordModel.confirmed_at.label("confirmed_at"),
+            )
+            .join(
+                SubjectClassModel,
+                SubjectClassModel.id == AttendanceSessionModel.subject_class_id,
+            )
+            .join(
+                EnrollmentModel,
+                and_(
+                    EnrollmentModel.subject_class_id == SubjectClassModel.id,
+                    EnrollmentModel.tenant_member_id == tenant_member_id,
+                    EnrollmentModel.status == EnrollmentStatus.ACTIVE,
+                    EnrollmentModel.deleted.is_(False),
+                ),
+            )
+            .outerjoin(
+                RoomModel,
+                RoomModel.id == target_room_id,
+            )
+            .outerjoin(
+                AttendanceRecordModel,
+                and_(
+                    AttendanceRecordModel.session_id == AttendanceSessionModel.id,
+                    AttendanceRecordModel.tenant_member_id == tenant_member_id,
+                ),
+            )
+            .where(*conditions)
+            .order_by(AttendanceSessionModel.opened_at.desc())
+            .offset(pagination.offset)
+            .limit(pagination.page_size)
+        )
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+
+        items = [
+            StudentAttendanceHistoryItem(
+                session_id=row.session_id,
+                subject_class_id=row.subject_class_id,
+                subject_class_name=row.subject_class_name,
+                discipline_name=row.discipline_name,
+                opened_at=row.opened_at,
+                session_status=row.session_status,
+                record_status=row.record_status,
+                confirmed_at=row.confirmed_at,
+                room_id=row.room_id,
+                room_name=row.room_name,
+                record_id=row.record_id,
+            )
+            for row in rows
+        ]
+
+        return Page.from_params(items, total=total, pagination=pagination)
+
     async def list_by_tenant_paginated(
         self,
         tenant_id: UUID,
@@ -579,3 +706,134 @@ class SessionSQLAlchemyRepository:
             row = counts_by_session.get(item.id)
             item.confirmed_count = int(row.confirmed_count) if row else 0
             item.irregular_count = int(row.irregular_count) if row else 0
+
+    async def find_confirmation_context(
+        self,
+        tenant_id: UUID,
+        subject_class_id: UUID,
+        session_id: UUID,
+        user_id: UUID,
+        device_id: str | None = None,
+    ) -> AttendanceConfirmationContext | None:
+        from infra.database.models.room import RoomModel
+        from infra.database.models.subject_class import SubjectClassModel
+        from infra.database.models.tenant import TenantMemberModel, TenantModel
+
+        room_id_expr = func.coalesce(AttendanceSessionModel.room_id, SubjectClassModel.room_id)
+
+        existing_record_sub = (
+            select(AttendanceRecordModel.id)
+            .where(
+                AttendanceRecordModel.session_id == session_id,
+                AttendanceRecordModel.tenant_member_id == TenantMemberModel.id,
+            )
+            .limit(1)
+            .scalar_subquery()
+        )
+
+        shared_device_sub = (
+            (
+                select(AttendanceRecordModel.id)
+                .where(
+                    AttendanceRecordModel.session_id == session_id,
+                    AttendanceRecordModel.device_id.is_not(None),
+                    AttendanceRecordModel.device_id == device_id,
+                    AttendanceRecordModel.tenant_member_id != TenantMemberModel.id,
+                )
+                .limit(1)
+                .scalar_subquery()
+            )
+            if device_id
+            else None
+        )
+
+        stmt = (
+            select(
+                TenantModel.id.label("tenant_id"),
+                TenantModel.deleted.label("tenant_deleted"),
+                SubjectClassModel.id.label("class_id"),
+                SubjectClassModel.deleted.label("class_deleted"),
+                AttendanceSessionModel.id.label("session_id"),
+                AttendanceSessionModel.status.label("session_status"),
+                AttendanceSessionModel.expires_at.label("session_expires_at"),
+                AttendanceSessionModel.day_code.label("session_day_code"),
+                TenantMemberModel.id.label("member_id"),
+                TenantMemberModel.deleted.label("member_deleted"),
+                EnrollmentModel.id.label("enrollment_id"),
+                EnrollmentModel.status.label("enrollment_status"),
+                EnrollmentModel.deleted.label("enrollment_deleted"),
+                room_id_expr.label("room_id"),
+                func.coalesce(
+                    AttendanceSessionModel.custom_tolerance_radius_meters,
+                    RoomModel.tolerance_radius_meters,
+                    50.0,
+                ).label("room_tolerance_radius"),
+                func.coalesce(
+                    AttendanceSessionModel.custom_location,
+                    RoomModel.location,
+                ).label("room_location"),
+                existing_record_sub.label("existing_record_id"),
+                (
+                    shared_device_sub.label("shared_device_id")
+                    if shared_device_sub is not None
+                    else literal(None).label("shared_device_id")
+                ),
+            )
+            .select_from(TenantModel)
+            .join(
+                SubjectClassModel,
+                and_(
+                    SubjectClassModel.id == subject_class_id,
+                    SubjectClassModel.tenant_id == TenantModel.id,
+                ),
+            )
+            .join(
+                AttendanceSessionModel,
+                and_(
+                    AttendanceSessionModel.id == session_id,
+                    AttendanceSessionModel.subject_class_id == SubjectClassModel.id,
+                ),
+            )
+            .outerjoin(
+                TenantMemberModel,
+                and_(
+                    TenantMemberModel.tenant_id == TenantModel.id,
+                    TenantMemberModel.user_id == user_id,
+                ),
+            )
+            .outerjoin(
+                EnrollmentModel,
+                and_(
+                    EnrollmentModel.subject_class_id == SubjectClassModel.id,
+                    EnrollmentModel.tenant_member_id == TenantMemberModel.id,
+                ),
+            )
+            .outerjoin(RoomModel, RoomModel.id == room_id_expr)
+            .where(TenantModel.id == tenant_id)
+        )
+
+        result = await self.session.execute(stmt)
+        row = result.first()
+        if not row:
+            return None
+
+        return AttendanceConfirmationContext(
+            tenant_id=row.tenant_id,
+            tenant_deleted=bool(row.tenant_deleted),
+            subject_class_id=row.class_id,
+            subject_class_deleted=bool(row.class_deleted),
+            session_id=row.session_id,
+            session_status=row.session_status,
+            session_expires_at=row.session_expires_at,
+            session_day_code=row.session_day_code,
+            member_id=row.member_id,
+            member_deleted=bool(row.member_deleted) if row.member_id else False,
+            enrollment_id=row.enrollment_id,
+            enrollment_status=row.enrollment_status,
+            enrollment_deleted=bool(row.enrollment_deleted) if row.enrollment_id else False,
+            room_id=row.room_id,
+            room_tolerance_radius=float(row.room_tolerance_radius),
+            room_location=row.room_location,
+            already_confirmed=row.existing_record_id is not None,
+            shared_device_conflict=row.shared_device_id is not None,
+        )

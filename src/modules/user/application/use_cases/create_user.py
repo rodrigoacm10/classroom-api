@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from modules.user.domain.entities.user import User
 from modules.user.domain.repositories.user_repository import UserRepository
-from security.password import hash_password
+from security.password import hash_password_async
 
 
 @dataclass
@@ -21,10 +21,11 @@ class CreateUserUseCase:
         if existing:
             raise ValueError("E-mail já cadastrado.")
 
+        password_hash = await hash_password_async(data.password)
         user = User(
             name=data.name,
             email=data.email,
-            password_hash=hash_password(data.password),
+            password_hash=password_hash,
         )
 
         return await self.repository.save(user)

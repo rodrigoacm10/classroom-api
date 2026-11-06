@@ -56,7 +56,7 @@ class TestPasswordResetIntegrationFlow:
 
         # ── Etapa 1: Solicitar código ──
         with patch(
-            "modules.auth.application.use_cases.forgot_password.send_password_reset_email"
+            "modules.auth.application.use_cases.forgot_password.send_password_reset_email_task.delay"
         ) as mock_email:
             await self.forgot_use_case.execute(ForgotPasswordInput(email=email))
 
