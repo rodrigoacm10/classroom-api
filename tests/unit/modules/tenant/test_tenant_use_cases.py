@@ -556,3 +556,52 @@ class TestListTenantMembersUseCase:
         assert res_class.total == 1
         assert len(res_class.items) == 1
         assert res_class.items[0].user_id == u1.id
+
+
+class TestGetMembersMetricsUseCase:
+    """Testes unitários para o caso de uso GetMembersMetricsUseCase."""
+
+    async def test_get_members_metrics_success(self):
+        """Deve calcular e consolidar as métricas de membros da tenant (sem contar alunos)."""
+        from modules.tenant.application.use_cases.get_members_metrics import (
+            GetMembersMetricsInput,
+            GetMembersMetricsUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        u_admin = UserFactory.make()
+        u_coord = UserFactory.make()
+        u_prof1 = UserFactory.make()
+        u_prof2 = UserFactory.make()
+        u_aluno = UserFactory.make()
+
+        m_admin = TenantMember(tenant_id=tenant.id, user_id=u_admin.id, role=UserRole.ADMIN)
+        m_coord = TenantMember(tenant_id=tenant.id, user_id=u_coord.id, role=UserRole.COORDENADOR)
+        m_prof1 = TenantMember(tenant_id=tenant.id, user_id=u_prof1.id, role=UserRole.PROFESSOR)
+        m_prof2 = TenantMember(tenant_id=tenant.id, user_id=u_prof2.id, role=UserRole.PROFESSOR)
+        m_aluno = TenantMember(tenant_id=tenant.id, user_id=u_aluno.id, role=UserRole.ALUNO)
+
+        setattr(m_prof1, "assigned_classes_count", 3)
+        setattr(m_prof2, "assigned_classes_count", 2)
+
+        member_repo.seed(m_admin)
+        member_repo.seed(m_coord)
+        member_repo.seed(m_prof1)
+        member_repo.seed(m_prof2)
+        member_repo.seed(m_aluno)
+
+        use_case = GetMembersMetricsUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        metrics = await use_case.execute(GetMembersMetricsInput(tenant_id=tenant.id))
+
+        assert metrics.total_members == 4  # 1 admin + 1 coord + 2 profs (sem aluno!)
+        assert metrics.professors_count == 2
+        assert metrics.coordinators_count == 1
+        assert metrics.admins_count == 1
+        assert metrics.management_count == 2  # admin + coord
+        assert metrics.assigned_classes_count == 5
