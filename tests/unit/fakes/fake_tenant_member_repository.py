@@ -56,6 +56,7 @@ class FakeTenantMemberRepository:
         tenant_id: UUID,
         pagination: PaginationParams,
         role: UserRole | None = None,
+        exclude_role: UserRole | None = None,
         search: str | None = None,
         subject_class_id: UUID | None = None,
         created_after: datetime | None = None,
@@ -69,6 +70,8 @@ class FakeTenantMemberRepository:
             if not include_deleted and m.deleted:
                 continue
             if role is not None and m.role != role:
+                continue
+            if exclude_role is not None and m.role == exclude_role:
                 continue
             if created_after is not None and m.created_at < created_after:
                 continue

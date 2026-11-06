@@ -35,6 +35,7 @@ class TenantMemberRepository(Protocol):
         tenant_id: UUID,
         pagination: PaginationParams,
         role: UserRole | None = None,
+        exclude_role: UserRole | None = None,
         search: str | None = None,
         subject_class_id: UUID | None = None,
         created_after: datetime | None = None,

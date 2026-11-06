@@ -17,6 +17,7 @@ class ListTenantMembersInput:
     tenant_id: UUID
     pagination: PaginationParams = field(default_factory=PaginationParams)
     role: UserRole | None = None
+    exclude_role: UserRole | None = None
     search: str | None = None
     subject_class_id: UUID | None = None
     created_after: datetime | None = None
@@ -42,6 +43,7 @@ class ListTenantMembersUseCase:
             tenant_id=data.tenant_id,
             pagination=data.pagination,
             role=data.role,
+            exclude_role=data.exclude_role,
             search=data.search,
             subject_class_id=data.subject_class_id,
             created_after=data.created_after,

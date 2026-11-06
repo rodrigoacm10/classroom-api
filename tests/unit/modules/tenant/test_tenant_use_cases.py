@@ -458,6 +458,35 @@ class TestListTenantMembersUseCase:
         assert len(result.items) == 1
         assert result.items[0].user_id == u2.id
 
+    async def test_list_tenant_members_exclude_role(self):
+        """Deve listar membros excluindo um papel específico (ex: ALUNO)."""
+        from modules.tenant.application.use_cases.list_tenant_members import (
+            ListTenantMembersInput,
+            ListTenantMembersUseCase,
+        )
+
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant = TenantFactory.make()
+        tenant_repo.seed(tenant)
+
+        u1 = UserFactory.make()
+        u2 = UserFactory.make()
+        m1 = TenantMember(tenant_id=tenant.id, user_id=u1.id, role=UserRole.ADMIN)
+        m2 = TenantMember(tenant_id=tenant.id, user_id=u2.id, role=UserRole.ALUNO)
+        member_repo.seed(m1)
+        member_repo.seed(m2)
+
+        use_case = ListTenantMembersUseCase(tenant_repo=tenant_repo, member_repo=member_repo)
+
+        result = await use_case.execute(
+            ListTenantMembersInput(tenant_id=tenant.id, exclude_role=UserRole.ALUNO)
+        )
+        assert result.total == 1
+        assert len(result.items) == 1
+        assert result.items[0].user_id == u1.id
+
     async def test_list_tenant_members_tenant_not_found(self):
         """Deve lançar ResourceNotFoundException se a tenant não existir."""
         from uuid import uuid4

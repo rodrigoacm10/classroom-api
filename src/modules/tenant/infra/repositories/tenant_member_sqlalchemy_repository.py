@@ -91,6 +91,7 @@ class TenantMemberSQLAlchemyRepository:
         tenant_id: UUID,
         pagination: PaginationParams,
         role: UserRole | None = None,
+        exclude_role: UserRole | None = None,
         search: str | None = None,
         subject_class_id: UUID | None = None,
         created_after: datetime | None = None,
@@ -100,6 +101,8 @@ class TenantMemberSQLAlchemyRepository:
         conditions = [TenantMemberModel.tenant_id == tenant_id]
         if role is not None:
             conditions.append(TenantMemberModel.role == role)
+        if exclude_role is not None:
+            conditions.append(TenantMemberModel.role != exclude_role)
         if created_after is not None:
             conditions.append(TenantMemberModel.created_at >= created_after)
         if created_before is not None:
