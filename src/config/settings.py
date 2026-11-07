@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,21 @@ class Settings(BaseSettings):
     app_name: str = "Classroom API"
     app_version: str = "0.2.0"
     database_url: str = "postgresql+psycopg://classroom:classroom@localhost:5432/classroom"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def assemble_db_connection(cls, v: str) -> str:
+        """
+        Converte URLs padrão do Railway / Heroku ('postgresql://' ou 'postgres://')
+        para o formato compatível com psycopg3 ('postgresql+psycopg://').
+        """
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+psycopg://", 1)
+            if v.startswith("postgresql://") and not v.startswith("postgresql+psycopg://"):
+                return v.replace("postgresql://", "postgresql+psycopg://", 1)
+        return v
+
     database_pool_size: int = 20  # Conexões ativas permanentes mantidas no pool
     database_max_overflow: int = 20  # Conexões adicionais permitidas durante picos (total: 40)
     database_pool_timeout: int = (
