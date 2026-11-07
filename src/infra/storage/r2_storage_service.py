@@ -44,7 +44,7 @@ class R2StorageService:
             ContentType=content_type,
         )
         await loop.run_in_executor(None, put_fn)
-        return f"{self._public_url}/{key}"
+        return self.public_url(key)
 
     async def delete(self, key: str) -> None:
         """
@@ -61,4 +61,27 @@ class R2StorageService:
             await loop.run_in_executor(None, delete_fn)
         except Exception as exc:
             logger.error("Erro ao apagar objeto %s do R2: %s", key, exc)
+            raise
+
+    def public_url(self, key: str) -> str:
+        return f"{self._public_url}/{key}"
+
+    async def copy(self, source_key: str, destination_key: str) -> None:
+        """
+        Copia um objeto dentro do bucket R2. Como nos outros métodos, roda o boto3
+        (síncrono) em uma thread separada para não bloquear o event loop.
+        """
+        loop = asyncio.get_running_loop()
+        copy_fn = partial(
+            self._client.copy_object,
+            Bucket=self._bucket,
+            Key=destination_key,
+            CopySource={"Bucket": self._bucket, "Key": source_key},
+        )
+        try:
+            await loop.run_in_executor(None, copy_fn)
+        except Exception as exc:
+            logger.error(
+                "Erro ao copiar objeto %s para %s no R2: %s", source_key, destination_key, exc
+            )
             raise
