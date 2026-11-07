@@ -6,6 +6,7 @@ from modules.attendance.domain.entities.attendance_confirmation_context import (
     AttendanceConfirmationContext,
 )
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
+from modules.attendance.domain.entities.evidence_photo_upload import EvidencePhotoUpload
 from modules.attendance.domain.repositories.attendance_record_repository import (
     AttendanceRecordRepository,
 )
@@ -98,6 +99,35 @@ class ConfirmAttendanceUseCase:
         # Fallback para fakes sem o método ou resolução precisa de 404
         return await self._execute_legacy(data)
 
+    async def _validate_evidence_upload(
+        self, data: ConfirmAttendanceInput
+    ) -> EvidencePhotoUpload | None:
+        """
+        Valida a foto de evidência informada (se houver): precisa ter vindo do endpoint
+        de upload, pertencer a esta sessão e ainda estar pending. Deve rodar ANTES de
+        criar a presença, para não registrar presença com foto inválida.
+        """
+        if not data.evidence_photo_url:
+            return None
+
+        upload = await self.upload_repo.find_by_url(data.evidence_photo_url)
+        if not upload or upload.session_id != data.session_id:
+            raise BusinessRuleException("Foto de evidência inválida para esta chamada.")
+        if upload.status != UploadStatus.PENDING:
+            raise BusinessRuleException(
+                "Foto de evidência expirada ou já utilizada. Envie a foto novamente."
+            )
+        return upload
+
+    async def _confirm_evidence_upload(
+        self, upload: EvidencePhotoUpload | None, record: AttendanceRecord
+    ) -> None:
+        """Vincula o upload ao registro de presença criado e o marca como confirmed."""
+        if upload is None:
+            return
+        upload.confirm(record.id)
+        await self.upload_repo.save(upload)
+
     async def _execute_from_context(
         self, context: AttendanceConfirmationContext, data: ConfirmAttendanceInput
     ) -> AttendanceRecord:
@@ -158,7 +188,9 @@ class ConfirmAttendanceUseCase:
         if context.shared_device_conflict:
             flags.append("shared_device")
 
-        return await self.record_repo.create_record(
+        evidence_upload = await self._validate_evidence_upload(data)
+
+        record = await self.record_repo.create_record(
             session_id=data.session_id,
             tenant_member_id=context.member_id,
             latitude=data.latitude,
@@ -172,7 +204,11 @@ class ConfirmAttendanceUseCase:
             user_agent=data.user_agent,
             device_info=data.device_info,
             room_location=context.room_location,
+            evidence_photo_url=data.evidence_photo_url,
         )
+
+        await self._confirm_evidence_upload(evidence_upload, record)
+        return record
 
     async def _execute_legacy(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
         # 1. Tenant
@@ -264,15 +300,7 @@ class ConfirmAttendanceUseCase:
         flags: list[str] = []
 
         # 12. Validar foto de evidência (se informada)
-        evidence_upload = None
-        if data.evidence_photo_url:
-            evidence_upload = await self.upload_repo.find_by_url(data.evidence_photo_url)
-            if not evidence_upload or evidence_upload.session_id != data.session_id:
-                raise BusinessRuleException("Foto de evidência inválida para esta chamada.")
-            if evidence_upload.status != UploadStatus.PENDING:
-                raise BusinessRuleException(
-                    "Foto de evidência expirada ou já utilizada. Envie a foto novamente."
-                )
+        evidence_upload = await self._validate_evidence_upload(data)
 
         # GPS accuracy imprecisa
         if data.gps_accuracy_meters is not None and data.gps_accuracy_meters > tolerance_radius:
@@ -313,8 +341,5 @@ class ConfirmAttendanceUseCase:
         )
 
         # 13. Vincular o upload ao registro de presença criado
-        if evidence_upload:
-          evidence_upload.confirm(record.id)
-          await self.upload_repo.save(evidence_upload)
-
+        await self._confirm_evidence_upload(evidence_upload, record)
         return record
