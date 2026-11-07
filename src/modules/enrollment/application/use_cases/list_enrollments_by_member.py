@@ -17,7 +17,6 @@ class ListEnrollmentsByMemberInput:
 
 
 class ListEnrollmentsByMemberUseCase:
-
     def __init__(
         self,
         enrollment_repo: EnrollmentRepository,

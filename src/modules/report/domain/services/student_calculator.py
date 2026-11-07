@@ -14,9 +14,7 @@ _VALID_STATUSES = ("regular", "approved")
 _IRREGULAR_STATUS = "irregular"
 
 
-def _build_student_report(
-    data: StudentAttendanceData, distances: list[float]
-) -> StudentReport:
+def _build_student_report(data: StudentAttendanceData, distances: list[float]) -> StudentReport:
     valid = [c for c in data.confirmations if c.record_status in _VALID_STATUSES]
     irregular = [c for c in data.confirmations if c.record_status == _IRREGULAR_STATUS]
 
@@ -29,6 +27,7 @@ def _build_student_report(
     return StudentReport(
         tenant_member_id=data.tenant_member_id,
         student_name=data.student_name,
+        email=data.email,
         total_present=present,
         total_absent=absent,
         total_irregular=len(irregular),
@@ -65,9 +64,7 @@ def calculate_student_report_numpy(data: StudentAttendanceData) -> StudentReport
     else:
         lats = np.array([c.latitude for c in data.confirmations], dtype=float)
         lons = np.array([c.longitude for c in data.confirmations], dtype=float)
-        distances = haversine_distance_vectorized(
-            lats, lons, data.room_lat, data.room_lon
-        ).tolist()
+        distances = haversine_distance_vectorized(lats, lons, data.room_lat, data.room_lon).tolist()
     return _build_student_report(data, distances)
 
 

@@ -18,6 +18,10 @@ class SubjectClassSummary:
     attendance_rate: float
     created_at: datetime
     updated_at: datetime
+    active: bool = True
+    room_name: str | None = None
+    has_active_session: bool = False
+    active_session_id: UUID | None = None
 
     @staticmethod
     def compute_attendance_rate(

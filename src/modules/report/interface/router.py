@@ -27,11 +27,12 @@ from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repositor
 from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
     TenantSQLAlchemyRepository,
 )
+from security.dependencies.current_user import get_current_tenant_id
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
 
 router = APIRouter(
-    prefix="/tenants/{tenant_id}/subject-classes/{subject_class_id}/reports",
+    prefix="/subject-classes/{subject_class_id}/reports",
     tags=["reports"],
 )
 
@@ -42,8 +43,8 @@ router = APIRouter(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def generate_frequency_report(
-    tenant_id: UUID,
     subject_class_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> ClassReportResponse:
     """Gera o relatório de frequência da turma, com métricas geoespaciais recalculadas em paralelo."""
@@ -66,9 +67,9 @@ async def generate_frequency_report(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def get_student_frequency_report(
-    tenant_id: UUID,
     subject_class_id: UUID,
     tenant_member_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> StudentReportResponse:
     """Retorna o detalhe do relatório de frequência de um aluno específico da turma."""

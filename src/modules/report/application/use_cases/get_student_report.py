@@ -4,7 +4,9 @@ from uuid import UUID
 from modules.report.domain.entities.student_report import StudentReport
 from modules.report.domain.services.student_calculator import calculate_student_report
 from modules.report.infra.repositories.report_data_repository import ReportDataRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.exceptions import ResourceNotFoundException
 

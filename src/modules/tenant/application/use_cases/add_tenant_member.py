@@ -18,7 +18,6 @@ class AddTenantMemberInput:
 
 
 class AddTenantMemberUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,

@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
@@ -33,13 +31,9 @@ class TestTenantMemberSQLAlchemyRepository:
         """Membership existente → retorna TenantMember com os dados corretos."""
         tenant = await TenantFactory.create(self.session)
         user = await UserFactory.create(self.session)
-        await TenantFactory.create_member(
-            self.session, tenant_id=tenant.id, user_id=user.id
-        )
+        await TenantFactory.create_member(self.session, tenant_id=tenant.id, user_id=user.id)
 
-        result = await self.repository.find_by_tenant_and_user(
-            tenant_id=tenant.id, user_id=user.id
-        )
+        result = await self.repository.find_by_tenant_and_user(tenant_id=tenant.id, user_id=user.id)
 
         assert result is not None
         assert result.tenant_id == tenant.id
@@ -51,9 +45,7 @@ class TestTenantMemberSQLAlchemyRepository:
         user = await UserFactory.create(self.session)
         # Nenhuma membership criada
 
-        result = await self.repository.find_by_tenant_and_user(
-            tenant_id=tenant.id, user_id=user.id
-        )
+        result = await self.repository.find_by_tenant_and_user(tenant_id=tenant.id, user_id=user.id)
 
         assert result is None
 
@@ -69,9 +61,7 @@ class TestTenantMemberSQLAlchemyRepository:
         user = await UserFactory.create(self.session)
 
         # Usuário só tem membership na tenant A
-        await TenantFactory.create_member(
-            self.session, tenant_id=tenant_a.id, user_id=user.id
-        )
+        await TenantFactory.create_member(self.session, tenant_id=tenant_a.id, user_id=user.id)
 
         # Busca na tenant B deve retornar None
         result = await self.repository.find_by_tenant_and_user(
@@ -88,12 +78,8 @@ class TestTenantMemberSQLAlchemyRepository:
         tenant_2 = await TenantFactory.create(self.session)
         user = await UserFactory.create(self.session)
 
-        await TenantFactory.create_member(
-            self.session, tenant_id=tenant_1.id, user_id=user.id
-        )
-        await TenantFactory.create_member(
-            self.session, tenant_id=tenant_2.id, user_id=user.id
-        )
+        await TenantFactory.create_member(self.session, tenant_id=tenant_1.id, user_id=user.id)
+        await TenantFactory.create_member(self.session, tenant_id=tenant_2.id, user_id=user.id)
 
         result = await self.repository.find_by_user_id(user.id)
 
@@ -120,12 +106,8 @@ class TestTenantMemberSQLAlchemyRepository:
         user_1 = await UserFactory.create(self.session)
         user_2 = await UserFactory.create(self.session)
 
-        await TenantFactory.create_member(
-            self.session, tenant_id=tenant.id, user_id=user_1.id
-        )
-        await TenantFactory.create_member(
-            self.session, tenant_id=tenant.id, user_id=user_2.id
-        )
+        await TenantFactory.create_member(self.session, tenant_id=tenant.id, user_id=user_1.id)
+        await TenantFactory.create_member(self.session, tenant_id=tenant.id, user_id=user_2.id)
 
         page = await self.repository.find_by_tenant_id_paginated(
             tenant.id, pagination=PaginationParams(page=1, page_size=10)
@@ -150,9 +132,7 @@ class TestTenantMemberSQLAlchemyRepository:
         user = await UserFactory.create(self.session)
 
         # Usuário só é membro da tenant B
-        await TenantFactory.create_member(
-            self.session, tenant_id=tenant_b.id, user_id=user.id
-        )
+        await TenantFactory.create_member(self.session, tenant_id=tenant_b.id, user_id=user.id)
 
         # Busca na tenant A não deve retornar nada
         page = await self.repository.find_by_tenant_id_paginated(
@@ -200,7 +180,9 @@ class TestTenantMemberSQLAlchemyRepository:
         from shared.pagination import PaginationParams
 
         tenant = await TenantFactory.create(self.session)
-        user_carlos = await UserFactory.create(self.session, name="Carlos Eduardo", email="carlos@gmail.com")
+        user_carlos = await UserFactory.create(
+            self.session, name="Carlos Eduardo", email="carlos@gmail.com"
+        )
         user_ana = await UserFactory.create(self.session, name="Ana Paula", email="ana@gmail.com")
 
         m_carlos = await TenantFactory.create_member(
@@ -284,8 +266,6 @@ class TestTenantMemberSQLAlchemyRepository:
         assert saved.role == UserRole.ADMIN
 
         # Confirma que está no banco
-        found = await self.repository.find_by_tenant_and_user(
-            tenant_id=tenant.id, user_id=user.id
-        )
+        found = await self.repository.find_by_tenant_and_user(tenant_id=tenant.id, user_id=user.id)
         assert found is not None
         assert found.role == UserRole.ADMIN

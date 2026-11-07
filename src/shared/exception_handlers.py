@@ -8,7 +8,10 @@ continuam completamente agnósticos ao protocolo.
 Registre todos os handlers em main.py via app.add_exception_handler().
 """
 
-from fastapi import Request, status
+from collections.abc import Awaitable
+from typing import Callable, cast
+
+from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from shared.exceptions import (
@@ -39,18 +42,14 @@ async def resource_already_exists_handler(
     )
 
 
-async def business_rule_handler(
-    request: Request, exc: BusinessRuleException
-) -> JSONResponse:
+async def business_rule_handler(request: Request, exc: BusinessRuleException) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={"detail": str(exc)},
     )
 
 
-async def forbidden_handler(
-    request: Request, exc: ForbiddenException
-) -> JSONResponse:
+async def forbidden_handler(request: Request, exc: ForbiddenException) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
         content={"detail": str(exc)},
@@ -72,9 +71,7 @@ async def plan_limit_exceeded_handler(
     )
 
 
-async def generic_domain_exception_handler(
-    request: Request, exc: DomainException
-) -> JSONResponse:
+async def generic_domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:
     """Fallback para exceções de domínio não tratadas especificamente."""
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -82,7 +79,11 @@ async def generic_domain_exception_handler(
     )
 
 
-def register_exception_handlers(app: object) -> None:
+# Tipo exato que o Starlette/FastAPI espera para handlers de exceção HTTP
+ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
+
+
+def register_exception_handlers(app: FastAPI) -> None:
     """
     Registra todos os handlers de exceções de domínio na instância do FastAPI.
 
@@ -91,10 +92,18 @@ def register_exception_handlers(app: object) -> None:
         register_exception_handlers(app)
     """
     # Handlers específicos devem ser registrados ANTES do handler genérico
-    app.add_exception_handler(ResourceNotFoundException, resource_not_found_handler)
-    app.add_exception_handler(ResourceAlreadyExistsException, resource_already_exists_handler)
-    app.add_exception_handler(BusinessRuleException, business_rule_handler)
-    app.add_exception_handler(ForbiddenException, forbidden_handler)
-    app.add_exception_handler(PlanLimitExceededException, plan_limit_exceeded_handler)
+    app.add_exception_handler(
+        ResourceNotFoundException, cast(ExceptionHandler, resource_not_found_handler)
+    )
+    app.add_exception_handler(
+        ResourceAlreadyExistsException, cast(ExceptionHandler, resource_already_exists_handler)
+    )
+    app.add_exception_handler(BusinessRuleException, cast(ExceptionHandler, business_rule_handler))
+    app.add_exception_handler(ForbiddenException, cast(ExceptionHandler, forbidden_handler))
+    app.add_exception_handler(
+        PlanLimitExceededException, cast(ExceptionHandler, plan_limit_exceeded_handler)
+    )
     # Fallback genérico para DomainException base (deve ser o último)
-    app.add_exception_handler(DomainException, generic_domain_exception_handler)
+    app.add_exception_handler(
+        DomainException, cast(ExceptionHandler, generic_domain_exception_handler)
+    )

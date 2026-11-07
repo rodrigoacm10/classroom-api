@@ -3,95 +3,283 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Convite para Instituição</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Convite Institucional — Locus</title>
+  <!-- Google Fonts: Archivo (Sans) e IBM Plex Mono (Monospace) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;900&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
   <style>
+    /* Reset básico para clientes de e-mail */
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background-color: #f4f5f7;
       margin: 0;
       padding: 0;
-      color: #172b4d;
+      width: 100% !important;
+      background-color: #f5f5f5;
+      font-family: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #18191b;
+      -webkit-font-smoothing: antialiased;
     }
-    .container {
-      max-width: 560px;
+    table {
+      border-spacing: 0;
+      border-collapse: collapse;
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      border: 0;
+      height: auto;
+      line-height: 100%;
+      outline: none;
+      text-decoration: none;
+    }
+    .email-container {
+      max-width: 580px;
       margin: 40px auto;
-      background: #ffffff;
-      border-radius: 8px;
+      background-color: #ffffff;
+      border: 1px solid #e4e4e4;
+      border-radius: 12px;
       overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.03);
     }
     .header {
-      background-color: #4f46e5;
-      padding: 32px 24px;
-      text-align: center;
-      color: #ffffff;
-    }
-    .header h1 {
-      margin: 0;
-      font-size: 24px;
-      font-weight: 700;
+      padding: 24px 32px;
+      background-color: #ffffff;
+      border-bottom: 1px solid #e4e4e4;
     }
     .content {
-      padding: 32px 24px;
-      line-height: 1.6;
+      padding: 40px 32px 36px 32px;
     }
-    .badge {
-      display: inline-block;
-      background-color: #e0e7ff;
-      color: #3730a3;
-      padding: 4px 12px;
-      border-radius: 9999px;
+    .h1-title {
+      font-family: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 32px;
+      letter-spacing: -0.025em;
+      color: #18191b;
+      margin: 0 0 14px 0;
+    }
+    .body-text {
+      font-size: 15px;
+      line-height: 24px;
+      color: #5c5e63;
+      margin: 0 0 20px 0;
+    }
+    .body-text strong {
+      color: #18191b;
       font-weight: 600;
+    }
+    .role-container {
+      margin: 24px 0 32px 0;
+      padding: 20px;
+      background-color: #fafafa;
+      border: 1px solid #e4e4e4;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .role-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #5c5e63;
+      margin-bottom: 8px;
+    }
+    .role-badge {
+      display: inline-block;
+      background-color: #fff4cc;
+      color: #18191b;
+      border: 1px solid #ffc400;
+      font-family: 'Archivo', sans-serif;
       font-size: 14px;
-      margin-top: 8px;
+      font-weight: 700;
+      padding: 6px 16px;
+      border-radius: 999px;
+      letter-spacing: -0.01em;
     }
     .btn-container {
       text-align: center;
       margin: 32px 0;
     }
-    .btn {
-      background-color: #4f46e5;
-      color: #ffffff !important;
-      text-decoration: none;
-      padding: 14px 28px;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 16px;
+    .btn-primary {
       display: inline-block;
+      background-color: #ffc400;
+      color: #18191b !important;
+      font-family: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      padding: 14px 36px;
+      border-radius: 8px;
+      border: 1px solid #e6b000;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+    }
+    .notice-box {
+      background-color: #fafafa;
+      border-left: 3px solid #ffc400;
+      border-radius: 0 6px 6px 0;
+      padding: 14px 18px;
+      margin: 28px 0 0 0;
+    }
+    .notice-text {
+      font-size: 13px;
+      line-height: 20px;
+      color: #5c5e63;
+      margin: 0;
+    }
+    .link-fallback {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px dashed #e4e4e4;
+      font-size: 12px;
+      line-height: 18px;
+      color: #8a8c91;
+      word-break: break-all;
+    }
+    .link-fallback a {
+      color: #18191b;
+      text-decoration: underline;
     }
     .footer {
-      background-color: #f8fafc;
-      padding: 20px 24px;
+      padding: 24px 32px;
+      background-color: #fafafa;
+      border-top: 1px solid #e4e4e4;
       text-align: center;
+    }
+    .footer-copy {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
       font-size: 12px;
-      color: #64748b;
-      border-top: 1px solid #e2e8f0;
+      line-height: 18px;
+      color: #8a8c91;
+      margin: 0 0 8px 0;
+    }
+    .footer-sub {
+      font-size: 12px;
+      line-height: 18px;
+      color: #8a8c91;
+      margin: 0;
+    }
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        margin: 12px auto !important;
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+      }
+      .header {
+        padding: 20px !important;
+      }
+      .content {
+        padding: 30px 20px 24px 20px !important;
+      }
+      .h1-title {
+        font-size: 22px !important;
+        line-height: 28px !important;
+      }
+      .btn-primary {
+        display: block !important;
+        padding: 14px 20px !important;
+      }
+      .footer {
+        padding: 20px !important;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>Classroom</h1>
-    </div>
-    <div class="content">
-      <h2>Você recebeu um convite!</h2>
-      <p>Olá,</p>
-      <p><strong>{{ inviter_name }}</strong> convidou você para participar da instituição <strong>{{ tenant_name }}</strong> no papel de:</p>
-      <div style="text-align: center;">
-        <span class="badge">{{ role_display }}</span>
-      </div>
-      <p>Para aceitar o convite e acessar a instituição, clique no botão abaixo:</p>
-      <div class="btn-container">
-        <a href="{{ invite_link }}" class="btn" target="_blank">Aceitar Convite</a>
-      </div>
-      <p style="font-size: 13px; color: #64748b;">
-        Este convite expira em <strong>{{ expires_in_hours }} horas</strong>. Caso você não reconheça este convite, pode ignorar este e-mail com segurança.
-      </p>
-    </div>
-    <div class="footer">
-      &copy; Classroom API. Todos os direitos reservados.
-    </div>
-  </div>
+  <table role="presentation" width="100%" bgcolor="#f5f5f5" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td align="center" style="padding: 24px 12px;">
+        <!-- Card Principal -->
+        <table role="presentation" class="email-container" width="100%" cellpadding="0" cellspacing="0" border="0">
+          
+          <!-- Cabeçalho com Logo Locus -->
+          <tr>
+            <td class="header">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <!-- Ícone Amarelo com Ponto Central Preto -->
+                  <td width="28" height="28" bgcolor="#ffc400" style="border-radius: 6px; text-align: center; vertical-align: middle;">
+                    <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
+                      <tr>
+                        <td width="10" height="10" bgcolor="#18191b" style="border-radius: 50%; font-size: 0; line-height: 0;">&nbsp;</td>
+                      </tr>
+                    </table>
+                  </td>
+                  <!-- Nome Locus -->
+                  <td style="padding-left: 10px; vertical-align: middle;">
+                    <span style="font-family: 'Archivo', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: -0.03em; color: #18191b; text-decoration: none;">
+                      Locus
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Conteúdo -->
+          <tr>
+            <td class="content">
+              <h1 class="h1-title">Você recebeu um convite</h1>
+              
+              <p class="body-text">
+                Olá,
+              </p>
+              
+              <p class="body-text">
+                <strong>{{ inviter_name }}</strong> convidou você para fazer parte da instituição <strong>{{ tenant_name }}</strong> no <strong>Locus</strong>.
+              </p>
+
+              <!-- Bloco Papel / Perfil -->
+              <div class="role-container">
+                <div class="role-label">Papel na instituição</div>
+                <div>
+                  <span class="role-badge">{{ role_display }}</span>
+                </div>
+              </div>
+
+              <p class="body-text" style="text-align: center; margin-bottom: 16px;">
+                Para aceitar o convite e vincular sua conta à instituição, clique no botão abaixo:
+              </p>
+
+              <!-- Botão Primário Locus -->
+              <div class="btn-container">
+                <a href="{{ invite_link }}" class="btn-primary" target="_blank">
+                  Aceitar Convite
+                </a>
+              </div>
+
+              <!-- Aviso de Expiração -->
+              <div class="notice-box">
+                <p class="notice-text">
+                  Este convite é de uso exclusivo e expira em <strong>{{ expires_in_hours }} horas</strong>. Caso você não reconheça esta instituição, pode ignorar este e-mail com segurança.
+                </p>
+              </div>
+
+              <!-- Link Alternativo -->
+              <div class="link-fallback">
+                Caso o botão não funcione, copie e cole o endereço abaixo no seu navegador:<br>
+                <a href="{{ invite_link }}">{{ invite_link }}</a>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Rodapé -->
+          <tr>
+            <td class="footer">
+              <p class="footer-copy">© 2026 Locus · A presença da turma, no seu controle.</p>
+              <p class="footer-sub">Mensagem enviada automaticamente pelo sistema institucional Locus.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

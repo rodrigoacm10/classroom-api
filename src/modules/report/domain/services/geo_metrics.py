@@ -7,6 +7,7 @@ NOTA DE DÍVIDA TÉCNICA: esta lógica é conceitualmente do domínio `attendanc
 deliberadamente para manter os módulos desacoplados dentro do prazo do TCC.
 Mover para shared/ em uma refatoração futura.
 """
+
 import math
 
 import numpy as np
@@ -43,9 +44,7 @@ def haversine_distance_vectorized(
     return EARTH_RADIUS_METERS * c
 
 
-def compute_student_geo_metrics(
-    distances: list[float], tolerance_radius_meters: float
-) -> dict:
+def compute_student_geo_metrics(distances: list[float], tolerance_radius_meters: float) -> dict:
     """Agrega as distâncias recalculadas de um aluno em métricas de auditoria."""
     if not distances:
         return {"avg_distance_meters": 0.0, "confirmations_near_limit": 0}

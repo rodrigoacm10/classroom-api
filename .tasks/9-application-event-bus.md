@@ -169,6 +169,7 @@ from uuid import UUID, uuid4
 @dataclass(frozen=True)
 class BaseEvent:
     """Classe base para todos os Application Events do sistema."""
+
     event_id: UUID = field(default_factory=uuid4)
     occurred_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 ```
@@ -242,6 +243,7 @@ class AttendanceSessionOpenedEvent(BaseEvent):
     Publicado quando um professor abre uma sessão de chamada.
     Consumido por: AttendancePushNotificationHandler (envia push para alunos).
     """
+
     session_id: UUID
     subject_class_id: UUID
     subject_class_name: str
@@ -255,6 +257,7 @@ class AttendanceSessionClosedEvent(BaseEvent):
     Publicado quando a chamada é encerrada (manual ou expiração).
     Consumido por: AttendancePushNotificationHandler (envia push para alunos).
     """
+
     session_id: UUID
     subject_class_id: UUID
     subject_class_name: str
@@ -323,6 +326,7 @@ class AttendancePushNotificationHandler:
 
     async def on_session_opened(self, event: AttendanceSessionOpenedEvent) -> None:
         from infra.tasks.notification_tasks import send_push_notification
+
         tokens = await self.enrollment_repo.find_active_fcm_tokens(event.subject_class_id)
         if tokens:
             send_push_notification.delay(
@@ -342,6 +346,7 @@ class AttendancePushNotificationHandler:
 
     async def on_session_closed(self, event: AttendanceSessionClosedEvent) -> None:
         from infra.tasks.notification_tasks import send_push_notification
+
         tokens = await self.enrollment_repo.find_active_fcm_tokens(event.subject_class_id)
         if tokens:
             send_push_notification.delay(
@@ -373,10 +378,12 @@ from modules.attendance.domain.events.attendance_events import (
 # Instância global do barramento (injetada nos Use Cases via DI)
 event_dispatcher = EventDispatcher()
 
+
 @app.on_event("startup")
 async def register_event_handlers() -> None:
     # Handlers de notificação são instanciados aqui com suas dependências de infra
     from infra.database.session import AsyncSessionLocal
+
     async with AsyncSessionLocal() as db:
         from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
             EnrollmentSQLAlchemyRepository,
@@ -384,6 +391,7 @@ async def register_event_handlers() -> None:
         from modules.attendance.application.handlers.attendance_notification_handler import (
             AttendancePushNotificationHandler,
         )
+
         handler = AttendancePushNotificationHandler(
             enrollment_repo=EnrollmentSQLAlchemyRepository(db)
         )
@@ -406,8 +414,8 @@ async def register_event_handlers() -> None:
 # Removido: import EnrollmentRepository
 # Adicionado: EventDispatcher
 
-class OpenAttendanceSessionUseCase:
 
+class OpenAttendanceSessionUseCase:
     def __init__(
         self,
         session_repo: AttendanceSessionRepository,
@@ -416,8 +424,7 @@ class OpenAttendanceSessionUseCase:
         member_repo: TenantMemberRepository,
         room_repo: RoomRepository,
         event_dispatcher: EventDispatcher,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def execute(self, data: OpenAttendanceSessionInput) -> AttendanceSession:
         # ... toda a lógica de negócio sem alteração ...
@@ -462,8 +469,10 @@ refatoração de arquitetura interna que não altera contratos de API.
 async def test_dispatcher_routes_to_correct_handler():
     """Evento é entregue apenas ao handler registrado para aquele tipo."""
 
+
 async def test_dispatcher_continues_after_handler_failure():
     """Se um handler falhar, o próximo handler do mesmo evento ainda é executado."""
+
 
 async def test_dispatcher_ignores_unregistered_event():
     """Publicar evento sem handler registrado não lança exceção."""
@@ -474,6 +483,7 @@ async def test_dispatcher_ignores_unregistered_event():
 ```python
 async def test_open_session_publishes_opened_event():
     """Deve publicar AttendanceSessionOpenedEvent com os dados corretos após salvar sessão."""
+
 
 async def test_open_session_event_contains_correct_day_code():
     """O evento publicado deve conter o day_code da sessão recém-criada."""

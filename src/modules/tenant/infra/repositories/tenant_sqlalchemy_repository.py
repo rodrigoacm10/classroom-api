@@ -9,7 +9,6 @@ from modules.tenant.infra.mappers.tenant_mapper import TenantMapper
 
 
 class TenantSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 

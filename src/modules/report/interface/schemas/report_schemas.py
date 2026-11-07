@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 class StudentReportResponse(BaseModel):
     tenant_member_id: UUID
     student_name: str
+    email: str = ""
     total_present: int
     total_absent: int
     total_irregular: int

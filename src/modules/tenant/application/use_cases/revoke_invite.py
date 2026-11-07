@@ -15,7 +15,6 @@ class RevokeInviteInput:
 
 
 class RevokeInviteUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,
@@ -44,4 +43,6 @@ class RevokeInviteUseCase:
 
         # 4. Revoga o convite
         invite.revoked_at = datetime.now(timezone.utc)
-        return await self.invite_repo.save(invite)
+        saved = await self.invite_repo.save(invite)
+        saved.tenant_name = tenant.name
+        return saved

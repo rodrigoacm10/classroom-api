@@ -1,10 +1,9 @@
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
-from security.dependencies.current_user import AuthContext
 from modules.auth.application.use_cases.logout import LogoutUseCase
+from security.dependencies.current_user import AuthContext
 from tests.factories.user_factory import UserFactory
-
 
 _UNSET = object()  # sentinela para diferenciar "não passado" de "passado como None"
 
@@ -96,3 +95,34 @@ class TestLogoutUseCase:
             await self.use_case.execute(auth_context)
 
         mock_blacklist.assert_not_called()
+
+    async def test_logout_blacklists_refresh_token_when_provided(self) -> None:
+        """Quando refresh_token é informado, seu jti é adicionado à blacklist."""
+        auth_context = _make_auth_context()
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        refresh_payload = {
+            "jti": "refresh-jti-5678",
+            "sub": str(auth_context.user.id),
+            "type": "refresh",
+            "exp": now_ts + 600,
+        }
+
+        with (
+            patch(
+                "modules.auth.application.use_cases.logout.add_token_to_blacklist",
+                new_callable=AsyncMock,
+            ) as mock_blacklist,
+            patch(
+                "modules.auth.application.use_cases.logout.decode_access_token",
+                return_value=refresh_payload,
+            ),
+        ):
+            await self.use_case.execute(
+                auth_context=auth_context,
+                refresh_token="valid.refresh.jwt",
+            )
+
+        assert mock_blacklist.call_count == 2
+        calls = [c.kwargs["jti"] for c in mock_blacklist.call_args_list]
+        assert "test-jti-1234" in calls
+        assert "refresh-jti-5678" in calls

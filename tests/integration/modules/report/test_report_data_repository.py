@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
+from infra.database.models.report_generation_log import ReportGenerationLogModel
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
     RecordSQLAlchemyRepository,
@@ -13,9 +15,6 @@ from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
     EnrollmentSQLAlchemyRepository,
 )
-from sqlalchemy import select
-
-from infra.database.models.report_generation_log import ReportGenerationLogModel
 from modules.report.infra.repositories.report_data_repository import ReportDataRepository
 from modules.report.infra.repositories.report_generation_log_repository import (
     ReportGenerationLogRepository,
@@ -37,7 +36,6 @@ class TestReportDataRepository:
     Suíte de Testes (Integração): ReportDataRepository
     Valida a carga da turma no Postgres (confirmações, matrículas e sala).
     """
-
 
     async def _seed_class_with_students(self, session, n_students: int = 2):
         tenant = await TenantFactory.create(session)
@@ -240,12 +238,16 @@ class TestReportGenerationLogRepository:
         )
 
         rows = (
-            await session.execute(
-                select(ReportGenerationLogModel).where(
-                    ReportGenerationLogModel.subject_class_id == sc.id
+            (
+                await session.execute(
+                    select(ReportGenerationLogModel).where(
+                        ReportGenerationLogModel.subject_class_id == sc.id
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         assert len(rows) == 1
         log = rows[0]

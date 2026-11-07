@@ -15,23 +15,19 @@ Os handlers só fazem `flush` na mesma sessão do teste. O `get_db` de produçã
 commita no fim da request; aqui o override não commita, e o `rollback()` do
 teste desfaz tudo.
 """
+
 from collections.abc import AsyncGenerator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
-from sqlalchemy import text
-
-TEST_DATABASE_URL = (
-    "postgresql+psycopg://classroom:classroom@localhost:5432/classroom_test"
-)
+TEST_DATABASE_URL = "postgresql+psycopg://classroom:classroom@localhost:5432/classroom_test"
 
 
 @pytest.fixture(scope="session")
@@ -52,7 +48,6 @@ async def create_tables(engine) -> AsyncGenerator[None, None]:
         await conn.run_sync(Base.metadata.create_all)
 
     yield
-
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -116,4 +111,5 @@ async def client(session) -> AsyncGenerator[AsyncClient, None]:
         limiter.enabled = True
         app.dependency_overrides.pop(get_db, None)
         from infra.cache.redis_client import redis_client
+
         await redis_client.connection_pool.disconnect()

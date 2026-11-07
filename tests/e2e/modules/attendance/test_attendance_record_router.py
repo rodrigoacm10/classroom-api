@@ -11,7 +11,6 @@ from tests.factories.user_factory import UserFactory
 
 @pytest.mark.asyncio
 class TestAttendanceRecordRouter:
-
     async def _setup_fixtures(self, session, client):
         admin_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
@@ -19,34 +18,53 @@ class TestAttendanceRecordRouter:
             session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
         )
 
-        admin_token = create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        admin_token = create_access_token(
+            user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         prof_user = await UserFactory.create(session)
         prof_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=prof_user.id, role=UserRole.PROFESSOR
         )
-        prof_token = create_access_token(user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        prof_token = create_access_token(
+            user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         prof_headers = {"Authorization": f"Bearer {prof_token}"}
 
         student1_user = await UserFactory.create(session)
         student1_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=student1_user.id, role=UserRole.ALUNO
         )
-        student1_token = create_access_token(user_id=student1_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
-        student1_headers = {"Authorization": f"Bearer {student1_token}", "User-Agent": "okhttp/4.9.0"}
+        student1_token = create_access_token(
+            user_id=student1_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value
+        )
+        student1_headers = {
+            "Authorization": f"Bearer {student1_token}",
+            "User-Agent": "okhttp/4.9.0",
+        }
 
         student2_user = await UserFactory.create(session)
         student2_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=student2_user.id, role=UserRole.ALUNO
         )
-        student2_token = create_access_token(user_id=student2_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
-        student2_headers = {"Authorization": f"Bearer {student2_token}", "User-Agent": "okhttp/4.9.0"}
+        student2_token = create_access_token(
+            user_id=student2_user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value
+        )
+        student2_headers = {
+            "Authorization": f"Bearer {student2_token}",
+            "User-Agent": "okhttp/4.9.0",
+        }
 
         # Room
         room_res = await client.post(
-            f"/tenants/{tenant.id}/rooms",
-            json={"name": "Lab 101", "latitude": -8.0476, "longitude": -34.8770, "tolerance_radius_meters": 50},
+            "/rooms",
+            json={
+                "name": "Lab 101",
+                "latitude": -8.0476,
+                "longitude": -34.8770,
+                "tolerance_radius_meters": 50,
+            },
             headers=admin_headers,
         )
         assert room_res.status_code == 201
@@ -54,7 +72,7 @@ class TestAttendanceRecordRouter:
 
         # Subject class
         sc_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes",
+            "/subject-classes",
             json={"room_id": room_id, "name": "POO", "discipline_name": "Programação"},
             headers=prof_headers,
         )
@@ -63,19 +81,19 @@ class TestAttendanceRecordRouter:
 
         # Enroll student 1 and student 2
         await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student1_member.id)},
             headers=admin_headers,
         )
         await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+            f"/subject-classes/{sc_id}/enrollments",
             json={"tenant_member_id": str(student2_member.id)},
             headers=admin_headers,
         )
 
         # Open session
         session_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 20},
             headers=prof_headers,
         )
@@ -103,12 +121,14 @@ class TestAttendanceRecordRouter:
             day_code,
             prof_headers,
             student1_headers,
-            student2_headers, _, _,
+            student2_headers,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         # Student 1 confirms (inside room radius)
         res1 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
             json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=student1_headers,
         )
@@ -119,7 +139,7 @@ class TestAttendanceRecordRouter:
 
         # Student 2 confirms (outside room radius -> ~1km away)
         res2 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
             json={"day_code": day_code, "latitude": -8.05600, "longitude": -34.87700},
             headers=student2_headers,
         )
@@ -131,7 +151,7 @@ class TestAttendanceRecordRouter:
 
         # List all records
         list_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/records",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/records",
             headers=prof_headers,
         )
         assert list_res.status_code == 200
@@ -139,7 +159,7 @@ class TestAttendanceRecordRouter:
 
         # List irregular records only
         list_irreg = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/records?record_status=irregular",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/records?record_status=irregular",
             headers=prof_headers,
         )
         assert list_irreg.status_code == 200
@@ -155,12 +175,14 @@ class TestAttendanceRecordRouter:
             day_code,
             prof_headers,
             _,
-            student2_headers, _, _,
+            student2_headers,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         # Student 2 confirms outside radius -> irregular
         res2 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
             json={"day_code": day_code, "latitude": -8.05600, "longitude": -34.87700},
             headers=student2_headers,
         )
@@ -169,7 +191,7 @@ class TestAttendanceRecordRouter:
 
         # Review - Approve
         rev_res = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/records/{record_id}/review",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/records/{record_id}/review",
             json={"decision": "approved", "note": "Aluno estava na secretaria"},
             headers=prof_headers,
         )
@@ -188,19 +210,22 @@ class TestAttendanceRecordRouter:
             session_id,
             day_code,
             prof_headers,
-            student1_headers, _, _, _,
+            student1_headers,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         # Professor cancela a chamada
         cancel_res = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
             headers=prof_headers,
         )
         assert cancel_res.status_code == 200
 
         # Aluno tenta confirmar em chamada cancelada
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
             json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=student1_headers,
         )
@@ -215,7 +240,12 @@ class TestAttendanceRecordRouter:
             tenant,
             sc_id,
             session_id,
-            day_code, _, _, _, _, _,
+            day_code,
+            _,
+            _,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         outsider_user = await UserFactory.create(session)
@@ -231,7 +261,7 @@ class TestAttendanceRecordRouter:
         }
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
             json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=outsider_headers,
         )
@@ -253,7 +283,7 @@ class TestAttendanceRecordRouter:
         ) = await self._setup_fixtures(session, client)
 
         confirm_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
             json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=student1_headers,
         )
@@ -261,13 +291,13 @@ class TestAttendanceRecordRouter:
         confirmed = confirm_res.json()
 
         student_roster = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
             headers=student1_headers,
         )
         assert student_roster.status_code == 403
 
         roster_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/roster",
             headers=prof_headers,
         )
         assert roster_res.status_code == 200
@@ -292,7 +322,7 @@ class TestAttendanceRecordRouter:
         assert absent["record_status"] is None
 
         missing = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{uuid4()}/roster",
+            f"/subject-classes/{sc_id}/attendance-sessions/{uuid4()}/roster",
             headers=prof_headers,
         )
         assert missing.status_code == 404

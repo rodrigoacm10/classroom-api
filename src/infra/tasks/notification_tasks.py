@@ -1,5 +1,6 @@
 import asyncio
 import logging
+
 from celery import Task
 from firebase_admin import messaging
 from firebase_admin.exceptions import FirebaseError
@@ -37,7 +38,6 @@ def _cleanup_stale_tokens(stale_tokens: list[str]) -> None:
         asyncio.run(_cleanup())
     except Exception as err:
         logger.error("Erro ao remover tokens FCM inválidos do banco: %s", err)
-
 
 
 @celery_app.task(
@@ -86,7 +86,9 @@ def send_push_notification(
             data=data,
             android=messaging.AndroidConfig(
                 priority="high",
-                ttl=int(data.get("duration_minutes", "0")) * 60 if "duration_minutes" in data else 3600,
+                ttl=int(data.get("duration_minutes", "0")) * 60
+                if "duration_minutes" in data
+                else 3600,
             ),
             apns=messaging.APNSConfig(
                 headers={"apns-priority": "10"},
@@ -112,13 +114,15 @@ def send_push_notification(
                 if not result.success:
                     error_code = getattr(result.exception, "code", "unknown")
                     logger.warning("FCM delivery failed for token index %d: %s", idx, error_code)
-                    if error_code in ("registration-token-not-registered", "invalid-argument", "UNREGISTERED"):
+                    if error_code in (
+                        "registration-token-not-registered",
+                        "invalid-argument",
+                        "UNREGISTERED",
+                    ):
                         stale_tokens.append(batch[idx])
 
             if stale_tokens:
                 _cleanup_stale_tokens(stale_tokens)
-
-
 
         except FirebaseError as exc:
             logger.error("Firebase batch error: %s. Retrying...", exc)

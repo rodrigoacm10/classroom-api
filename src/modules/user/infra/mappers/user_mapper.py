@@ -3,7 +3,6 @@ from modules.user.domain.entities.user import User
 
 
 class UserMapper:
-
     @staticmethod
     def to_domain(model: UserModel) -> User:
         return User(

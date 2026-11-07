@@ -5,7 +5,6 @@ from modules.user.domain.repositories.user_repository import UserRepository
 
 
 class GetUserUseCase:
-
     def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
 

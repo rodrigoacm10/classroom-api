@@ -2,7 +2,9 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from modules.subject_class.domain.entities.subject_class_summary import SubjectClassSummary
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.exceptions import ResourceNotFoundException
 from shared.pagination import Page, PaginationParams
@@ -15,10 +17,13 @@ class ListSubjectClassesInput:
     professor_id: UUID | None = None
     room_id: UUID | None = None
     search: str | None = None
+    active: bool | None = None
+    has_active_session: bool | None = None
+    sort_by: str | None = None
+    order: str | None = None
 
 
 class ListSubjectClassesUseCase:
-
     def __init__(
         self,
         subject_class_repo: SubjectClassRepository,
@@ -38,4 +43,8 @@ class ListSubjectClassesUseCase:
             professor_id=data.professor_id,
             room_id=data.room_id,
             search=data.search,
+            active=data.active,
+            has_active_session=data.has_active_session,
+            sort_by=data.sort_by,
+            order=data.order,
         )

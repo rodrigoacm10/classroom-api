@@ -3,7 +3,6 @@ from modules.enrollment.domain.entities.enrollment import Enrollment
 
 
 class EnrollmentMapper:
-
     @staticmethod
     def to_domain(model: EnrollmentModel) -> Enrollment:
         return Enrollment(

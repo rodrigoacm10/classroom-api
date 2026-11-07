@@ -3,7 +3,6 @@ from modules.notification.domain.entities.fcm_token import FCMToken
 
 
 class FCMTokenMapper:
-
     @staticmethod
     def to_domain(model: UserFCMTokenModel) -> FCMToken:
         return FCMToken(

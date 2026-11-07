@@ -36,7 +36,9 @@ class TestTenantSQLAlchemyRepository:
     async def test_find_by_slug_active_and_deleted(self) -> None:
         """find_by_slug deve ignorar tenants deletadas por padrão."""
         active_tenant = await TenantFactory.create(self.session, slug="tenant-ativa", deleted=False)
-        deleted_tenant = await TenantFactory.create(self.session, slug="tenant-deletada", deleted=True)
+        deleted_tenant = await TenantFactory.create(
+            self.session, slug="tenant-deletada", deleted=True
+        )
 
         found_active = await self.repository.find_by_slug("tenant-ativa")
         assert found_active is not None
@@ -45,7 +47,9 @@ class TestTenantSQLAlchemyRepository:
         found_deleted_default = await self.repository.find_by_slug("tenant-deletada")
         assert found_deleted_default is None
 
-        found_deleted_included = await self.repository.find_by_slug("tenant-deletada", include_deleted=True)
+        found_deleted_included = await self.repository.find_by_slug(
+            "tenant-deletada", include_deleted=True
+        )
         assert found_deleted_included is not None
         assert found_deleted_included.id == deleted_tenant.id
 

@@ -22,7 +22,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestListSessionRosterUseCase:
-
     async def _setup(self):
         session_repo = FakeAttendanceSessionRepository()
         record_repo = FakeAttendanceRecordRepository()

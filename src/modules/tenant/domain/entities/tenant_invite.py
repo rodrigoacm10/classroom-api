@@ -14,9 +14,13 @@ class TenantInvite:
     role: UserRole
     expires_at: datetime
     invited_by: UUID | None = None
+    invited_by_name: str | None = None
+    tenant_name: str | None = None
     token: str = field(default_factory=lambda: secrets.token_urlsafe(32))
     accepted_at: datetime | None = None
     revoked_at: datetime | None = None
+    subject_class_ids: list[UUID] = field(default_factory=list)
+    subject_class_names: list[str] = field(default_factory=list)
     id: UUID = field(default_factory=uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -24,7 +28,11 @@ class TenantInvite:
     def is_expired(self) -> bool:
         # Garante comparação segura com fuso horário
         now = datetime.now(timezone.utc)
-        exp = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
+        exp = (
+            self.expires_at
+            if self.expires_at.tzinfo
+            else self.expires_at.replace(tzinfo=timezone.utc)
+        )
         return now > exp
 
     @property
@@ -48,3 +56,14 @@ class TenantInvite:
         if self.is_expired:
             return "expired"
         return "pending"
+
+
+@dataclass
+class TenantInvitesMetrics:
+    total: int
+    pending: int
+    accepted: int
+    expired: int
+    revoked: int
+    acceptance_rate: float
+    days: int

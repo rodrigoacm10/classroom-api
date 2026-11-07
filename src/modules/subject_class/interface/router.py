@@ -17,6 +17,10 @@ from modules.subject_class.application.use_cases.get_subject_class import (
     GetSubjectClassInput,
     GetSubjectClassUseCase,
 )
+from modules.subject_class.application.use_cases.get_subject_class_metrics import (
+    GetSubjectClassMetricsInput,
+    GetSubjectClassMetricsUseCase,
+)
 from modules.subject_class.application.use_cases.list_subject_classes import (
     ListSubjectClassesInput,
     ListSubjectClassesUseCase,
@@ -31,20 +35,28 @@ from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repositor
 from modules.subject_class.interface.schemas.subject_class_schemas import (
     CreateSubjectClassRequest,
     SubjectClassListItemResponse,
+    SubjectClassMetricsResponse,
     SubjectClassResponse,
     UpdateSubjectClassRequest,
 )
 from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
     TenantMemberSQLAlchemyRepository,
 )
-from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import TenantSQLAlchemyRepository
+from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
+    TenantSQLAlchemyRepository,
+)
 from modules.user.domain.entities.user import User
-from security.dependencies.current_user import get_current_user
+from security.dependencies.current_user import (
+    AuthContext,
+    get_auth_context,
+    get_current_tenant_id,
+    get_current_user,
+)
 from security.dependencies.require_role import require_role
 from shared.enums.user_role import UserRole
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
-router = APIRouter(prefix="/tenants/{tenant_id}/subject-classes", tags=["subject-classes"])
+router = APIRouter(prefix="/subject-classes", tags=["subject-classes"])
 
 
 @router.post(
@@ -54,8 +66,8 @@ router = APIRouter(prefix="/tenants/{tenant_id}/subject-classes", tags=["subject
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def create_subject_class(
-    tenant_id: UUID,
     body: CreateSubjectClassRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SubjectClassResponse:
@@ -84,17 +96,27 @@ async def create_subject_class(
 
 @router.get("", response_model=PageResponse[SubjectClassListItemResponse])
 async def list_subject_classes(
-    tenant_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     pagination: PaginationParams = Depends(get_pagination_params),
     professor_id: UUID | None = Query(None, description="Filtrar por ID do professor responsável"),
     room_id: UUID | None = Query(None, description="Filtrar por ID da sala vinculada"),
     search: str | None = Query(None, description="Busca por nome da turma ou disciplina"),
+    active: bool | None = Query(None, description="Filtrar por status ativo/inativo"),
+    has_active_session: bool | None = Query(
+        None, description="Filtrar turmas com chamada aberta agora"
+    ),
+    sort_by: str | None = Query(
+        None, description="Campo de ordenação (name, student_count, created_at)"
+    ),
+    order: str | None = Query("asc", description="Direção da ordenação (asc ou desc)"),
     db: AsyncSession = Depends(get_db),
 ) -> PageResponse[SubjectClassListItemResponse]:
-    """Lista turmas ativas da Tenant com paginação offset, nome do professor, alunos ativos e taxa de presença."""
+    """Lista turmas da Tenant com filtros, busca por turma/disciplina e ordenação."""
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
-    use_case = ListSubjectClassesUseCase(subject_class_repo=subject_class_repo, tenant_repo=tenant_repo)
+    use_case = ListSubjectClassesUseCase(
+        subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+    )
 
     page = await use_case.execute(
         ListSubjectClassesInput(
@@ -103,26 +125,70 @@ async def list_subject_classes(
             professor_id=professor_id,
             room_id=room_id,
             search=search,
+            active=active,
+            has_active_session=has_active_session,
+            sort_by=sort_by,
+            order=order,
         )
     )
     items = [SubjectClassListItemResponse.model_validate(c) for c in page.items]
     return PageResponse.of(page, items)
 
 
-@router.get("/{subject_class_id}", response_model=SubjectClassResponse)
-async def get_subject_class(
-    tenant_id: UUID,
-    subject_class_id: UUID,
+@router.get(
+    "/metrics",
+    response_model=SubjectClassMetricsResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_subject_class_metrics(
+    days: int | None = Query(
+        30, ge=1, le=365, description="Janela de dias para taxa de presença média (padrão: 30)"
+    ),
+    professor_id: UUID | None = Query(
+        None, description="Filtrar métricas por professor específico (apenas ADMIN/COORDENADOR)"
+    ),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
-) -> SubjectClassResponse:
-    """Retorna os detalhes de uma turma. Retorna 404 se deletada ou inexistente."""
+) -> SubjectClassMetricsResponse:
+    """Retorna métricas consolidadas das turmas (total, ativas, alunos matriculados, frequência média, em risco e ao vivo)."""
+    subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
+    tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+
+    use_case = GetSubjectClassMetricsUseCase(
+        subject_class_repo=subject_class_repo,
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
+    )
+
+    metrics = await use_case.execute(
+        GetSubjectClassMetricsInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+            user_role=auth.role,
+            professor_id=professor_id,
+            days=days,
+        )
+    )
+
+    return SubjectClassMetricsResponse.model_validate(metrics)
+
+
+@router.get("/{subject_class_id}", response_model=SubjectClassListItemResponse)
+async def get_subject_class(
+    subject_class_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> SubjectClassListItemResponse:
+    """Retorna os detalhes enriquecidos de uma turma. Retorna 404 se deletada ou inexistente."""
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     use_case = GetSubjectClassUseCase(subject_class_repo=subject_class_repo)
 
     subject_class = await use_case.execute(
         GetSubjectClassInput(subject_class_id=subject_class_id, tenant_id=tenant_id)
     )
-    return SubjectClassResponse.model_validate(subject_class)
+    return SubjectClassListItemResponse.model_validate(subject_class)
 
 
 @router.patch(
@@ -131,9 +197,9 @@ async def get_subject_class(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def update_subject_class(
-    tenant_id: UUID,
     subject_class_id: UUID,
     body: UpdateSubjectClassRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> SubjectClassResponse:
     """Atualiza parcialmente os dados de uma turma. Retorna 404 se deletada."""
@@ -148,6 +214,7 @@ async def update_subject_class(
             name=body.name,
             discipline_name=body.discipline_name,
             room_id=body.room_id,
+            active=body.active,
         )
     )
     return SubjectClassResponse.model_validate(subject_class)
@@ -159,8 +226,8 @@ async def update_subject_class(
     dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 async def delete_subject_class(
-    tenant_id: UUID,
     subject_class_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Soft-delete de uma turma. Requer papel ADMIN. Retorna 404 se já deletada."""

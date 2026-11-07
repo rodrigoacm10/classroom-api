@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from shared.enums.drop_reason import DropReason
 from shared.enums.enrollment_status import EnrollmentStatus
@@ -35,5 +35,24 @@ class StudentSubjectClassListItemResponse(BaseModel):
     professor_name: str | None
     attendance_rate: float
     status: EnrollmentStatus
+    total_sessions: int = 0
+    absences_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StudentMetricsResponse(BaseModel):
+    total_classes: int = Field(
+        ..., description="Total de turmas ativas em que o aluno está matriculado"
+    )
+    average_attendance_rate: float = Field(
+        ..., description="Taxa média de frequência entre as turmas (0.0 a 1.0)"
+    )
+    at_risk_count: int = Field(..., description="Quantidade de turmas com frequência abaixo de 75%")
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def classes_count(self) -> int:
+        return self.total_classes
 
     model_config = ConfigDict(from_attributes=True)

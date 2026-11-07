@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from modules.user.domain.repositories.user_repository import UserRepository
 from security.jwt import create_access_token, create_refresh_token
-from security.password import verify_password
+from security.password import verify_password_async
 
 
 @dataclass
@@ -19,14 +19,13 @@ class LoginOutput:
 
 
 class LoginUseCase:
-
     def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
 
     async def execute(self, data: LoginInput) -> LoginOutput:
         user = await self.repository.find_by_email(data.email)
 
-        if not user or not verify_password(data.password, user.password_hash):
+        if not user or not await verify_password_async(data.password, user.password_hash):
             raise ValueError("Credenciais inválidas.")
 
         # Gera o token de acesso base e o refresh token de longa duração

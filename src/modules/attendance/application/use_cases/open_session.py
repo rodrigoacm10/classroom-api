@@ -1,16 +1,23 @@
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import secrets
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.events.attendance_events import AttendanceSessionOpenedEvent
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
 from modules.room.domain.repositories.room_repository import RoomRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
-from modules.tenant.domain.repositories.tenant_repository import TenantMemberRepository, TenantRepository
-from shared.events.event_dispatcher import EventDispatcher
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
+from modules.tenant.domain.repositories.tenant_repository import (
+    TenantMemberRepository,
+    TenantRepository,
+)
 from shared.enums.user_role import UserRole
+from shared.events.event_dispatcher import EventDispatcher
 from shared.exceptions import (
     BusinessRuleException,
     ForbiddenException,
@@ -33,10 +40,13 @@ class OpenAttendanceSessionInput:
     user_role: UserRole | None
     room_id: UUID | None = None
     duration_minutes: int = 15
+    use_professor_location: bool = False
+    latitude: float | None = None
+    longitude: float | None = None
+    tolerance_radius_meters: int | None = None
 
 
 class OpenAttendanceSessionUseCase:
-
     def __init__(
         self,
         session_repo: AttendanceSessionRepository,
@@ -64,6 +74,9 @@ class OpenAttendanceSessionUseCase:
         if not subject_class or getattr(subject_class, "deleted", False):
             raise ResourceNotFoundException("Turma não encontrada.")
 
+        if not getattr(subject_class, "active", True):
+            raise BusinessRuleException("Não é possível abrir chamada para uma turma inativa.")
+
         # Verificar permissão
         member = await self.member_repo.find_by_tenant_and_user(data.tenant_id, data.user_id)
         if not member:
@@ -73,15 +86,41 @@ class OpenAttendanceSessionUseCase:
         is_professor = subject_class.professor_id == member.id
 
         if not (is_admin or is_professor):
-            raise ForbiddenException("Apenas o professor da turma ou um administrador podem abrir chamadas.")
+            raise ForbiddenException(
+                "Apenas o professor da turma ou um administrador podem abrir chamadas."
+            )
 
-        target_room_id = data.room_id or subject_class.room_id
-        if not target_room_id:
-            raise BusinessRuleException("A turma não tem sala cadastrada e nenhuma sala foi especificada.")
+        target_room_id: UUID | None = None
+        custom_lat: float | None = None
+        custom_lon: float | None = None
+        custom_radius: int | None = None
 
-        room = await self.room_repo.find_by_id_and_tenant(target_room_id, data.tenant_id)
-        if not room or room.deleted:
-            raise ResourceNotFoundException("Sala especificada não foi encontrada.")
+        if data.use_professor_location:
+            if data.latitude is None or data.longitude is None:
+                raise BusinessRuleException(
+                    "Coordenadas de geolocalização são obrigatórias quando 'usar localização atual' está ativado."
+                )
+            if not (-90.0 <= data.latitude <= 90.0) or not (-180.0 <= data.longitude <= 180.0):
+                raise BusinessRuleException("Coordenadas geográficas inválidas.")
+
+            custom_lat = data.latitude
+            custom_lon = data.longitude
+            custom_radius = (
+                data.tolerance_radius_meters
+                if data.tolerance_radius_meters and data.tolerance_radius_meters >= 10
+                else 50
+            )
+            target_room_id = data.room_id or subject_class.room_id
+        else:
+            target_room_id = data.room_id or subject_class.room_id
+            if not target_room_id:
+                raise BusinessRuleException(
+                    "A turma não tem sala cadastrada e nenhuma sala foi especificada."
+                )
+
+            room = await self.room_repo.find_by_id_and_tenant(target_room_id, data.tenant_id)
+            if not room or room.deleted:
+                raise ResourceNotFoundException("Sala especificada não foi encontrada.")
 
         # Verificar se já existe chamada aberta
         existing_open = await self.session_repo.find_open_session_by_class(data.subject_class_id)
@@ -94,6 +133,9 @@ class OpenAttendanceSessionUseCase:
         session = AttendanceSession(
             subject_class_id=data.subject_class_id,
             room_id=target_room_id,
+            custom_latitude=custom_lat,
+            custom_longitude=custom_lon,
+            custom_tolerance_radius_meters=custom_radius,
             day_code=day_code,
             expires_at=expires_at,
         )

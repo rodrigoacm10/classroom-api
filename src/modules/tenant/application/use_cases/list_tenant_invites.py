@@ -16,10 +16,11 @@ class ListTenantInvitesInput:
     status: str | None = None
     role: UserRole | None = None
     search: str | None = None
+    sort_by: str = "created_at"
+    order: str = "desc"
 
 
 class ListTenantInvitesUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,
@@ -39,4 +40,6 @@ class ListTenantInvitesUseCase:
             status=data.status,
             role=data.role,
             search=data.search,
+            sort_by=data.sort_by,
+            order=data.order,
         )

@@ -43,6 +43,7 @@ from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.user_role import UserRole
 from shared.exceptions import (
     BusinessRuleException,
+    ForbiddenException,
     ResourceAlreadyExistsException,
     ResourceNotFoundException,
 )
@@ -54,7 +55,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestEnrollmentUseCases:
-
     async def test_enroll_student_success(self):
         """Matricular aluno válido deve retornar Enrollment com status=active e deleted=false."""
         enrollment_repo = FakeEnrollmentRepository()
@@ -361,9 +361,22 @@ class TestEnrollmentUseCases:
         subject_class = SubjectClass(tenant_id=tenant_id, name="Turma 1", discipline_name="Math")
         await subject_class_repo.save(subject_class)
 
-        e1 = Enrollment(subject_class_id=subject_class.id, tenant_member_id=uuid4(), status=EnrollmentStatus.ACTIVE)
-        e2 = Enrollment(subject_class_id=subject_class.id, tenant_member_id=uuid4(), status=EnrollmentStatus.DROPPED)
-        e3 = Enrollment(subject_class_id=subject_class.id, tenant_member_id=uuid4(), status=EnrollmentStatus.ACTIVE, deleted=True)
+        e1 = Enrollment(
+            subject_class_id=subject_class.id,
+            tenant_member_id=uuid4(),
+            status=EnrollmentStatus.ACTIVE,
+        )
+        e2 = Enrollment(
+            subject_class_id=subject_class.id,
+            tenant_member_id=uuid4(),
+            status=EnrollmentStatus.DROPPED,
+        )
+        e3 = Enrollment(
+            subject_class_id=subject_class.id,
+            tenant_member_id=uuid4(),
+            status=EnrollmentStatus.ACTIVE,
+            deleted=True,
+        )
 
         await enrollment_repo.save(e1)
         await enrollment_repo.save(e2)
@@ -421,8 +434,16 @@ class TestEnrollmentUseCases:
         aluno_member = TenantMember(tenant_id=tenant.id, user_id=aluno_user_id, role=UserRole.ALUNO)
         await member_repo.save(aluno_member)
 
-        e1 = Enrollment(subject_class_id=uuid4(), tenant_member_id=aluno_member.id, status=EnrollmentStatus.ACTIVE)
-        e2 = Enrollment(subject_class_id=uuid4(), tenant_member_id=aluno_member.id, status=EnrollmentStatus.ACTIVE)
+        e1 = Enrollment(
+            subject_class_id=uuid4(),
+            tenant_member_id=aluno_member.id,
+            status=EnrollmentStatus.ACTIVE,
+        )
+        e2 = Enrollment(
+            subject_class_id=uuid4(),
+            tenant_member_id=aluno_member.id,
+            status=EnrollmentStatus.ACTIVE,
+        )
         await enrollment_repo.save(e1)
         await enrollment_repo.save(e2)
 
@@ -473,8 +494,12 @@ class TestEnrollmentUseCases:
         member = TenantMember(tenant_id=tenant_id, user_id=uuid4(), role=UserRole.ALUNO)
         await member_repo.save(member)
 
-        e1 = Enrollment(subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE)
-        e2 = Enrollment(subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.DROPPED)
+        e1 = Enrollment(
+            subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE
+        )
+        e2 = Enrollment(
+            subject_class_id=uuid4(), tenant_member_id=member.id, status=EnrollmentStatus.DROPPED
+        )
         await enrollment_repo.save(e1)
         await enrollment_repo.save(e2)
 
@@ -489,7 +514,9 @@ class TestEnrollmentUseCases:
         assert len(res_all) == 2
 
         res_active = await use_case.execute(
-            ListEnrollmentsByMemberInput(tenant_id=tenant_id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE)
+            ListEnrollmentsByMemberInput(
+                tenant_id=tenant_id, tenant_member_id=member.id, status=EnrollmentStatus.ACTIVE
+            )
         )
         assert len(res_active) == 1
         assert res_active[0].id == e1.id
@@ -605,4 +632,69 @@ class TestListStudentSubjectClassesUseCase:
         with pytest.raises(BusinessRuleException):
             await use_case.execute(
                 ListStudentSubjectClassesInput(tenant_id=uuid4(), tenant_member_id=member.id)
+            )
+
+    async def test_list_student_subject_classes_by_user_id_success(self):
+        """Deve listar as turmas do aluno resolvendo o membro a partir de user_id."""
+        enrollment_repo = FakeEnrollmentRepository()
+        member_repo = FakeTenantMemberRepository()
+
+        tenant_id = uuid4()
+        user_id = uuid4()
+        member = TenantMember(tenant_id=tenant_id, user_id=user_id, role=UserRole.ALUNO)
+        await member_repo.save(member)
+
+        mine = Enrollment(subject_class_id=uuid4(), tenant_member_id=member.id)
+        await enrollment_repo.save(mine)
+
+        use_case = ListStudentSubjectClassesUseCase(
+            enrollment_repo=enrollment_repo,
+            member_repo=member_repo,
+        )
+        result = await use_case.execute(
+            ListStudentSubjectClassesInput(tenant_id=tenant_id, user_id=user_id)
+        )
+
+        assert len(result) == 1
+        assert result[0].enrollment_id == mine.id
+
+    async def test_list_student_subject_classes_by_user_id_not_found(self):
+        """Deve lançar ForbiddenException se o membro não for encontrado para o user_id."""
+        use_case = ListStudentSubjectClassesUseCase(
+            enrollment_repo=FakeEnrollmentRepository(),
+            member_repo=FakeTenantMemberRepository(),
+        )
+        with pytest.raises(ForbiddenException, match="Aluno não encontrado nesta instituição."):
+            await use_case.execute(
+                ListStudentSubjectClassesInput(tenant_id=uuid4(), user_id=uuid4())
+            )
+
+    async def test_list_student_subject_classes_missing_both_identifiers(self):
+        """Deve lançar BusinessRuleException se nem user_id nem tenant_member_id forem informados."""
+        use_case = ListStudentSubjectClassesUseCase(
+            enrollment_repo=FakeEnrollmentRepository(),
+            member_repo=FakeTenantMemberRepository(),
+        )
+        with pytest.raises(
+            BusinessRuleException, match="É necessário informar tenant_member_id ou user_id."
+        ):
+            await use_case.execute(ListStudentSubjectClassesInput(tenant_id=uuid4()))
+
+    async def test_list_student_subject_classes_deleted_member_forbidden(self):
+        """Deve lançar ForbiddenException se o membro estiver marcado como deletado."""
+        member_repo = FakeTenantMemberRepository()
+        tenant_id = uuid4()
+        user_id = uuid4()
+        member = TenantMember(
+            tenant_id=tenant_id, user_id=user_id, role=UserRole.ALUNO, deleted=True
+        )
+        await member_repo.save(member)
+
+        use_case = ListStudentSubjectClassesUseCase(
+            enrollment_repo=FakeEnrollmentRepository(),
+            member_repo=member_repo,
+        )
+        with pytest.raises(ForbiddenException, match="Aluno não encontrado nesta instituição."):
+            await use_case.execute(
+                ListStudentSubjectClassesInput(tenant_id=tenant_id, user_id=user_id)
             )

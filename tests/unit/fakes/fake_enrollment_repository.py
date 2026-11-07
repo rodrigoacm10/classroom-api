@@ -11,7 +11,6 @@ from shared.pagination import Page, PaginationParams, paginate_list
 
 
 class FakeEnrollmentRepository:
-
     def __init__(self) -> None:
         self._enrollments: dict[UUID, Enrollment] = {}
 
@@ -93,6 +92,13 @@ class FakeEnrollmentRepository:
             result.append(e)
         return result
 
+    def set_summaries(
+        self, tenant_member_id: UUID, summaries: list[StudentSubjectClassSummary]
+    ) -> None:
+        if not hasattr(self, "_custom_summaries"):
+            self._custom_summaries = {}
+        self._custom_summaries[tenant_member_id] = summaries
+
     async def list_summaries_by_member(
         self,
         tenant_id: UUID,
@@ -100,6 +106,12 @@ class FakeEnrollmentRepository:
         status: EnrollmentStatus | None = None,
         include_deleted: bool = False,
     ) -> list[StudentSubjectClassSummary]:
+        if hasattr(self, "_custom_summaries") and tenant_member_id in self._custom_summaries:
+            return [
+                s
+                for s in self._custom_summaries[tenant_member_id]
+                if (status is None or s.status == status)
+            ]
         enrollments = await self.list_by_member(
             tenant_member_id=tenant_member_id,
             status=status,
@@ -144,5 +156,3 @@ class FakeEnrollmentRepository:
         if not hasattr(self, "_active_fcm_tokens"):
             return []
         return self._active_fcm_tokens.get(subject_class_id, [])
-
-

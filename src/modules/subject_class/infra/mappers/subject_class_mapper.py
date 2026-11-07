@@ -3,7 +3,6 @@ from modules.subject_class.domain.entities.subject_class import SubjectClass
 
 
 class SubjectClassMapper:
-
     @staticmethod
     def to_domain(model: SubjectClassModel) -> SubjectClass:
         return SubjectClass(
@@ -13,6 +12,7 @@ class SubjectClassMapper:
             room_id=model.room_id,
             name=model.name,
             discipline_name=model.discipline_name,
+            active=model.active,
             deleted=model.deleted,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -27,6 +27,7 @@ class SubjectClassMapper:
             room_id=entity.room_id,
             name=entity.name,
             discipline_name=entity.discipline_name,
+            active=entity.active,
             deleted=entity.deleted,
             created_at=entity.created_at,
             updated_at=entity.updated_at,

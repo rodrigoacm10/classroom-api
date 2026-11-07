@@ -5,7 +5,6 @@ from modules.notification.domain.repositories.fcm_token_repository import FCMTok
 
 
 class FakeFCMTokenRepository(FCMTokenRepository):
-
     def __init__(self) -> None:
         self.tokens: list[FCMToken] = []
 
@@ -42,4 +41,3 @@ class FakeFCMTokenRepository(FCMTokenRepository):
         initial_count = len(self.tokens)
         self.tokens = [t for t in self.tokens if t.user_id != user_id]
         return initial_count - len(self.tokens)
-

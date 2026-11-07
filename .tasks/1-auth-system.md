@@ -2,7 +2,7 @@
 
 > **Objetivo**: Implementar o ciclo completo de autenticação com suporte a
 > multi-tenancy. O `User` é uma identidade global do sistema; a **role** é
-> definida pela relação entre o usuário e uma tenant específica.  
+> definida pela relação entre o usuário e uma tenant específica.
 > **Entrega esperada**: `POST /users`, `POST /auth/login`,
 > `POST /auth/switch-tenant`, rotas protegidas por `Depends(require_role(...))`.
 
@@ -144,7 +144,6 @@ from modules.user.domain.entities.user import User
 
 
 class UserRepository(Protocol):
-
     async def find_by_id(self, user_id: UUID) -> User | None: ...
 
     async def find_by_email(self, email: str) -> User | None: ...
@@ -171,16 +170,12 @@ from infra.database.base import Base
 class UserModel(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     fcm_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 ```
 
 > **Sem coluna `role`**. O enum `UserRole` não pertence à tabela `users`.
@@ -202,7 +197,6 @@ from modules.user.domain.entities.user import User
 
 
 class UserMapper:
-
     @staticmethod
     def to_domain(model: UserModel) -> User:
         return User(
@@ -242,7 +236,6 @@ from modules.user.infra.mappers.user_mapper import UserMapper
 
 
 class UserSQLAlchemyRepository:
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -289,7 +282,6 @@ class CreateUserInput:
 
 
 class CreateUserUseCase:
-
     def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
 
@@ -318,7 +310,6 @@ from modules.user.domain.repositories.user_repository import UserRepository
 
 
 class GetUserUseCase:
-
     def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
 
@@ -505,9 +496,10 @@ bearer_scheme = HTTPBearer()
 @dataclass
 class AuthContext:
     """Contexto completo de uma requisição autenticada."""
+
     user: User
-    tenant_id: UUID | None        # None se o usuário não selecionou uma tenant ainda
-    role: UserRole | None         # None se ainda não está em contexto de tenant
+    tenant_id: UUID | None  # None se o usuário não selecionou uma tenant ainda
+    role: UserRole | None  # None se ainda não está em contexto de tenant
 
 
 async def get_auth_context(
@@ -528,7 +520,9 @@ async def get_auth_context(
     user = await repository.find_by_id(user_id)
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado."
+        )
 
     raw_tenant_id = payload.get("tenant_id")
     raw_role = payload.get("role")
@@ -568,6 +562,7 @@ def require_role(*roles: UserRole):
     Uso no router:
         @router.post("/sessions", dependencies=[Depends(require_role(UserRole.PROFESSOR))])
     """
+
     async def dependency(ctx: AuthContext = Depends(get_auth_context)) -> AuthContext:
         if ctx.tenant_id is None:
             raise HTTPException(
@@ -612,7 +607,6 @@ class LoginOutput:
 
 
 class LoginUseCase:
-
     def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
 

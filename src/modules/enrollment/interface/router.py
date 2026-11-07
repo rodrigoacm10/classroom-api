@@ -16,32 +16,17 @@ from modules.enrollment.application.use_cases.enroll_student import (
     EnrollStudentInput,
     EnrollStudentUseCase,
 )
-from modules.enrollment.application.use_cases.list_enrollments import (
-    ListEnrollmentsInput,
-    ListEnrollmentsUseCase,
-)
-from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
-    EnrollmentSQLAlchemyRepository,
-)
-from modules.enrollment.interface.schemas.enrollment_schemas import (
-    EnrollStudentRequest,
-    EnrollmentResponse,
-    StudentSubjectClassListItemResponse,
-)
-from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import (
-    SubjectClassSQLAlchemyRepository,
-)
-from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
-    TenantMemberSQLAlchemyRepository,
-)
-from security.dependencies.require_role import require_role
-from shared.enums.enrollment_status import EnrollmentStatus
-from shared.enums.user_role import UserRole
-from shared.pagination import PageResponse, PaginationParams, get_pagination_params
-
 from modules.enrollment.application.use_cases.get_enrollment import (
     GetEnrollmentInput,
     GetEnrollmentUseCase,
+)
+from modules.enrollment.application.use_cases.get_student_metrics import (
+    GetStudentMetricsInput,
+    GetStudentMetricsUseCase,
+)
+from modules.enrollment.application.use_cases.list_enrollments import (
+    ListEnrollmentsInput,
+    ListEnrollmentsUseCase,
 )
 from modules.enrollment.application.use_cases.list_enrollments_by_member import (
     ListEnrollmentsByMemberInput,
@@ -51,20 +36,59 @@ from modules.enrollment.application.use_cases.list_student_subject_classes impor
     ListStudentSubjectClassesInput,
     ListStudentSubjectClassesUseCase,
 )
+from modules.enrollment.infra.repositories.enrollment_sqlalchemy_repository import (
+    EnrollmentSQLAlchemyRepository,
+)
+from modules.enrollment.interface.schemas.enrollment_schemas import (
+    EnrollmentResponse,
+    EnrollStudentRequest,
+    StudentMetricsResponse,
+    StudentSubjectClassListItemResponse,
+)
+from modules.subject_class.infra.repositories.subject_class_sqlalchemy_repository import (
+    SubjectClassSQLAlchemyRepository,
+)
+from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository import (
+    TenantMemberSQLAlchemyRepository,
+)
+from security.dependencies.current_user import (
+    AuthContext,
+    get_auth_context,
+    get_current_tenant_id,
+)
+from security.dependencies.require_role import require_role
+from shared.enums.enrollment_status import EnrollmentStatus
+from shared.enums.user_role import UserRole
+from shared.pagination import PageResponse, PaginationParams, get_pagination_params
 
 router = APIRouter(
-    prefix="/tenants/{tenant_id}/subject-classes/{subject_class_id}/enrollments",
+    prefix="/subject-classes/{subject_class_id}/enrollments",
     tags=["enrollments"],
 )
 
 member_enrollments_router = APIRouter(
-    prefix="/tenants/{tenant_id}/members/{member_id}/enrollments",
+    prefix="/members/{member_id}/enrollments",
     tags=["enrollments"],
 )
 
 student_subject_classes_router = APIRouter(
-    prefix="/tenants/{tenant_id}/members/{member_id}/subject-classes",
+    prefix="/members/{member_id}/subject-classes",
     tags=["subject-classes"],
+)
+
+my_student_subject_classes_router = APIRouter(
+    prefix="/members/me/subject-classes",
+    tags=["subject-classes"],
+)
+
+student_metrics_router = APIRouter(
+    prefix="/members/{member_id}/metrics",
+    tags=["metrics"],
+)
+
+my_student_metrics_router = APIRouter(
+    prefix="/members/me/metrics",
+    tags=["metrics"],
 )
 
 
@@ -75,9 +99,9 @@ student_subject_classes_router = APIRouter(
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROFESSOR))],
 )
 async def enroll_student(
-    tenant_id: UUID,
     subject_class_id: UUID,
     body: EnrollStudentRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db),
 ) -> EnrollmentResponse:
     """Matricula um aluno (TenantMember com papel ALUNO) em uma turma."""
@@ -101,8 +125,8 @@ async def enroll_student(
 
 @router.get("", response_model=PageResponse[EnrollmentResponse])
 async def list_enrollments(
-    tenant_id: UUID,
     subject_class_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     pagination: PaginationParams = Depends(get_pagination_params),
     status: EnrollmentStatus | None = Query(None, description="Filtrar por status da matrícula"),
     include_deleted: bool = Query(False, description="Incluir matrículas removidas"),
@@ -130,7 +154,6 @@ async def list_enrollments(
 
 @router.get("/{enrollment_id}", response_model=EnrollmentResponse)
 async def get_enrollment(
-    tenant_id: UUID,
     subject_class_id: UUID,
     enrollment_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -149,8 +172,8 @@ async def get_enrollment(
 
 @member_enrollments_router.get("", response_model=list[EnrollmentResponse])
 async def list_enrollments_by_member(
-    tenant_id: UUID,
     member_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     status: EnrollmentStatus | None = None,
     include_deleted: bool = False,
     db: AsyncSession = Depends(get_db),
@@ -173,12 +196,10 @@ async def list_enrollments_by_member(
     return [EnrollmentResponse.model_validate(e) for e in enrollments]
 
 
-@student_subject_classes_router.get(
-    "", response_model=list[StudentSubjectClassListItemResponse]
-)
+@student_subject_classes_router.get("", response_model=list[StudentSubjectClassListItemResponse])
 async def list_student_subject_classes(
-    tenant_id: UUID,
     member_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     status: EnrollmentStatus | None = None,
     include_deleted: bool = False,
     db: AsyncSession = Depends(get_db),
@@ -201,18 +222,101 @@ async def list_student_subject_classes(
     return [StudentSubjectClassListItemResponse.model_validate(c) for c in classes]
 
 
+@my_student_subject_classes_router.get(
+    "",
+    response_model=list[StudentSubjectClassListItemResponse],
+    dependencies=[Depends(require_role(UserRole.ALUNO))],
+)
+async def list_my_student_subject_classes(
+    status: EnrollmentStatus | None = Query(
+        EnrollmentStatus.ACTIVE,
+        description="Filtrar por status da matrícula (padrão: active)",
+    ),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> list[StudentSubjectClassListItemResponse]:
+    """Lista as turmas do aluno autenticado no tenant ativo com sala, professor e taxa de presença individual."""
+    enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = ListStudentSubjectClassesUseCase(
+        enrollment_repo=enrollment_repo,
+        member_repo=member_repo,
+    )
+    classes = await use_case.execute(
+        ListStudentSubjectClassesInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+            status=status,
+            include_deleted=False,
+        )
+    )
+    return [StudentSubjectClassListItemResponse.model_validate(c) for c in classes]
+
+
+@student_metrics_router.get(
+    "",
+    response_model=StudentMetricsResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR, UserRole.PROFESSOR))],
+)
+async def get_student_metrics(
+    member_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> StudentMetricsResponse:
+    """Retorna os indicadores consolidados de um aluno no tenant ativo. ADMIN, COORDENADOR ou PROFESSOR."""
+    enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = GetStudentMetricsUseCase(
+        enrollment_repo=enrollment_repo,
+        member_repo=member_repo,
+    )
+    metrics = await use_case.execute(
+        GetStudentMetricsInput(
+            tenant_id=tenant_id,
+            tenant_member_id=member_id,
+        )
+    )
+    return StudentMetricsResponse.model_validate(metrics)
+
+
+@my_student_metrics_router.get(
+    "",
+    response_model=StudentMetricsResponse,
+    dependencies=[Depends(require_role(UserRole.ALUNO))],
+)
+async def get_my_student_metrics(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    auth: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> StudentMetricsResponse:
+    """Retorna os indicadores consolidados do aluno autenticado no tenant ativo."""
+    enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
+    use_case = GetStudentMetricsUseCase(
+        enrollment_repo=enrollment_repo,
+        member_repo=member_repo,
+    )
+    metrics = await use_case.execute(
+        GetStudentMetricsInput(
+            tenant_id=tenant_id,
+            user_id=auth.user.id,
+        )
+    )
+    return StudentMetricsResponse.model_validate(metrics)
+
+
 @router.patch(
     "/{enrollment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR))],
 )
 async def drop_enrollment(
-    tenant_id: UUID,
     subject_class_id: UUID,
     enrollment_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Cancela matrícula por evento legítimo (status → dropped). Histórico preservado. Apenas ADMIN."""
+    """Cancela matrícula por evento legítimo (status → dropped). Histórico preservado. ADMIN ou COORDENADOR."""
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     use_case = DropEnrollmentUseCase(enrollment_repo=enrollment_repo)
     await use_case.execute(
@@ -226,15 +330,14 @@ async def drop_enrollment(
 @router.delete(
     "/{enrollment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_role(UserRole.ADMIN))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR))],
 )
 async def delete_enrollment(
-    tenant_id: UUID,
     subject_class_id: UUID,
     enrollment_id: UUID,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Remove matrícula por erro administrativo (soft delete → deleted=True). Some do histórico. Apenas ADMIN."""
+    """Remove matrícula por erro administrativo (soft delete → deleted=True). Some do histórico. ADMIN ou COORDENADOR."""
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     use_case = DeleteEnrollmentUseCase(enrollment_repo=enrollment_repo)
     await use_case.execute(

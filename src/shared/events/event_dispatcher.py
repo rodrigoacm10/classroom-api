@@ -25,7 +25,9 @@ class EventDispatcher:
     def __init__(self) -> None:
         self._handlers: dict[Type[BaseEvent], list[EventHandler]] = defaultdict(list)
 
-    def register(self, event_type: Type[BaseEvent], handler: Callable[..., Awaitable[None]]) -> None:
+    def register(
+        self, event_type: Type[BaseEvent], handler: Callable[..., Awaitable[None]]
+    ) -> None:
         """Registra um handler para um tipo de evento."""
         self._handlers[event_type].append(handler)  # type: ignore[arg-type]
 

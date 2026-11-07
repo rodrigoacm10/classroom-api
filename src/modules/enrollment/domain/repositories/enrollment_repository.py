@@ -10,7 +10,6 @@ from shared.pagination import Page, PaginationParams
 
 
 class EnrollmentRepository(Protocol):
-
     async def save(self, enrollment: Enrollment) -> Enrollment: ...
 
     async def find_by_id(
@@ -64,4 +63,3 @@ class EnrollmentRepository(Protocol):
     async def find_active_fcm_tokens(self, subject_class_id: UUID) -> list[str]:
         """Busca os tokens FCM de todos os alunos ativos matriculados em uma turma."""
         ...
-

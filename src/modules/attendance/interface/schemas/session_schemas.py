@@ -3,12 +3,43 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
 
 
 class CreateAttendanceSessionRequest(BaseModel):
-    room_id: UUID | None = Field(default=None, description="ID da sala para a chamada (opcional, utiliza a sala padrão da turma se omitido)")
-    duration_minutes: int = Field(default=15, gt=0, le=1440, description="Duração da chamada em minutos (de 1 a 1440 - máximo 24 horas)")
+    room_id: UUID | None = Field(
+        default=None,
+        description="ID da sala para a chamada (opcional, utiliza a sala padrão da turma se omitido)",
+    )
+    duration_minutes: int = Field(
+        default=15,
+        gt=0,
+        le=1440,
+        description="Duração da chamada em minutos (de 1 a 1440 - máximo 24 horas)",
+    )
+    use_professor_location: bool = Field(
+        default=False,
+        description="Define se a chamada utilizará a localização GPS atual do professor",
+    )
+    latitude: float | None = Field(
+        default=None,
+        ge=-90.0,
+        le=90.0,
+        description="Latitude atual do professor (WGS84)",
+    )
+    longitude: float | None = Field(
+        default=None,
+        ge=-180.0,
+        le=180.0,
+        description="Longitude atual do professor (WGS84)",
+    )
+    tolerance_radius_meters: int | None = Field(
+        default=None,
+        ge=10,
+        le=1000,
+        description="Raio de tolerância em metros a partir da posição do professor",
+    )
 
 
 class SubjectClassSummaryResponse(BaseModel):
@@ -30,6 +61,9 @@ class AttendanceSessionResponse(BaseModel):
     id: UUID
     subject_class_id: UUID
     room_id: UUID | None
+    custom_latitude: float | None = None
+    custom_longitude: float | None = None
+    custom_tolerance_radius_meters: int | None = None
     subject_class: SubjectClassSummaryResponse | None = None
     room: RoomSummaryResponse | None = None
     day_code: str
@@ -43,5 +77,84 @@ class AttendanceSessionResponse(BaseModel):
     irregular_count: int
     created_at: datetime
     updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ActiveAttendanceSessionResponse(BaseModel):
+    session_id: UUID
+    subject_class_id: UUID
+    subject_class_name: str
+    discipline_name: str
+    day_code: str
+    room_id: UUID | None = None
+    room_name: str | None = None
+    opened_at: datetime
+    expires_at: datetime
+    duration_minutes: int
+    present_count: int
+    total_students: int
+
+    model_config = {"from_attributes": True}
+
+
+class StudentActiveAttendanceSessionResponse(BaseModel):
+    session_id: UUID
+    subject_class_id: UUID
+    subject_class_name: str
+    discipline_name: str
+    room_id: UUID | None = None
+    room_name: str | None = None
+    opened_at: datetime
+    expires_at: datetime
+    duration_minutes: int
+    already_confirmed: bool
+    record_id: UUID | None = None
+    record_status: RecordStatus | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class StudentAttendanceHistoryItemResponse(BaseModel):
+    session_id: UUID
+    subject_class_id: UUID
+    subject_class_name: str
+    discipline_name: str
+    room_id: UUID | None = None
+    room_name: str | None = None
+    opened_at: datetime
+    session_status: SessionStatus
+    record_status: RecordStatus | None = None
+    confirmed_at: datetime | None = None
+    record_id: UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class LastSessionSummaryResponse(BaseModel):
+    id: UUID
+    subject_class_id: UUID
+    subject_class_name: str
+    discipline_name: str
+    room_name: str | None = None
+    opened_at: datetime
+    day_code: str
+    status: SessionStatus
+    confirmed_count: int
+    total_students: int
+    attendance_rate: float
+
+    model_config = {"from_attributes": True}
+
+
+class AttendanceMetricsResponse(BaseModel):
+    total_sessions: int = Field(..., description="Total de chamadas nos últimos N dias")
+    average_attendance_rate: float = Field(..., description="Frequência média agregada (0.0 a 1.0)")
+    cancelled_sessions: int = Field(
+        ..., description="Total de chamadas canceladas nos últimos N dias"
+    )
+    last_session: LastSessionSummaryResponse | None = Field(
+        default=None, description="Última chamada realizada"
+    )
 
     model_config = {"from_attributes": True}

@@ -3,7 +3,10 @@ from uuid import uuid4
 
 import pytest
 
-from modules.attendance.application.use_cases.review_record import ReviewAttendanceRecordInput, ReviewAttendanceRecordUseCase
+from modules.attendance.application.use_cases.review_record import (
+    ReviewAttendanceRecordInput,
+    ReviewAttendanceRecordUseCase,
+)
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.subject_class.domain.entities.subject_class import SubjectClass
@@ -22,7 +25,6 @@ from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 @pytest.mark.asyncio
 class TestReviewAttendanceRecordUseCase:
-
     async def test_review_record_approve_success(self):
         """Professor aprova um registro irregular preenchendo reviewed_by e reviewed_at."""
         record_repo = FakeAttendanceRecordRepository()
@@ -35,7 +37,9 @@ class TestReviewAttendanceRecordUseCase:
         await tenant_repo.save(tenant)
 
         prof_user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=prof_user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=prof_user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -104,7 +108,9 @@ class TestReviewAttendanceRecordUseCase:
         await tenant_repo.save(tenant)
 
         prof_user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=prof_user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=prof_user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -171,7 +177,9 @@ class TestReviewAttendanceRecordUseCase:
         await tenant_repo.save(tenant)
 
         prof_user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=prof_user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=prof_user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -210,7 +218,9 @@ class TestReviewAttendanceRecordUseCase:
             member_repo=member_repo,
         )
 
-        with pytest.raises(BusinessRuleException, match="Apenas registros marcados como irregulares"):
+        with pytest.raises(
+            BusinessRuleException, match="Apenas registros marcados como irregulares"
+        ):
             await use_case.execute(
                 ReviewAttendanceRecordInput(
                     tenant_id=tenant.id,

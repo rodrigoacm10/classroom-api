@@ -119,7 +119,7 @@ Validar com o professor de Tópicos Avançados se "otimização de processamento
 
 | Camada | Tecnologia | Observações |
 |---|---|---|
-| App mobile (aluno) | **React Native** | Equipe já tem experiência — produtividade > escolha "ideal". Suporta Android/iOS oficialmente; Web via `react-native-web`; Desktop via projetos da comunidade (`react-native-windows`/`macos`) |
+| App mobile (aluno) | **React Native + TypeScript + Expo + NativeWind** | Um código para iOS e Android. Detalhe do que o app faz, push, `device_id` e GPS: [app-mobile.md](./app-mobile.md) |
 | Painel web (professor/admin) | React (web) | Uso complementar de JS é aceito pelos slides para interface |
 | Backend / API REST | **Python + FastAPI** | Linguagem prioritária nos slides; suporte nativo a `async`, facilita processamento paralelo e futura integração com IA se necessário |
 | Banco de dados | **PostgreSQL + PostGIS** (hospedado no **Neon**) | PostGIS confirmado como suportado nativamente no Neon (inclusive free tier). Ativar com `CREATE EXTENSION postgis;` no SQL Editor do Neon |

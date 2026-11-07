@@ -11,6 +11,7 @@ def require_role(*roles: UserRole):
     Uso no router:
         @router.post("/sessions", dependencies=[Depends(require_role(UserRole.PROFESSOR))])
     """
+
     async def dependency(ctx: AuthContext = Depends(get_auth_context)) -> AuthContext:
         if ctx.tenant_id is None:
             raise HTTPException(

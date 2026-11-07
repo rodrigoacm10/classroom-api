@@ -35,10 +35,15 @@ def create_access_token(
     return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
 
 
-def create_refresh_token(user_id: UUID) -> str:
+def create_refresh_token(
+    user_id: UUID,
+    tenant_id: UUID | None = None,
+    role: str | None = None,
+) -> str:
     """
     Gera um Refresh Token de longa duração (ex: 7 dias).
     Usado exclusivamente no endpoint /auth/refresh para gerar novos Access Tokens.
+    Pode carregar o escopo da tenant ativa para manter a sessão após F5/recarregamento.
     """
     now = datetime.now(timezone.utc)
     expire = now + timedelta(days=settings.refresh_token_expire_days)
@@ -46,6 +51,8 @@ def create_refresh_token(user_id: UUID) -> str:
     payload: dict = {
         "jti": str(uuid4()),
         "sub": str(user_id),
+        "tenant_id": str(tenant_id) if tenant_id else None,
+        "role": role,
         "type": "refresh",
         "iat": int(now.timestamp()),
         "exp": expire,
@@ -59,3 +66,38 @@ def decode_access_token(token: str) -> dict:
     Lança jwt.ExpiredSignatureError ou jwt.InvalidTokenError em caso de falha.
     """
     return jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+
+
+def create_reset_password_token(
+    user_id: UUID,
+    expire_minutes: int | None = None,
+) -> str:
+    """
+    Gera um Reset Token JWT temporário (ex: 10 minutos).
+    Usado exclusivamente no endpoint /auth/reset-password para definir nova senha.
+    Possui JTI único para permitir invalidação após o uso (single-use).
+    """
+    now = datetime.now(timezone.utc)
+    delta = timedelta(minutes=expire_minutes or settings.password_reset_token_expire_minutes)
+    expire = now + delta
+
+    payload: dict = {
+        "jti": str(uuid4()),
+        "sub": str(user_id),
+        "type": "password_reset",
+        "iat": int(now.timestamp()),
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
+
+
+def decode_reset_password_token(token: str) -> dict:
+    """
+    Decodifica e valida o token JWT de redefinição de senha.
+    Lança jwt.ExpiredSignatureError ou jwt.InvalidTokenError se expirado, inválido
+    ou se o tipo não for 'password_reset'.
+    """
+    payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+    if payload.get("type") != "password_reset":
+        raise jwt.InvalidTokenError("Token informado não é um token de redefinição de senha.")
+    return payload

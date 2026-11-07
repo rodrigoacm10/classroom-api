@@ -9,7 +9,6 @@ from tests.factories.user_factory import UserFactory
 
 @pytest.mark.asyncio
 class TestAttendanceSessionRouter:
-
     async def _setup_fixtures(self, session, client):
         admin_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
@@ -17,18 +16,22 @@ class TestAttendanceSessionRouter:
             session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
         )
 
-        admin_token = create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        admin_token = create_access_token(
+            user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
         prof_user = await UserFactory.create(session)
         prof_member = await TenantFactory.create_member(
             session, tenant_id=tenant.id, user_id=prof_user.id, role=UserRole.PROFESSOR
         )
-        prof_token = create_access_token(user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        prof_token = create_access_token(
+            user_id=prof_user.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         prof_headers = {"Authorization": f"Bearer {prof_token}"}
 
         room_res = await client.post(
-            f"/tenants/{tenant.id}/rooms",
+            "/rooms",
             json={"name": "Lab 101", "latitude": -8.0476, "longitude": -34.8770},
             headers=admin_headers,
         )
@@ -36,7 +39,7 @@ class TestAttendanceSessionRouter:
         room_id = room_res.json()["id"]
 
         sc_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes",
+            "/subject-classes",
             json={"room_id": room_id, "name": "POO", "discipline_name": "Programação"},
             headers=prof_headers,
         )
@@ -50,7 +53,7 @@ class TestAttendanceSessionRouter:
         tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
 
         res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 20},
             headers=prof_headers,
         )
@@ -66,14 +69,14 @@ class TestAttendanceSessionRouter:
         tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
 
         res1 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 20},
             headers=prof_headers,
         )
         assert res1.status_code == 201
 
         res2 = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 20},
             headers=prof_headers,
         )
@@ -84,7 +87,7 @@ class TestAttendanceSessionRouter:
         tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
 
         open_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 15},
             headers=prof_headers,
         )
@@ -92,7 +95,7 @@ class TestAttendanceSessionRouter:
 
         # List
         list_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions?page=1&page_size=10",
+            f"/subject-classes/{sc_id}/attendance-sessions?page=1&page_size=10",
             headers=prof_headers,
         )
         assert list_res.status_code == 200
@@ -109,7 +112,7 @@ class TestAttendanceSessionRouter:
 
         # Get
         get_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}",
             headers=prof_headers,
         )
         assert get_res.status_code == 200
@@ -139,14 +142,14 @@ class TestAttendanceSessionRouter:
         )
         for member in (member1, member2):
             enroll_res = await client.post(
-                f"/tenants/{tenant.id}/subject-classes/{sc_id}/enrollments",
+                f"/subject-classes/{sc_id}/enrollments",
                 json={"tenant_member_id": str(member.id)},
                 headers=admin_headers,
             )
             assert enroll_res.status_code == 201
 
         open_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 20},
             headers=prof_headers,
         )
@@ -169,20 +172,20 @@ class TestAttendanceSessionRouter:
         }
 
         regular = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
             json={"day_code": day_code, "latitude": -8.04761, "longitude": -34.87701},
             headers=student1_headers,
         )
         assert regular.status_code == 201
         irregular = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
             json={"day_code": day_code, "latitude": -8.05600, "longitude": -34.87700},
             headers=student2_headers,
         )
         assert irregular.status_code == 201
 
         get_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}",
             headers=prof_headers,
         )
         assert get_res.status_code == 200
@@ -196,7 +199,7 @@ class TestAttendanceSessionRouter:
         assert data["irregular_count"] == 1
 
         list_res = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             headers=prof_headers,
         )
         assert list_res.status_code == 200
@@ -210,7 +213,7 @@ class TestAttendanceSessionRouter:
         tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
 
         open_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 15},
             headers=prof_headers,
         )
@@ -218,7 +221,7 @@ class TestAttendanceSessionRouter:
 
         # Close 1
         close1_res = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/close",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/close",
             headers=prof_headers,
         )
         assert close1_res.status_code == 200
@@ -226,7 +229,7 @@ class TestAttendanceSessionRouter:
 
         # Close 2 (Conflict)
         close2_res = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/close",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/close",
             headers=prof_headers,
         )
         assert close2_res.status_code == 409
@@ -236,7 +239,7 @@ class TestAttendanceSessionRouter:
         tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
 
         open_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 15},
             headers=prof_headers,
         )
@@ -244,7 +247,7 @@ class TestAttendanceSessionRouter:
 
         # Cancel 1
         cancel1_res = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
             headers=prof_headers,
         )
         assert cancel1_res.status_code == 200
@@ -252,7 +255,7 @@ class TestAttendanceSessionRouter:
 
         # Cancel 2 (Conflict)
         cancel2_res = await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/cancel",
             headers=prof_headers,
         )
         assert cancel2_res.status_code == 409
@@ -261,21 +264,26 @@ class TestAttendanceSessionRouter:
         """Abertura de chamada deve publicar AttendanceSessionOpenedEvent no EventDispatcher."""
         from unittest.mock import AsyncMock, patch
 
-        tenant, admin_headers, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
+        tenant, admin_headers, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(
+            session, client
+        )
 
         with patch(
             "shared.events.event_dispatcher.EventDispatcher.publish",
             new_callable=AsyncMock,
         ) as mock_publish:
             res = await client.post(
-                f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+                f"/subject-classes/{sc_id}/attendance-sessions",
                 json={"room_id": room_id, "duration_minutes": 15},
                 headers=prof_headers,
             )
             assert res.status_code == 201
             mock_publish.assert_called_once()
             published_event = mock_publish.call_args.args[0]
-            from modules.attendance.domain.events.attendance_events import AttendanceSessionOpenedEvent
+            from modules.attendance.domain.events.attendance_events import (
+                AttendanceSessionOpenedEvent,
+            )
+
             assert isinstance(published_event, AttendanceSessionOpenedEvent)
             assert published_event.day_code == res.json()["day_code"]
 
@@ -284,7 +292,7 @@ class TestAttendanceSessionRouter:
         tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
 
         open_res = await client.post(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions",
+            f"/subject-classes/{sc_id}/attendance-sessions",
             json={"room_id": room_id, "duration_minutes": 15},
             headers=prof_headers,
         )
@@ -292,12 +300,12 @@ class TestAttendanceSessionRouter:
 
         # Close session
         await client.patch(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions/{session_id}/close",
+            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/close",
             headers=prof_headers,
         )
 
         res_closed = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions?page=1&page_size=5&status=closed",
+            f"/subject-classes/{sc_id}/attendance-sessions?page=1&page_size=5&status=closed",
             headers=prof_headers,
         )
         assert res_closed.status_code == 200
@@ -306,10 +314,28 @@ class TestAttendanceSessionRouter:
         assert data_closed["items"][0]["status"] == SessionStatus.CLOSED.value
 
         res_open = await client.get(
-            f"/tenants/{tenant.id}/subject-classes/{sc_id}/attendance-sessions?status=open",
+            f"/subject-classes/{sc_id}/attendance-sessions?status=open",
             headers=prof_headers,
         )
         assert res_open.status_code == 200
         assert res_open.json()["total"] == 0
 
+    async def test_open_session_fails_for_inactive_subject_class(self, client, session):
+        """POST /attendance-sessions -> Retorna 400 ao tentar abrir sessão para turma inativa."""
+        tenant, _, prof_headers, sc_id, room_id, _ = await self._setup_fixtures(session, client)
 
+        # Desativa a turma via PATCH geral
+        deact_res = await client.patch(
+            f"/subject-classes/{sc_id}", json={"active": False}, headers=prof_headers
+        )
+        assert deact_res.status_code == 200
+        assert deact_res.json()["active"] is False
+
+        # Tenta abrir sessão de chamada
+        res = await client.post(
+            f"/subject-classes/{sc_id}/attendance-sessions",
+            json={"room_id": room_id, "duration_minutes": 20},
+            headers=prof_headers,
+        )
+        assert res.status_code == 400
+        assert res.json()["detail"] == "Não é possível abrir chamada para uma turma inativa."

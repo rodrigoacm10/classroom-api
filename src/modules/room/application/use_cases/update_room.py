@@ -17,7 +17,6 @@ class UpdateRoomInput:
 
 
 class UpdateRoomUseCase:
-
     def __init__(self, room_repo: RoomRepository) -> None:
         self.room_repo = room_repo
 

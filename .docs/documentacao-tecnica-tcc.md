@@ -140,7 +140,7 @@ Celery Task → Redis → Worker → FCM / Resend / S3
 
 | Camada | Ferramenta | Papel no sistema |
 |---|---|---|
-| App mobile | **React Native** | Interface do aluno: recebe notificação, escaneia/digita código, envia geolocalização e evidência |
+| App mobile | **React Native + TypeScript + Expo + NativeWind** | Interface do aluno. Capacidades, push, `device_id` e GPS: [app-mobile.md](./app-mobile.md) |
 | Painel web | **React** | Interface do professor/admin: abre chamada, gera código, acompanha presença em tempo real, gera relatórios |
 | Backend | **FastAPI (Python)** | Expõe a API REST, aplica regras de negócio, orquestra banco/fila/storage |
 | Banco de dados | **PostgreSQL + PostGIS (Neon)** | Armazena dados relacionais + calcula distância geoespacial com precisão e índice otimizado |

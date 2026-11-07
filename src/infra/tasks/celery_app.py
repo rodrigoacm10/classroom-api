@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Garante que a pasta 'src' esteja no sys.path
+src_dir = str(Path(__file__).resolve().parent.parent.parent)
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import worker_process_init
@@ -11,6 +19,7 @@ celery_app = Celery(
     include=[
         "infra.tasks.notification_tasks",
         "infra.tasks.attendance_tasks",
+        "infra.tasks.email_tasks",
     ],
 )
 
@@ -20,7 +29,6 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=4,
@@ -31,7 +39,6 @@ celery_app.conf.update(
         },
     },
 )
-
 
 
 @worker_process_init.connect

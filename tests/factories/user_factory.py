@@ -63,6 +63,6 @@ class UserFactory:
 
         model = UserModel(**data)
         session.add(model)
-        await session.flush()   # INSERT imediato, mas dentro da transação (sem commit)
+        await session.flush()  # INSERT imediato, mas dentro da transação (sem commit)
         await session.refresh(model)
         return model

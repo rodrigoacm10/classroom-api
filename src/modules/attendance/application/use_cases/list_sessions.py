@@ -3,8 +3,12 @@ from datetime import datetime
 from uuid import UUID
 
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
-from modules.attendance.domain.repositories.attendance_session_repository import AttendanceSessionRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.attendance.domain.repositories.attendance_session_repository import (
+    AttendanceSessionRepository,
+)
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.enums.session_status import SessionStatus
 from shared.exceptions import ResourceNotFoundException
@@ -22,7 +26,6 @@ class ListAttendanceSessionsInput:
 
 
 class ListAttendanceSessionsUseCase:
-
     def __init__(
         self,
         session_repo: AttendanceSessionRepository,

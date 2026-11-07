@@ -22,7 +22,6 @@ class SwitchTenantOutput:
 
 
 class SwitchTenantUseCase:
-
     def __init__(
         self,
         member_repo: TenantMemberRepository,

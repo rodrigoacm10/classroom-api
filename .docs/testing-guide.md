@@ -208,8 +208,7 @@ class FakeUserRepository:
 
     async def find_by_email(self, email: str, tenant_id: str) -> User | None:
         return next(
-            (u for u in self._store.values()
-             if u.email == email and u.tenant_id == tenant_id),
+            (u for u in self._store.values() if u.email == email and u.tenant_id == tenant_id),
             None,
         )
 
@@ -234,7 +233,6 @@ from src.modules.auth.domain.exceptions import InvalidTokenException
 
 
 class TestLogoutUseCase:
-
     def setup_method(self):
         self.blacklist = FakeTokenBlacklistService()
         self.use_case = LogoutUseCase(token_blacklist=self.blacklist)
@@ -266,7 +264,6 @@ from tests.factories.appointment_factory import AppointmentFactory
 
 
 class TestAppointmentEntity:
-
     def test_appointment_duration_is_calculated_correctly(self):
         now = datetime(2024, 1, 10, 9, 0)
         appointment = AppointmentFactory.make(
@@ -328,6 +325,7 @@ def engine():
 async def create_tables(engine):
     """Cria as tabelas antes de todos os testes da sessão."""
     from src.infra.database.base import Base
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -362,7 +360,6 @@ from src.modules.user.infra.repositories.user_sqlalchemy_repository import (
 
 
 class TestUserSQLAlchemyRepository:
-
     @pytest.fixture(autouse=True)
     def setup(self, session):
         self.repository = UserSQLAlchemyRepository(session=session)
@@ -390,7 +387,7 @@ class TestUserSQLAlchemyRepository:
 
         result = await self.repository.find_by_email(
             email="jane@example.com",
-            tenant_id="different-tenant-id",   # tenant errado
+            tenant_id="different-tenant-id",  # tenant errado
         )
 
         assert result is None  # multi-tenant isolamento garantido
@@ -486,7 +483,6 @@ from tests.factories.user_factory import UserFactory
 
 
 class TestLoginRoute:
-
     async def test_login_returns_tokens_on_valid_credentials(
         self,
         client: AsyncClient,
@@ -498,10 +494,13 @@ class TestLoginRoute:
             hashed_password="<hashed_known_password>",
         )
 
-        response = await client.post("/auth/login", json={
-            "email": "valid@example.com",
-            "password": "known_password",
-        })
+        response = await client.post(
+            "/auth/login",
+            json={
+                "email": "valid@example.com",
+                "password": "known_password",
+            },
+        )
 
         assert response.status_code == 200
         body = response.json()
@@ -515,10 +514,13 @@ class TestLoginRoute:
     ):
         await UserFactory.create(session, email="user@example.com")
 
-        response = await client.post("/auth/login", json={
-            "email": "user@example.com",
-            "password": "wrong_password",
-        })
+        response = await client.post(
+            "/auth/login",
+            json={
+                "email": "user@example.com",
+                "password": "wrong_password",
+            },
+        )
 
         assert response.status_code == 401
 
@@ -526,25 +528,30 @@ class TestLoginRoute:
         self,
         client: AsyncClient,
     ):
-        response = await client.post("/auth/login", json={
-            "password": "some_password",
-        })
+        response = await client.post(
+            "/auth/login",
+            json={
+                "password": "some_password",
+            },
+        )
 
         assert response.status_code == 422
 
 
 class TestLogoutRoute:
-
     async def test_logout_returns_204_with_valid_token(
         self,
         client: AsyncClient,
         session,
     ):
         await UserFactory.create(session, email="user@example.com")
-        login = await client.post("/auth/login", json={
-            "email": "user@example.com",
-            "password": "known_password",
-        })
+        login = await client.post(
+            "/auth/login",
+            json={
+                "email": "user@example.com",
+                "password": "known_password",
+            },
+        )
         token = login.json()["access_token"]
 
         response = await client.post(

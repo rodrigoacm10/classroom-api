@@ -9,7 +9,6 @@ from modules.room.domain.entities.room import Room
 
 
 class RoomMapper:
-
     @staticmethod
     def to_domain(model: RoomModel) -> Room:
         point = cast(Point, to_shape(cast(Any, model.location)))
@@ -25,7 +24,6 @@ class RoomMapper:
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
-
 
     @staticmethod
     def to_model(entity: Room) -> RoomModel:

@@ -109,4 +109,3 @@ def register_attendance_event_handlers(dispatcher) -> None:
 
     dispatcher.register(AttendanceSessionOpenedEvent, _on_session_opened)
     dispatcher.register(AttendanceSessionClosedEvent, _on_session_closed)
-

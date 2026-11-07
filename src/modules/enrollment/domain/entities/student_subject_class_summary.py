@@ -18,6 +18,8 @@ class StudentSubjectClassSummary:
     professor_name: str | None
     attendance_rate: float
     status: EnrollmentStatus
+    total_sessions: int = 0
+    absences_count: int = 0
 
     @staticmethod
     def compute_attendance_rate(present_count: int, session_count: int) -> float:

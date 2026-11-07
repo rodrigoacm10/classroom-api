@@ -25,18 +25,22 @@ from modules.tenant.infra.repositories.tenant_member_sqlalchemy_repository impor
 from modules.tenant.infra.repositories.tenant_sqlalchemy_repository import (
     TenantSQLAlchemyRepository,
 )
-from security.dependencies.current_user import AuthContext, get_auth_context
+from security.dependencies.current_user import (
+    AuthContext,
+    get_auth_context,
+    get_current_tenant_id,
+)
 
 router = APIRouter(
-    prefix="/tenants/{tenant_id}/fcm-tokens",
+    prefix="/fcm-tokens",
     tags=["notifications"],
 )
 
 
 @router.post("", response_model=FCMTokenResponse, status_code=status.HTTP_200_OK)
 async def register_fcm_token(
-    tenant_id: UUID,
     body: RegisterFCMTokenRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> FCMTokenResponse:
@@ -68,8 +72,8 @@ async def register_fcm_token(
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_fcm_token(
-    tenant_id: UUID,
     device_id: str,
+    tenant_id: UUID = Depends(get_current_tenant_id),
     auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> None:

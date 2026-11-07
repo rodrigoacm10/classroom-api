@@ -3,7 +3,10 @@ from uuid import uuid4
 
 import pytest
 
-from modules.attendance.application.use_cases.close_session import CloseAttendanceSessionInput, CloseAttendanceSessionUseCase
+from modules.attendance.application.use_cases.close_session import (
+    CloseAttendanceSessionInput,
+    CloseAttendanceSessionUseCase,
+)
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
 from modules.attendance.domain.events.attendance_events import AttendanceSessionClosedEvent
 from modules.subject_class.domain.entities.subject_class import SubjectClass
@@ -11,7 +14,10 @@ from modules.tenant.domain.entities.tenant_member import TenantMember
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
 from shared.events.event_dispatcher import EventDispatcher
-from shared.exceptions import ForbiddenException, ResourceAlreadyExistsException, ResourceNotFoundException
+from shared.exceptions import (
+    ForbiddenException,
+    ResourceAlreadyExistsException,
+)
 from tests.factories.tenant_factory import TenantFactory
 from tests.unit.fakes.fake_attendance_session_repository import FakeAttendanceSessionRepository
 from tests.unit.fakes.fake_subject_class_repository import FakeSubjectClassRepository
@@ -19,7 +25,9 @@ from tests.unit.fakes.fake_tenant_member_repository import FakeTenantMemberRepos
 from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 
 
-def make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, event_dispatcher=None):
+def make_use_case(
+    session_repo, subject_class_repo, tenant_repo, member_repo, event_dispatcher=None
+):
     """Helper para instanciar o use case com um dispatcher (real ou no-op)."""
     return CloseAttendanceSessionUseCase(
         session_repo=session_repo,
@@ -32,7 +40,6 @@ def make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, ev
 
 @pytest.mark.asyncio
 class TestCloseAttendanceSessionUseCase:
-
     async def test_close_session_success(self):
         """Deve encerrar uma chamada aberta setando status=CLOSED e preenchendo closed_at."""
         session_repo = FakeAttendanceSessionRepository()
@@ -44,7 +51,9 @@ class TestCloseAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -89,7 +98,9 @@ class TestCloseAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(
@@ -117,7 +128,9 @@ class TestCloseAttendanceSessionUseCase:
         dispatcher = EventDispatcher()
         dispatcher.register(AttendanceSessionClosedEvent, spy_handler)
 
-        use_case = make_use_case(session_repo, subject_class_repo, tenant_repo, member_repo, dispatcher)
+        use_case = make_use_case(
+            session_repo, subject_class_repo, tenant_repo, member_repo, dispatcher
+        )
 
         closed = await use_case.execute(
             CloseAttendanceSessionInput(
@@ -147,7 +160,9 @@ class TestCloseAttendanceSessionUseCase:
         await tenant_repo.save(tenant)
 
         user_id = uuid4()
-        professor_member = TenantMember(tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR)
+        professor_member = TenantMember(
+            tenant_id=tenant.id, user_id=user_id, role=UserRole.PROFESSOR
+        )
         await member_repo.save(professor_member)
 
         subject_class = SubjectClass(

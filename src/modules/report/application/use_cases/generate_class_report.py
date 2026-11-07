@@ -8,7 +8,9 @@ from modules.report.infra.repositories.report_data_repository import ReportDataR
 from modules.report.infra.repositories.report_generation_log_repository import (
     ReportGenerationLogRepository,
 )
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from modules.tenant.domain.repositories.tenant_repository import TenantRepository
 from shared.exceptions import ResourceNotFoundException
 from shared.parallel.compute_strategy import ComputeStrategy

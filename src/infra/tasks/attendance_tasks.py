@@ -1,5 +1,6 @@
 import asyncio
 import logging
+
 from celery import Task
 
 from infra.database.session import session_scope
@@ -29,7 +30,6 @@ def close_expired_sessions_task(self: Task) -> dict[str, int]:
     Task periódica (Celery Beat) para fechar sessões de chamada que atingiram o tempo limite (expires_at)
     e enviar notificações push de encerramento para os alunos matriculados na turma.
     """
-
 
     async def _run() -> int:
         async with session_scope() as session:

@@ -264,10 +264,11 @@ mantendo o domínio livre de qualquer dependência de storage.
 ```python
 # src/modules/attendance/application/use_cases/confirm_attendance.py (MODIFY)
 
+
 @dataclass
 class ConfirmAttendanceInput:
     # ... campos existentes sem alteração ...
-    evidence_photo_url: str | None = None   # ← [ADD] URL já gerada após upload no R2
+    evidence_photo_url: str | None = None  # ← [ADD] URL já gerada após upload no R2
 ```
 
 No método `execute`, repassar o campo para `create_record`:
@@ -393,6 +394,7 @@ Os testes de unidade **não precisam de Cloudflare R2 real**. O Use Case aceita 
 ```python
 # tests/unit/modules/attendance/test_confirm_attendance_use_case.py (MODIFY)
 
+
 async def test_confirm_attendance_with_evidence_photo():
     """Evidência opcional: quando fornecida, deve ser persistida no record."""
     photo_url = "https://pub-xxx.r2.dev/evidence/session-id/uuid.jpg"
@@ -428,11 +430,13 @@ class FakeStorageService:
         self.uploaded_files: list[dict] = []
 
     async def upload(self, file_bytes: bytes, key: str, content_type: str) -> str:
-        self.uploaded_files.append({
-            "key": key,
-            "content_type": content_type,
-            "size": len(file_bytes),
-        })
+        self.uploaded_files.append(
+            {
+                "key": key,
+                "content_type": content_type,
+                "size": len(file_bytes),
+            }
+        )
         return self.return_url
 ```
 

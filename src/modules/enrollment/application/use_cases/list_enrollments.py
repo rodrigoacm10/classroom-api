@@ -3,7 +3,9 @@ from uuid import UUID
 
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
-from modules.subject_class.domain.repositories.subject_class_repository import SubjectClassRepository
+from modules.subject_class.domain.repositories.subject_class_repository import (
+    SubjectClassRepository,
+)
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.exceptions import ResourceNotFoundException
 from shared.pagination import Page, PaginationParams
@@ -19,7 +21,6 @@ class ListEnrollmentsInput:
 
 
 class ListEnrollmentsUseCase:
-
     def __init__(
         self,
         enrollment_repo: EnrollmentRepository,

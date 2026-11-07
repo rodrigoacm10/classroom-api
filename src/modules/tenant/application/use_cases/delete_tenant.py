@@ -6,7 +6,6 @@ from shared.exceptions import ResourceNotFoundException
 
 
 class DeleteTenantUseCase:
-
     def __init__(self, tenant_repo: TenantRepository) -> None:
         self.tenant_repo = tenant_repo
 

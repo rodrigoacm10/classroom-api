@@ -1,9 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from config.settings import settings
-from infra.email.resend_client import send_invite_email
+from infra.tasks.email_tasks import send_invite_email_task
 from modules.tenant.domain.entities.tenant_invite import TenantInvite
 from modules.tenant.domain.repositories.tenant_invite_repository import TenantInviteRepository
 from modules.tenant.domain.repositories.tenant_repository import (
@@ -22,10 +22,10 @@ class SendInviteInput:
     email: str
     role: UserRole
     invited_by: User
+    subject_class_ids: list[UUID] = field(default_factory=list)
 
 
 class SendInviteUseCase:
-
     def __init__(
         self,
         tenant_repo: TenantRepository,
@@ -64,7 +64,9 @@ class SendInviteUseCase:
             email=data.email, tenant_id=data.tenant_id
         )
         if existing_invite and existing_invite.is_pending:
-            raise BusinessRuleException("Já existe um convite pendente para este e-mail nesta instituição.")
+            raise BusinessRuleException(
+                "Já existe um convite pendente para este e-mail nesta instituição."
+            )
 
         # 4. Cria o convite
         expires_at = datetime.now(timezone.utc) + timedelta(hours=self.expire_hours)
@@ -74,13 +76,15 @@ class SendInviteUseCase:
             email=data.email,
             role=data.role,
             expires_at=expires_at,
+            subject_class_ids=data.subject_class_ids,
         )
 
         saved_invite = await self.invite_repo.save(invite)
+        saved_invite.tenant_name = tenant.name
 
-        # 5. Monta o link e dispara o e-mail de convite
+        # 5. Monta o link e enfileira o disparo assíncrono do e-mail de convite via Celery
         invite_link = f"{self.frontend_url}/invites/accept?token={saved_invite.token}"
-        send_invite_email(
+        send_invite_email_task.delay(
             to_email=data.email,
             tenant_name=tenant.name,
             inviter_name=data.invited_by.name,

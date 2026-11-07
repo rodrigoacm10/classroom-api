@@ -41,7 +41,9 @@ class TestTenantRouterEndpoints:
         """GET /tenants/me -> Deve listar as tenants ativas e não deletadas do usuário."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, name="Minha Escola")
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -58,7 +60,9 @@ class TestTenantRouterEndpoints:
         """PATCH /tenants/{id}/deactivate -> Deve desativar a tenant quando o usuário for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=True)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -73,7 +77,9 @@ class TestTenantRouterEndpoints:
         """PATCH /tenants/{id}/activate -> Deve ativar a tenant quando o usuário for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=False)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -88,7 +94,9 @@ class TestTenantRouterEndpoints:
         """DELETE /tenants/{id} -> Deve realizar o soft delete da tenant quando o usuário for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=True, deleted=False)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -108,7 +116,9 @@ class TestTenantRouterEndpoints:
         """PATCH /tenants/{id}/deactivate -> Deve retornar status 403 se o usuário não for ADMIN."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         token = create_access_token(user_id=user.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
         headers = {"Authorization": f"Bearer {token}"}
@@ -120,12 +130,16 @@ class TestTenantRouterEndpoints:
         """POST /auth/switch-tenant -> Deve retornar status 403 ao tentar alternar para tenant desativada."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=False, deleted=False)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         base_token = create_access_token(user_id=user.id)
         headers = {"Authorization": f"Bearer {base_token}"}
 
-        response = await client.post("/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers)
+        response = await client.post(
+            "/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers
+        )
         assert response.status_code == 403
         assert "desativada" in response.json()["detail"]
 
@@ -133,12 +147,16 @@ class TestTenantRouterEndpoints:
         """POST /auth/switch-tenant -> Deve retornar status 403 ao tentar alternar para tenant deletada."""
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session, active=True, deleted=True)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ADMIN
+        )
 
         base_token = create_access_token(user_id=user.id)
         headers = {"Authorization": f"Bearer {base_token}"}
 
-        response = await client.post("/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers)
+        response = await client.post(
+            "/auth/switch-tenant", json={"tenant_id": str(tenant.id)}, headers=headers
+        )
         assert response.status_code == 403
         assert "não encontrada" in response.json()["detail"]
 
@@ -148,13 +166,21 @@ class TestTenantRouterEndpoints:
         member_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.PROFESSOR)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.PROFESSOR
+        )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        response = await client.delete(
+            f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["user_id"] == str(member_user.id)
@@ -171,8 +197,12 @@ class TestTenantRouterEndpoints:
         member_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO
+        )
 
         # Cadastrar token FCM no PostgreSQL para o aluno
         fcm_repo = FCMTokenSQLAlchemyRepository(session)
@@ -185,25 +215,32 @@ class TestTenantRouterEndpoints:
             )
         )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        response = await client.delete(
+            f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers
+        )
         assert response.status_code == 200
 
         # Verificar se o token FCM foi removido do banco de dados no nível E2E
         deleted_token = await fcm_repo.find_by_user_and_device(member_user.id, "mobile_device_10")
         assert deleted_token is None
 
-
     async def test_remove_single_admin_bad_request(self, client, session):
         """DELETE /tenants/{id}/members/{user_id} -> Deve retornar 400 Bad Request ao tentar remover o único ADMIN."""
         admin = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         response = await client.delete(f"/tenants/{tenant.id}/members/{admin.id}", headers=headers)
@@ -216,14 +253,22 @@ class TestTenantRouterEndpoints:
         member_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=professor.id, role=UserRole.PROFESSOR)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=professor.id, role=UserRole.PROFESSOR
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO
+        )
 
         # Token do PROFESSOR (não-ADMIN)
-        token = create_access_token(user_id=professor.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)
+        token = create_access_token(
+            user_id=professor.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = await client.delete(f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers)
+        response = await client.delete(
+            f"/tenants/{tenant.id}/members/{member_user.id}", headers=headers
+        )
         assert response.status_code == 403
         assert "não autorizado" in response.json()["detail"]
 
@@ -233,9 +278,13 @@ class TestTenantRouterEndpoints:
         new_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         payload = {
@@ -256,14 +305,22 @@ class TestTenantRouterEndpoints:
         member_user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=member_user.id, role=UserRole.ALUNO
+        )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         payload = {"role": "professor"}
-        response = await client.patch(f"/tenants/{tenant.id}/members/{member_user.id}/role", json=payload, headers=headers)
+        response = await client.patch(
+            f"/tenants/{tenant.id}/members/{member_user.id}/role", json=payload, headers=headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["user_id"] == str(member_user.id)
@@ -274,13 +331,19 @@ class TestTenantRouterEndpoints:
         admin = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         payload = {"role": "aluno"}
-        response = await client.patch(f"/tenants/{tenant.id}/members/{admin.id}/role", json=payload, headers=headers)
+        response = await client.patch(
+            f"/tenants/{tenant.id}/members/{admin.id}/role", json=payload, headers=headers
+        )
         assert response.status_code == 400
         assert "único administrador" in response.json()["detail"]
 
@@ -291,12 +354,20 @@ class TestTenantRouterEndpoints:
         user = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=coordenador.id, role=UserRole.COORDENADOR)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=coordenador.id, role=UserRole.COORDENADOR
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
 
         # Token ADMIN
-        admin_token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        admin_token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
         res_admin = await client.get(f"/tenants/{tenant.id}/members", headers=admin_headers)
         assert res_admin.status_code == 200
@@ -308,7 +379,9 @@ class TestTenantRouterEndpoints:
         assert data_admin["pages"] == 1
 
         # Token COORDENADOR
-        coord_token = create_access_token(user_id=coordenador.id, tenant_id=tenant.id, role=UserRole.COORDENADOR.value)
+        coord_token = create_access_token(
+            user_id=coordenador.id, tenant_id=tenant.id, role=UserRole.COORDENADOR.value
+        )
         coord_headers = {"Authorization": f"Bearer {coord_token}"}
         res_coord = await client.get(f"/tenants/{tenant.id}/members", headers=coord_headers)
         assert res_coord.status_code == 200
@@ -322,10 +395,16 @@ class TestTenantRouterEndpoints:
         aluno = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=aluno.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=aluno.id, role=UserRole.ALUNO
+        )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         response = await client.get(f"/tenants/{tenant.id}/members?role=aluno", headers=headers)
@@ -340,9 +419,13 @@ class TestTenantRouterEndpoints:
         aluno = await UserFactory.create(session)
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=aluno.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=aluno.id, role=UserRole.ALUNO
+        )
 
-        token = create_access_token(user_id=aluno.id, tenant_id=tenant.id, role=UserRole.ALUNO.value)
+        token = create_access_token(
+            user_id=aluno.id, tenant_id=tenant.id, role=UserRole.ALUNO.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         response = await client.get(f"/tenants/{tenant.id}/members", headers=headers)
@@ -351,15 +434,27 @@ class TestTenantRouterEndpoints:
     async def test_list_tenant_members_filter_by_search_query_param(self, client, session):
         """GET /tenants/{id}/members?search=marcos -> Deve filtrar membros por nome/e-mail."""
         admin = await UserFactory.create(session)
-        user_marcos = await UserFactory.create(session, name="Marcos Aurelio", email="marcos@test.com")
-        user_beatriz = await UserFactory.create(session, name="Beatriz Ramos", email="beatriz@test.com")
+        user_marcos = await UserFactory.create(
+            session, name="Marcos Aurelio", email="marcos@test.com"
+        )
+        user_beatriz = await UserFactory.create(
+            session, name="Beatriz Ramos", email="beatriz@test.com"
+        )
         tenant = await TenantFactory.create(session)
 
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user_marcos.id, role=UserRole.ALUNO)
-        await TenantFactory.create_member(session, tenant_id=tenant.id, user_id=user_beatriz.id, role=UserRole.ALUNO)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin.id, role=UserRole.ADMIN
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user_marcos.id, role=UserRole.ALUNO
+        )
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user_beatriz.id, role=UserRole.ALUNO
+        )
 
-        token = create_access_token(user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)
+        token = create_access_token(
+            user_id=admin.id, tenant_id=tenant.id, role=UserRole.ADMIN.value
+        )
         headers = {"Authorization": f"Bearer {token}"}
 
         response = await client.get(f"/tenants/{tenant.id}/members?search=marcos", headers=headers)
@@ -368,5 +463,3 @@ class TestTenantRouterEndpoints:
         assert data["total"] == 1
         assert len(data["items"]) == 1
         assert data["items"][0]["user_id"] == str(user_marcos.id)
-
-

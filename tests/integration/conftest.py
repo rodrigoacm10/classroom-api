@@ -9,6 +9,7 @@ Estratégia de isolamento:
 O rollback automático garante que cada teste começa com o banco limpo,
 sem precisar truncar tabelas ou recriar o banco entre testes.
 """
+
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -19,9 +20,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 # Banco de dados EXCLUSIVO para testes — nunca toca o banco de desenvolvimento
-TEST_DATABASE_URL = (
-    "postgresql+psycopg://classroom:classroom@localhost:5432/classroom_test"
-)
+TEST_DATABASE_URL = "postgresql+psycopg://classroom:classroom@localhost:5432/classroom_test"
 
 
 from sqlalchemy import text
@@ -53,7 +52,6 @@ async def create_tables(engine) -> AsyncGenerator[None, None]:
 
     yield  # Testes de integração rodam aqui
 
-
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
@@ -81,3 +79,12 @@ async def session(engine, create_tables) -> AsyncGenerator[AsyncSession, None]:
         async with session_factory() as sess:
             yield sess
             await sess.rollback()
+
+
+@pytest.fixture(autouse=True)
+async def cleanup_redis() -> AsyncGenerator[None, None]:
+    """Desconecta o pool do Redis ao final de cada teste para evitar conflito de event loops."""
+    yield
+    from infra.cache.redis_client import redis_client
+
+    await redis_client.connection_pool.disconnect()

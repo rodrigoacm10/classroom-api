@@ -50,9 +50,7 @@ class TestSwitchTenantUseCase:
         member = _make_member(tenant_id=tenant.id, user_id=user.id)
         self.member_repo.seed(member)
 
-        result = await self.use_case.execute(
-            SwitchTenantInput(user=user, tenant_id=tenant.id)
-        )
+        result = await self.use_case.execute(SwitchTenantInput(user=user, tenant_id=tenant.id))
 
         assert result.access_token
         assert result.token_type == "bearer"
@@ -64,9 +62,7 @@ class TestSwitchTenantUseCase:
         self.tenant_repo.seed(tenant)
 
         with pytest.raises(ValueError, match="não é membro"):
-            await self.use_case.execute(
-                SwitchTenantInput(user=user, tenant_id=tenant.id)
-            )
+            await self.use_case.execute(SwitchTenantInput(user=user, tenant_id=tenant.id))
 
     async def test_switch_tenant_raises_when_membership_belongs_to_different_tenant(
         self,
@@ -83,9 +79,7 @@ class TestSwitchTenantUseCase:
         self.member_repo.seed(member)
 
         with pytest.raises(ValueError, match="não é membro"):
-            await self.use_case.execute(
-                SwitchTenantInput(user=user, tenant_id=wrong_tenant.id)
-            )
+            await self.use_case.execute(SwitchTenantInput(user=user, tenant_id=wrong_tenant.id))
 
     async def test_switch_tenant_raises_when_tenant_is_inactive(self) -> None:
         """Usuário tenta acessar tenant desativada → ValueError."""
@@ -97,9 +91,7 @@ class TestSwitchTenantUseCase:
         self.member_repo.seed(member)
 
         with pytest.raises(ValueError, match="desativada"):
-            await self.use_case.execute(
-                SwitchTenantInput(user=user, tenant_id=tenant.id)
-            )
+            await self.use_case.execute(SwitchTenantInput(user=user, tenant_id=tenant.id))
 
     async def test_switch_tenant_raises_when_tenant_is_deleted(self) -> None:
         """Usuário tenta acessar tenant deletada → ValueError."""
@@ -111,6 +103,4 @@ class TestSwitchTenantUseCase:
         self.member_repo.seed(member)
 
         with pytest.raises(ValueError, match="não encontrada"):
-            await self.use_case.execute(
-                SwitchTenantInput(user=user, tenant_id=tenant.id)
-            )
+            await self.use_case.execute(SwitchTenantInput(user=user, tenant_id=tenant.id))
