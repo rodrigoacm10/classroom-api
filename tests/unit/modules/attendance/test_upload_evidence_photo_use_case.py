@@ -58,12 +58,14 @@ class TestUploadEvidencePhotoUseCase:
         assert result.url == storage_service.return_url
         assert len(storage_service.uploaded_files) == 1
 
-        saved = list(use_case.upload_repo.uploads.values())
+        upload_repo = use_case.upload_repo
+        assert isinstance(upload_repo, FakeEvidencePhotoUploadRepository)
+        saved = list(upload_repo.uploads.values())
         assert len(saved) == 1
         assert saved[0].status == UploadStatus.PENDING
         assert saved[0].url == result.url
         assert saved[0].session_id == session.id
-        assert saved[0].file_key.startswith(f"evidence/{session.id}/")
+        assert saved[0].file_key.startswith(f"pending/{session.id}/")
 
     async def test_upload_evidence_photo_raises_when_session_not_found(self):
         """Deve lançar ResourceNotFoundException se a sessão não existir para a turma informada."""

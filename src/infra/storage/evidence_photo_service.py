@@ -7,11 +7,28 @@ from shared.exceptions import BusinessRuleException
 ALLOWED_EVIDENCE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_EVIDENCE_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
+# Fotos recém-enviadas ficam em pending/ até a presença ser confirmada. Depois, são
+# promovidas para confirmed/. A lifecycle policy do bucket só atua em pending/.
+PENDING_PREFIX = "pending/"
+CONFIRMED_PREFIX = "confirmed/"
+
 
 @dataclass
 class UploadedEvidencePhoto:
     key: str
     url: str
+
+
+def confirmed_key_for(key: str) -> str:
+    """
+    Chave definitiva de uma foto: troca o prefixo pending/ por confirmed/.
+    Chaves fora de pending/ (uploads antigos, gravados em evidence/) já são definitivas
+    e voltam sem alteração. Quem chama detecta que não há o que copiar comparando
+    o resultado com a chave original.
+    """
+    if key.startswith(PENDING_PREFIX):
+        return CONFIRMED_PREFIX + key[len(PENDING_PREFIX) :]
+    return key
 
 
 async def upload_evidence_photo(
@@ -22,7 +39,7 @@ async def upload_evidence_photo(
 ) -> UploadedEvidencePhoto:
     """
     Valida e envia uma foto de evidência de presença para o storage configurado,
-    retornando a URL pública gerada.
+    retornando a chave do objeto no bucket e a URL pública gerada.
     """
     if content_type not in ALLOWED_EVIDENCE_CONTENT_TYPES:
         raise BusinessRuleException(
@@ -32,7 +49,7 @@ async def upload_evidence_photo(
         raise BusinessRuleException("Arquivo muito grande. Tamanho máximo: 5 MB.")
 
     extension = content_type.split("/")[-1]
-    key = f"evidence/{session_id}/{uuid4()}.{extension}"
+    key = f"{PENDING_PREFIX}{session_id}/{uuid4()}.{extension}"
 
     url = await storage_service.upload(
         file_bytes=file_bytes,
