@@ -383,6 +383,7 @@ async def confirm_attendance(
     enrollment_repo = EnrollmentSQLAlchemyRepository(session=db)
     room_repo = RoomSQLAlchemyRepository(session=db)
     upload_repo = EvidencePhotoUploadSQLAlchemyRepository(session=db)
+    storage_service = R2StorageService()
 
     use_case = ConfirmAttendanceUseCase(
         session_repo=session_repo,
@@ -393,6 +394,7 @@ async def confirm_attendance(
         enrollment_repo=enrollment_repo,
         room_repo=room_repo,
         upload_repo=upload_repo,
+        storage_service=storage_service,
     )
 
     ip_address = request.client.host if request.client else None

@@ -143,6 +143,50 @@ class TestEvidencePhotoUploadSQLAlchemyRepository:
         assert reloaded.attendance_record_id == record.id
         assert reloaded.confirmed_at is not None
 
+    async def test_confirm_with_promoted_key_and_url_persists_new_values(self, session):
+        """A promoção para confirmed/ persiste a nova chave e URL, e a URL antiga deixa de ser encontrada."""
+        tenant, room, att_session = await _create_attendance_session(session)
+        user = await UserFactory.create(session)
+        member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=user.id, role=UserRole.ALUNO
+        )
+        record = await RecordSQLAlchemyRepository(session).create_record(
+            session_id=att_session.id,
+            tenant_member_id=member.id,
+            latitude=-8.04761,
+            longitude=-34.87701,
+            room_id=room.id,
+            tolerance_radius_meters=50,
+        )
+
+        repo = EvidencePhotoUploadSQLAlchemyRepository(session)
+        pending_url = "https://fake-r2.dev/pending/s1/promo.jpg"
+        upload = await repo.save(
+            EvidencePhotoUpload(
+                session_id=att_session.id,
+                file_key="pending/s1/promo.jpg",
+                url=pending_url,
+            )
+        )
+
+        upload.confirm(
+            record.id,
+            file_key="confirmed/s1/promo.jpg",
+            url="https://fake-r2.dev/confirmed/s1/promo.jpg",
+        )
+        await repo.save(upload)
+
+        reloaded = await repo.find_by_id(upload.id)
+        assert reloaded is not None
+        assert reloaded.status == UploadStatus.CONFIRMED
+        assert reloaded.file_key == "confirmed/s1/promo.jpg"
+        assert reloaded.url == "https://fake-r2.dev/confirmed/s1/promo.jpg"
+
+        assert await repo.find_by_url(pending_url) is None
+        by_new_url = await repo.find_by_url("https://fake-r2.dev/confirmed/s1/promo.jpg")
+        assert by_new_url is not None
+        assert by_new_url.id == upload.id
+
     async def test_expired_upload_is_no_longer_listed_as_pending(self, session):
         """Depois de expire() + save, o upload sai da consulta de pendentes."""
         _, _, att_session = await _create_attendance_session(session)

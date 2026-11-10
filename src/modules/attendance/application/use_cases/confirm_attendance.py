@@ -1,7 +1,10 @@
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
+from infra.storage.evidence_photo_service import confirmed_key_for
+from infra.storage.storage_service import StorageService
 from modules.attendance.domain.entities.attendance_confirmation_context import (
     AttendanceConfirmationContext,
 )
@@ -73,6 +76,7 @@ class ConfirmAttendanceUseCase:
         enrollment_repo: EnrollmentRepository,
         room_repo: RoomRepository,
         upload_repo: EvidencePhotoUploadRepository,
+        storage_service: StorageService,
     ) -> None:
         self.session_repo = session_repo
         self.record_repo = record_repo
@@ -82,6 +86,7 @@ class ConfirmAttendanceUseCase:
         self.enrollment_repo = enrollment_repo
         self.room_repo = room_repo
         self.upload_repo = upload_repo
+        self.storage_service = storage_service
 
     async def execute(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
         # Caminho otimizado: 1 única query consolidada de validação
@@ -119,13 +124,42 @@ class ConfirmAttendanceUseCase:
             )
         return upload
 
-    async def _confirm_evidence_upload(
-        self, upload: EvidencePhotoUpload | None, record: AttendanceRecord
-    ) -> None:
-        """Vincula o upload ao registro de presença criado e o marca como confirmed."""
+    def _evidence_destination(self, upload: EvidencePhotoUpload | None) -> tuple[str, str] | None:
+        """
+        Chave e URL definitivas da foto. Uploads novos (pending/) serão promovidos para
+        confirmed/. Uploads antigos (evidence/) já são definitivos e mantêm chave e URL.
+        Só monta texto, sem acesso à rede, então roda antes de criar a presença.
+        """
         if upload is None:
+            return None
+        key = confirmed_key_for(upload.file_key)
+        if key == upload.file_key:
+            return key, upload.url
+        return key, self.storage_service.public_url(key)
+
+    async def _confirm_evidence_upload(
+        self,
+        upload: EvidencePhotoUpload | None,
+        destination: tuple[str, str] | None,
+        record: AttendanceRecord,
+    ) -> None:
+        """Promove a foto para confirmed/ e vincula o upload à presença criada."""
+        if upload is None or destination is None:
             return
-        upload.confirm(record.id)
+
+        new_key, new_url = destination
+        old_key = upload.file_key
+
+        if new_key != old_key:
+            # Se a cópia falhar, a exceção sobe e a transação inteira sofre rollback:
+            # a presença não é registrada e o upload continua pending.
+            await self.storage_service.copy(old_key, new_key)
+            # Best effort: se não apagar, sobra um objeto em pending/ (já com o erro logado
+            # na camada de infra), que a lifecycle policy do bucket remove depois.
+            with contextlib.suppress(Exception):
+                await self.storage_service.delete(old_key)
+
+        upload.confirm(record.id, file_key=new_key, url=new_url)
         await self.upload_repo.save(upload)
 
     async def _execute_from_context(
@@ -189,6 +223,7 @@ class ConfirmAttendanceUseCase:
             flags.append("shared_device")
 
         evidence_upload = await self._validate_evidence_upload(data)
+        evidence_destination = self._evidence_destination(evidence_upload)
 
         record = await self.record_repo.create_record(
             session_id=data.session_id,
@@ -204,10 +239,10 @@ class ConfirmAttendanceUseCase:
             user_agent=data.user_agent,
             device_info=data.device_info,
             room_location=context.room_location,
-            evidence_photo_url=data.evidence_photo_url,
+            evidence_photo_url=evidence_destination[1] if evidence_destination else None,
         )
 
-        await self._confirm_evidence_upload(evidence_upload, record)
+        await self._confirm_evidence_upload(evidence_upload, evidence_destination, record)
         return record
 
     async def _execute_legacy(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
@@ -301,6 +336,7 @@ class ConfirmAttendanceUseCase:
 
         # 12. Validar foto de evidência (se informada)
         evidence_upload = await self._validate_evidence_upload(data)
+        evidence_destination = self._evidence_destination(evidence_upload)
 
         # GPS accuracy imprecisa
         if data.gps_accuracy_meters is not None and data.gps_accuracy_meters > tolerance_radius:
@@ -337,9 +373,9 @@ class ConfirmAttendanceUseCase:
             user_agent=data.user_agent,
             device_info=data.device_info,
             distance_meters=distance_meters,
-            evidence_photo_url=data.evidence_photo_url,
+            evidence_photo_url=evidence_destination[1] if evidence_destination else None,
         )
 
         # 13. Vincular o upload ao registro de presença criado
-        await self._confirm_evidence_upload(evidence_upload, record)
+        await self._confirm_evidence_upload(evidence_upload, evidence_destination, record)
         return record

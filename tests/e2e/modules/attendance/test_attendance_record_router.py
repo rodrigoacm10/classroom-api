@@ -8,7 +8,7 @@ from shared.enums.record_status import RecordStatus
 from shared.enums.user_role import UserRole
 from tests.factories.tenant_factory import TenantFactory
 from tests.factories.user_factory import UserFactory
-
+from tests.unit.fakes.fake_storage_service import FakeStorageService
 
 @pytest.mark.asyncio
 class TestAttendanceRecordRouter:
@@ -234,7 +234,7 @@ class TestAttendanceRecordRouter:
         assert res.json()["detail"] == "A chamada foi cancelada."
 
     async def test_confirm_attendance_with_photo_upload(self, client, session):
-        """Upload de foto seguido de confirmação retorna evidence_photo_url no response."""
+        """Upload seguido de confirmação: a foto é promovida de pending/ para confirmed/."""
         (
             tenant,
             sc_id,
@@ -244,33 +244,38 @@ class TestAttendanceRecordRouter:
             student1_headers, _, _, _,
         ) = await self._setup_fixtures(session, client)
 
-        fake_url = "https://pub-test.r2.dev/evidence/session-id/uuid.jpg"
+        storage = FakeStorageService(url_from_key=True)
 
-        with patch("modules.attendance.interface.router.R2StorageService") as MockR2:
-            instance = MockR2.return_value
-            instance.upload = AsyncMock(return_value=fake_url)
-
+        with patch("modules.attendance.interface.router.R2StorageService", return_value=storage):
             upload_res = await client.post(
                 f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/evidence-photo",
                 files={"photo": ("selfie.jpg", b"fake-jpeg-bytes", "image/jpeg")},
                 headers=student1_headers,
             )
             assert upload_res.status_code == 201
-            assert upload_res.json()["url"] == fake_url
+            pending_url = upload_res.json()["url"]
+            assert f"/pending/{session_id}/" in pending_url
 
-        res = await client.post(
-            f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
-            json={
-                "day_code": day_code,
-                "latitude": -8.04761,
-                "longitude": -34.87701,
-                "evidence_photo_url": fake_url,
-            },
-            headers=student1_headers,
-        )
+            res = await client.post(
+                f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+                json={
+                    "day_code": day_code,
+                    "latitude": -8.04761,
+                    "longitude": -34.87701,
+                    "evidence_photo_url": pending_url,
+                },
+                headers=student1_headers,
+            )
 
         assert res.status_code == 201
-        assert res.json()["evidence_photo_url"] == fake_url
+        confirmed_url = res.json()["evidence_photo_url"]
+        assert f"/confirmed/{session_id}/" in confirmed_url
+        assert confirmed_url == pending_url.replace("/pending/", "/confirmed/")
+
+        # O arquivo foi movido: copiado para confirmed/ e removido de pending/
+        pending_key = storage.uploaded_files[0]["key"]
+        assert storage.copied == [(pending_key, pending_key.replace("pending/", "confirmed/", 1))]
+        assert storage.deleted_keys == [pending_key]
 
     async def test_confirm_attendance_without_photo(self, client, session):
         """Confirmação sem evidence_photo_url deve funcionar normalmente, com o campo nulo."""
@@ -426,3 +431,51 @@ class TestAttendanceRecordRouter:
             headers=prof_headers,
         )
         assert missing.status_code == 404
+
+    async def test_confirm_attendance_cannot_reuse_promoted_evidence_photo(self, client, session):
+        """Depois da promoção, a URL pending/ original não vale mais para outra confirmação."""
+        (
+            tenant,
+            sc_id,
+            session_id,
+            day_code,
+            prof_headers,
+            student1_headers,
+            student2_headers, _, _,
+        ) = await self._setup_fixtures(session, client)
+
+        storage = FakeStorageService(url_from_key=True)
+
+        with patch("modules.attendance.interface.router.R2StorageService", return_value=storage):
+            upload_res = await client.post(
+                f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/evidence-photo",
+                files={"photo": ("selfie.jpg", b"fake-jpeg-bytes", "image/jpeg")},
+                headers=student1_headers,
+            )
+            pending_url = upload_res.json()["url"]
+
+            first = await client.post(
+                f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+                json={
+                    "day_code": day_code,
+                    "latitude": -8.04761,
+                    "longitude": -34.87701,
+                    "evidence_photo_url": pending_url,
+                },
+                headers=student1_headers,
+            )
+            assert first.status_code == 201
+
+            second = await client.post(
+                f"/subject-classes/{sc_id}/attendance-sessions/{session_id}/confirm",
+                json={
+                    "day_code": day_code,
+                    "latitude": -8.04761,
+                    "longitude": -34.87701,
+                    "evidence_photo_url": pending_url,
+                },
+                headers=student2_headers,
+            )
+
+        assert second.status_code == 400
+        assert "Foto de evidência inválida" in second.json()["detail"]

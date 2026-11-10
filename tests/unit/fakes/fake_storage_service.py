@@ -1,6 +1,11 @@
 class FakeStorageService:
-    def __init__(self, return_url: str = "https://fake-r2.dev/evidence/test.jpg") -> None:
+    def __init__(
+        self,
+        return_url: str = "https://fake-r2.dev/evidence/test.jpg",
+        url_from_key: bool = False,
+    ) -> None:
         self.return_url = return_url
+        self.url_from_key = url_from_key
         self.uploaded_files: list[dict] = []
         self.deleted_keys: list[str] = []
         self.copied: list[tuple[str, str]] = []
@@ -15,7 +20,7 @@ class FakeStorageService:
                 "size": len(file_bytes),
             }
         )
-        return self.return_url
+        return self.public_url(key) if self.url_from_key else self.return_url
 
     async def delete(self, key: str) -> None:
         if key in self.failing_delete_keys:

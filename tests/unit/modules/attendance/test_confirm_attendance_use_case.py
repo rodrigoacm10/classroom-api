@@ -32,10 +32,17 @@ from tests.unit.fakes.fake_subject_class_repository import FakeSubjectClassRepos
 from tests.unit.fakes.fake_tenant_member_repository import FakeTenantMemberRepository
 from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
 from tests.unit.fakes.fake_evidence_photo_upload_repository import FakeEvidencePhotoUploadRepository
+from tests.unit.fakes.fake_storage_service import FakeStorageService
 
 
 @pytest.mark.asyncio
 class TestConfirmAttendanceUseCase:
+    @staticmethod
+    def _fake_storage(use_case: ConfirmAttendanceUseCase) -> FakeStorageService:
+        storage = use_case.storage_service
+        assert isinstance(storage, FakeStorageService)
+        return storage
+
     async def _setup_fixtures(self):
         session_repo = FakeAttendanceSessionRepository()
         record_repo = FakeAttendanceRecordRepository()
@@ -45,6 +52,7 @@ class TestConfirmAttendanceUseCase:
         enrollment_repo = FakeEnrollmentRepository()
         room_repo = FakeRoomRepository()
         upload_repo = FakeEvidencePhotoUploadRepository()
+        storage_service = FakeStorageService()
 
         tenant = TenantFactory.make()
         await tenant_repo.save(tenant)
@@ -98,6 +106,7 @@ class TestConfirmAttendanceUseCase:
             enrollment_repo=enrollment_repo,
             room_repo=room_repo,
             upload_repo=upload_repo,
+            storage_service=storage_service,
         )
 
         return (
@@ -853,3 +862,175 @@ class TestConfirmAttendanceUseCase:
                     evidence_photo_url=photo_url,
                 )
             )
+
+    async def test_confirm_attendance_promotes_pending_photo_to_confirmed(self):
+        """Foto em pending/ é copiada para confirmed/, e presença e upload apontam para a nova URL."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+        storage = self._fake_storage(use_case)
+
+        pending_key = f"pending/{session.id}/photo.jpg"
+        confirmed_key = f"confirmed/{session.id}/photo.jpg"
+        upload = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key=pending_key,
+            url=storage.public_url(pending_key),
+        )
+        await use_case.upload_repo.save(upload)
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_url=storage.public_url(pending_key),
+            )
+        )
+
+        assert record.evidence_photo_url == storage.public_url(confirmed_key)
+        assert storage.copied == [(pending_key, confirmed_key)]
+        assert storage.deleted_keys == [pending_key]
+
+        saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved is not None
+        assert saved.status == UploadStatus.CONFIRMED
+        assert saved.file_key == confirmed_key
+        assert saved.url == storage.public_url(confirmed_key)
+        assert saved.attendance_record_id == record.id
+
+    async def test_confirm_attendance_does_not_copy_legacy_evidence_photo(self):
+        """Upload antigo (evidence/...) já é definitivo: nada é copiado nem apagado."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+        storage = self._fake_storage(use_case)
+
+        legacy_url = "https://fake-r2.dev/evidence/old/photo.jpg"
+        await use_case.upload_repo.save(
+            EvidencePhotoUpload(
+                session_id=session.id,
+                file_key="evidence/old/photo.jpg",
+                url=legacy_url,
+            )
+        )
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_url=legacy_url,
+            )
+        )
+
+        assert record.evidence_photo_url == legacy_url
+        assert storage.copied == []
+        assert storage.deleted_keys == []
+
+    async def test_confirm_attendance_copy_failure_keeps_upload_pending(self):
+        """Se a cópia falhar, a confirmação falha e o upload continua pending (retentável)."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+        storage = self._fake_storage(use_case)
+
+        pending_key = f"pending/{session.id}/photo.jpg"
+        upload = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key=pending_key,
+            url=storage.public_url(pending_key),
+        )
+        await use_case.upload_repo.save(upload)
+        storage.failing_copy_keys.add(pending_key)
+
+        with pytest.raises(RuntimeError, match="Falha simulada ao copiar"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                    evidence_photo_url=storage.public_url(pending_key),
+                )
+            )
+
+        saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved is not None
+        assert saved.status == UploadStatus.PENDING
+        assert saved.file_key == pending_key
+        assert storage.deleted_keys == []
+
+    async def test_confirm_attendance_succeeds_when_deleting_original_fails(self):
+        """Falha ao apagar o original em pending/ não impede a confirmação."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+        storage = self._fake_storage(use_case)
+
+        pending_key = f"pending/{session.id}/photo.jpg"
+        upload = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key=pending_key,
+            url=storage.public_url(pending_key),
+        )
+        await use_case.upload_repo.save(upload)
+        storage.failing_delete_keys.add(pending_key)
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_url=storage.public_url(pending_key),
+            )
+        )
+
+        assert record.id is not None
+        assert storage.copied == [(pending_key, f"confirmed/{session.id}/photo.jpg")]
+        saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved is not None
+        assert saved.status == UploadStatus.CONFIRMED
