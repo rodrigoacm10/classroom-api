@@ -20,12 +20,14 @@ jobs:
     steps:
       - name: Require Railway secrets
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
           RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
         run: |
-          if [ -z "${RAILWAY_TOKEN}" ] || [ -z "${RAILWAY_SERVICE}" ]; then
-            echo "Faltam secrets do repositório: RAILWAY_TOKEN e RAILWAY_SERVICE."
-            echo "Sem eles o workflow não publica imagem nem mexe no Railway."
+          if [ -z "${RAILWAY_API_TOKEN}" ] || [ -z "${RAILWAY_PROJECT_ID}" ] || [ -z "${RAILWAY_ENVIRONMENT_ID}" ] || [ -z "${RAILWAY_SERVICE}" ]; then
+            echo "Faltam secrets: RAILWAY_API_TOKEN, RAILWAY_PROJECT_ID, RAILWAY_ENVIRONMENT_ID e RAILWAY_SERVICE."
+            echo "RAILWAY_API_TOKEN é um account token. Um project token em RAILWAY_TOKEN não consegue trocar a imagem do serviço."
             exit 1
           fi
 
@@ -84,7 +86,9 @@ jobs:
 
       - name: Pin Railway to this digest and deploy
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
           RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
           RAILWAY_EXTRA_SERVICES: ${{ secrets.RAILWAY_EXTRA_SERVICES }}
         run: |
@@ -104,10 +108,14 @@ jobs:
             echo "Connecting ${service} to ${IMAGE_PIN}"
             npx -y @railway/cli@latest service source connect \
               --image "${IMAGE_PIN}" \
-              --service "${service}"
+              --service "${service}" \
+              --project "${RAILWAY_PROJECT_ID}" \
+              --environment "${RAILWAY_ENVIRONMENT_ID}"
             echo "Deploying ${service} from the pinned image"
             npx -y @railway/cli@latest redeploy \
               --from-source \
               --yes \
-              --service "${service}"
+              --service "${service}" \
+              --project "${RAILWAY_PROJECT_ID}" \
+              --environment "${RAILWAY_ENVIRONMENT_ID}"
           done
