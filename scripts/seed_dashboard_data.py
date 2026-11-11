@@ -17,8 +17,15 @@ Uso:
 """
 
 import asyncio
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import TypedDict
+
+# Garante que a pasta 'src' esteja no sys.path para importação de infra, modules, etc.
+src_dir = str(Path(__file__).resolve().parent.parent / "src")
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 from sqlalchemy import select, text
 
