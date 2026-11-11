@@ -25,6 +25,10 @@ COPY . .
 # Porta padrão (Railway injeta $PORT automaticamente)
 EXPOSE 8000
 
-# Roda as migrations e sobe a API
-# Usa /bin/sh -c para permitir && e expansão de variáveis ($PORT)
-CMD ["/bin/sh", "-c", "uv run alembic upgrade head && uv run uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Só sobe a API. A migration NÃO roda aqui.
+# No Railway ela é o Pre-deploy Command do serviço da API:
+#   uv run alembic upgrade head
+# Assim um worker que usa esta mesma imagem não altera o banco,
+# e um erro de migration cancela o deploy antes do processo novo subir.
+# /bin/sh -c existe para expandir $PORT.
+CMD ["/bin/sh", "-c", "uv run uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

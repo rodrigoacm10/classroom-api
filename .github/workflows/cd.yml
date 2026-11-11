@@ -1,0 +1,113 @@
+name: CD
+
+on:
+  workflow_call:
+
+# Um deploy por vez. O segundo push na main espera o primeiro terminar,
+# em vez de cancelar uma publicação no meio.
+concurrency:
+  group: production-ghcr
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-and-deploy:
+    name: Build, push digest, pin Railway
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Railway secrets
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN}" ] || [ -z "${RAILWAY_SERVICE}" ]; then
+            echo "Faltam secrets do repositório: RAILWAY_TOKEN e RAILWAY_SERVICE."
+            echo "Sem eles o workflow não publica imagem nem mexe no Railway."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Image coordinates
+        id: meta
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Record digest
+        run: |
+          image="${{ steps.meta.outputs.image }}"
+          tag="${{ steps.meta.outputs.sha_tag }}"
+          digest="${{ steps.build.outputs.digest }}"
+          pin="${image}@${digest}"
+          echo "IMAGE_PIN=${pin}" >> "$GITHUB_ENV"
+          echo "Image tag:   ${image}:${tag}"
+          echo "Image digest: ${digest}"
+          echo "Railway pin:  ${pin}"
+          echo "::notice title=Image digest::${pin}"
+          {
+            echo "## Imagem publicada"
+            echo ""
+            echo "- Tag: \`${image}:${tag}\`"
+            echo "- Digest: \`${digest}\`"
+            echo "- Referência fixa: \`${pin}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pin Railway to this digest and deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          RAILWAY_EXTRA_SERVICES: ${{ secrets.RAILWAY_EXTRA_SERVICES }}
+        run: |
+          set -euo pipefail
+          services="${RAILWAY_SERVICE}"
+          if [ -n "${RAILWAY_EXTRA_SERVICES}" ]; then
+            services="${services},${RAILWAY_EXTRA_SERVICES}"
+          fi
+
+          echo "Pinning ${IMAGE_PIN}"
+          IFS=',' read -ra names <<< "${services}"
+          for raw in "${names[@]}"; do
+            service="$(printf '%s' "${raw}" | xargs)"
+            if [ -z "${service}" ]; then
+              continue
+            fi
+            echo "Connecting ${service} to ${IMAGE_PIN}"
+            npx -y @railway/cli@latest service source connect \
+              --image "${IMAGE_PIN}" \
+              --service "${service}"
+            echo "Deploying ${service} from the pinned image"
+            npx -y @railway/cli@latest redeploy \
+              --from-source \
+              --yes \
+              --service "${service}"
+          done

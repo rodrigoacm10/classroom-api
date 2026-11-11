@@ -42,6 +42,13 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://localhost:8000",
     ]
+
+    @field_validator("cors_origins", mode="after")
+    @classmethod
+    def clean_cors_origins(cls, v: list[str]) -> list[str]:
+        """Remove barras finais (trailing slashes) para evitar divergência no header Origin do CORS."""
+        return [origin.rstrip("/") for origin in v]
+
     access_token_expire_minutes: int = 15  # Reduzido para 15 min (minimiza a janela de exposição)
     refresh_token_expire_days: int = 7  # 7 dias para o Refresh Token
     cookie_secure: bool = False  # True em produção (HTTPS apenas)

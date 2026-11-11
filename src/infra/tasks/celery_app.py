@@ -8,7 +8,7 @@ if src_dir not in sys.path:
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_process_init
+from celery.signals import worker_init, worker_process_init
 
 from config.settings import settings
 
@@ -41,6 +41,7 @@ celery_app.conf.update(
 )
 
 
+@worker_init.connect
 @worker_process_init.connect
 def init_worker(**kwargs: object) -> None:
     """
