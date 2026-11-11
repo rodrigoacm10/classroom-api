@@ -103,7 +103,7 @@ O job `publish-and-deploy` do CI chama esse workflow **somente** em `push` na `m
 
 O que o CD faz:
 
-1. Recusa seguir se os secrets `RAILWAY_TOKEN` e `RAILWAY_SERVICE` não existirem.
+1. Recusa seguir se faltarem `RAILWAY_API_TOKEN`, `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID` ou `RAILWAY_SERVICE`.
 2. Constrói a imagem `linux/amd64` com o `Dockerfile` e envia ao GHCR.
 3. Publica a tag imutável na prática `sha-<commit>` (o commit SHA não se repete).
 4. Escreve no log e no summary a referência fixa `ghcr.io/<owner>/classroom-api@sha256:...`.
@@ -127,7 +127,7 @@ Esse comando roda num container efêmero, com as variáveis do serviço, **antes
 Branch protection, secrets e o painel do Railway não ficam no repositório.
 
 1. No serviço da API, em Settings → Deploy, Pre-deploy Command: `uv run alembic upgrade head`. Deixe o Custom Start Command vazio para valer o `CMD` da imagem. Se existir worker ou beat, o start command deles continua o comando do Celery, **sem** pre-deploy.
-2. Crie um project token do ambiente de produção e salve os secrets da tabela abaixo. Desconecte o repositório Git da source do serviço **antes** do merge deste fluxo, para o Railway parar de buildar o código. O container que já está no ar continua até o CD trocar a source.
+2. Crie um account token e salve os secrets da tabela abaixo. Desconecte o repositório Git da source do serviço **antes** do merge deste fluxo, para o Railway parar de buildar o código. O container que já está no ar continua até o CD trocar a source.
 3. No GitHub, em Settings → Branches → rule da `main`: exija pull request e estes status checks: `Lint & Type Check` e `Test Suite (Unit, Integration & E2E)`.
 
 Não marque `Publish image and deploy` como obrigatório. Em pull request esse job é ignorado, e um check obrigatório ignorado impede o merge.
@@ -138,9 +138,13 @@ Imagem privada no GHCR exige Railway Pro para o pull. No Hobby, a alternativa é
 
 | Secret | Valor |
 | --- | --- |
-| `RAILWAY_TOKEN` | Project token do ambiente de produção |
+| `RAILWAY_API_TOKEN` | Account token, criado em railway.com/account/tokens com "No workspace" |
+| `RAILWAY_PROJECT_ID` | ID do projeto, variável `RAILWAY_PROJECT_ID` do serviço |
+| `RAILWAY_ENVIRONMENT_ID` | ID do ambiente de produção, variável `RAILWAY_ENVIRONMENT_ID` do serviço |
 | `RAILWAY_SERVICE` | Nome do serviço da API no Railway |
 | `RAILWAY_EXTRA_SERVICES` | Opcional. Outros serviços da mesma imagem, separados por vírgula |
+
+`RAILWAY_TOKEN` é project token. O CLI recusa com ele o comando que troca a imagem do serviço. O workflow não usa mais esse secret.
 
 ---
 
