@@ -86,3 +86,16 @@ jobs:
           CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
           CLOUDFLARE_R2_PUBLIC_URL: ${{ secrets.CLOUDFLARE_R2_PUBLIC_URL }}
         run: uv run pytest
+
+  # Só entra na fila depois que lint e testes passaram, e só em push na main.
+  # Pull request não publica imagem. Este job NÃO deve ser required check:
+  # em PR ele fica skipped, e um check obrigatório skipped trava o merge.
+  publish-and-deploy:
+    name: Publish image and deploy
+    needs: [lint-and-typecheck, tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/cd.yml
+    secrets: inherit
