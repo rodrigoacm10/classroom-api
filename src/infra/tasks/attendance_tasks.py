@@ -3,12 +3,22 @@ import logging
 
 from celery import Task
 
+from config.settings import settings
 from infra.database.session import session_scope
+from infra.storage.r2_storage_service import R2StorageService
 from infra.tasks.celery_app import celery_app
 from modules.attendance.application.handlers.attendance_notification_handler import (
     AttendancePushNotificationHandler,
 )
+from modules.attendance.application.use_cases.cleanup_expired_evidence_uploads import (
+    CleanupExpiredEvidenceUploadsInput,
+    CleanupExpiredEvidenceUploadsOutput,
+    CleanupExpiredEvidenceUploadsUseCase,
+)
 from modules.attendance.domain.events.attendance_events import AttendanceSessionClosedEvent
+from modules.attendance.infra.repositories.evidence_photo_upload_sqlalchemy_repository import (
+    EvidencePhotoUploadSQLAlchemyRepository,
+)
 from modules.attendance.infra.repositories.session_sqlalchemy_repository import (
     SessionSQLAlchemyRepository,
 )
@@ -60,3 +70,34 @@ def close_expired_sessions_task(self: Task) -> dict[str, int]:
     except Exception as exc:
         logger.error("close_expired_sessions_task error: %s", exc)
         raise
+
+@celery_app.task(name="attendance.cleanup_expired_evidence_uploads")
+def cleanup_expired_evidence_uploads_task() -> dict[str, int]:
+    """
+    Task periódica (Celery Beat) que apaga do storage as fotos de evidência que ficaram
+    `pending` além do TTL (upload feito, confirmação de presença nunca recebida) e
+    marca os registros como `expired`.
+    """
+
+    async def _run() -> CleanupExpiredEvidenceUploadsOutput:
+        async with session_scope() as session:
+            use_case = CleanupExpiredEvidenceUploadsUseCase(
+                upload_repo=EvidencePhotoUploadSQLAlchemyRepository(session),
+                storage_service=R2StorageService(),
+            )
+            return await use_case.execute(
+                CleanupExpiredEvidenceUploadsInput(ttl_minutes=settings.evidence_upload_ttl_minutes)
+            )
+
+    try:
+        result = asyncio.run(_run())
+    except Exception as exc:
+        logger.error("cleanup_expired_evidence_uploads_task error: %s", exc)
+        raise
+
+    logger.info(
+        "cleanup_expired_evidence_uploads_task: %d uploads expirados, %d falhas.",
+        result.expired_count,
+        result.failed_count,
+    )
+    return {"expired_count": result.expired_count, "failed_count": result.failed_count}

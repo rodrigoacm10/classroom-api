@@ -55,6 +55,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
         device_info: dict | None = None,
         room_location: Any | None = None,
         distance_meters: float | None = None,
+        evidence_photo_url: str | None = None,
     ) -> AttendanceRecord:
         if distance_meters is None:
             if room_location is not None:
@@ -100,6 +101,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
             ip_address=ip_address,
             user_agent=user_agent,
             device_info=device_info,
+            evidence_photo_url=evidence_photo_url,
         )
 
         model = AttendanceRecordMapper.to_model(record_entity)

@@ -63,6 +63,7 @@ class FakeAttendanceRecordRepository(AttendanceRecordRepository):
         device_info: dict | None = None,
         room_location: Any | None = None,
         distance_meters: float | None = None,
+        evidence_photo_url: str | None = None,
     ) -> AttendanceRecord:
         # Verificar duplicidade de sessão + membro
         for r in self.records.values():
@@ -99,6 +100,7 @@ class FakeAttendanceRecordRepository(AttendanceRecordRepository):
             ip_address=ip_address,
             user_agent=user_agent,
             device_info=device_info,
+            evidence_photo_url=evidence_photo_url,
         )
 
         self.records[record.id] = record

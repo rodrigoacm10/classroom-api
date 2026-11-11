@@ -8,6 +8,7 @@ from modules.attendance.application.use_cases.confirm_attendance import (
     ConfirmAttendanceUseCase,
 )
 from modules.attendance.domain.entities.attendance_session import AttendanceSession
+from modules.attendance.domain.entities.evidence_photo_upload import EvidencePhotoUpload
 from modules.enrollment.domain.entities.enrollment import Enrollment
 from modules.room.domain.entities.room import Room
 from modules.subject_class.domain.entities.subject_class import SubjectClass
@@ -16,6 +17,7 @@ from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
 from shared.enums.user_role import UserRole
+from shared.enums.upload_status import UploadStatus
 from shared.exceptions import (
     BusinessRuleException,
     ForbiddenException,
@@ -29,10 +31,18 @@ from tests.unit.fakes.fake_room_repository import FakeRoomRepository
 from tests.unit.fakes.fake_subject_class_repository import FakeSubjectClassRepository
 from tests.unit.fakes.fake_tenant_member_repository import FakeTenantMemberRepository
 from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
+from tests.unit.fakes.fake_evidence_photo_upload_repository import FakeEvidencePhotoUploadRepository
+from tests.unit.fakes.fake_storage_service import FakeStorageService
 
 
 @pytest.mark.asyncio
 class TestConfirmAttendanceUseCase:
+    @staticmethod
+    def _fake_storage(use_case: ConfirmAttendanceUseCase) -> FakeStorageService:
+        storage = use_case.storage_service
+        assert isinstance(storage, FakeStorageService)
+        return storage
+
     async def _setup_fixtures(self):
         session_repo = FakeAttendanceSessionRepository()
         record_repo = FakeAttendanceRecordRepository()
@@ -41,6 +51,8 @@ class TestConfirmAttendanceUseCase:
         member_repo = FakeTenantMemberRepository()
         enrollment_repo = FakeEnrollmentRepository()
         room_repo = FakeRoomRepository()
+        upload_repo = FakeEvidencePhotoUploadRepository()
+        storage_service = FakeStorageService()
 
         tenant = TenantFactory.make()
         await tenant_repo.save(tenant)
@@ -93,6 +105,8 @@ class TestConfirmAttendanceUseCase:
             member_repo=member_repo,
             enrollment_repo=enrollment_repo,
             room_repo=room_repo,
+            upload_repo=upload_repo,
+            storage_service=storage_service,
         )
 
         return (
@@ -674,3 +688,349 @@ class TestConfirmAttendanceUseCase:
         assert record.within_radius is True
         assert record.record_status == RecordStatus.REGULAR
         assert record.distance_meters < 80.0
+
+    async def test_confirm_attendance_with_evidence_photo_url(self):
+        """URL de um upload pending é aceita, persistida e o upload vira confirmed."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        photo_url = "https://fake-r2.dev/evidence/session-id/uuid.jpg"
+        upload = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key="evidence/session-id/uuid.jpg",
+            url=photo_url,
+        )
+        await use_case.upload_repo.save(upload)
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_url=photo_url,
+            )
+        )
+
+        assert record.evidence_photo_url == photo_url
+
+        saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved is not None
+        assert saved.status == UploadStatus.CONFIRMED
+        assert saved.attendance_record_id == record.id
+        assert saved.confirmed_at is not None
+
+    async def test_confirm_attendance_without_evidence_photo_url(self):
+        """Quando evidence_photo_url não é fornecida, o campo deve permanecer None."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+            )
+        )
+
+        assert record.evidence_photo_url is None
+
+    async def test_confirm_attendance_rejects_unknown_evidence_photo_url(self):
+        """URL que não veio do endpoint de upload deve ser rejeitada."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        with pytest.raises(BusinessRuleException, match="Foto de evidência inválida"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                    evidence_photo_url="https://site-qualquer.com/foto.jpg",
+                )
+            )
+
+        # A validação acontece antes de criar a presença
+        assert (
+            await use_case.record_repo.find_by_session_and_member(session.id, student_member.id)
+            is None
+        )
+
+    async def test_confirm_attendance_rejects_evidence_photo_from_another_session(self):
+        """Foto enviada para outra sessão não pode ser usada nesta confirmação."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        photo_url = "https://fake-r2.dev/evidence/other-session/uuid.jpg"
+        await use_case.upload_repo.save(
+            EvidencePhotoUpload(
+                session_id=uuid4(),  # outra sessão
+                file_key="evidence/other-session/uuid.jpg",
+                url=photo_url,
+            )
+        )
+
+        with pytest.raises(BusinessRuleException, match="Foto de evidência inválida"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                    evidence_photo_url=photo_url,
+                )
+            )
+
+    async def test_confirm_attendance_rejects_already_used_evidence_photo(self):
+        """Foto já confirmada em outra presença não pode ser reaproveitada."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+
+        photo_url = "https://fake-r2.dev/evidence/session-id/used.jpg"
+        used = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key="evidence/session-id/used.jpg",
+            url=photo_url,
+        )
+        used.confirm(uuid4())
+        await use_case.upload_repo.save(used)
+
+        with pytest.raises(BusinessRuleException, match="expirada ou já utilizada"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                    evidence_photo_url=photo_url,
+                )
+            )
+
+    async def test_confirm_attendance_promotes_pending_photo_to_confirmed(self):
+        """Foto em pending/ é copiada para confirmed/, e presença e upload apontam para a nova URL."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+        storage = self._fake_storage(use_case)
+
+        pending_key = f"pending/{session.id}/photo.jpg"
+        confirmed_key = f"confirmed/{session.id}/photo.jpg"
+        upload = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key=pending_key,
+            url=storage.public_url(pending_key),
+        )
+        await use_case.upload_repo.save(upload)
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_url=storage.public_url(pending_key),
+            )
+        )
+
+        assert record.evidence_photo_url == storage.public_url(confirmed_key)
+        assert storage.copied == [(pending_key, confirmed_key)]
+        assert storage.deleted_keys == [pending_key]
+
+        saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved is not None
+        assert saved.status == UploadStatus.CONFIRMED
+        assert saved.file_key == confirmed_key
+        assert saved.url == storage.public_url(confirmed_key)
+        assert saved.attendance_record_id == record.id
+
+    async def test_confirm_attendance_does_not_copy_legacy_evidence_photo(self):
+        """Upload antigo (evidence/...) já é definitivo: nada é copiado nem apagado."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+        storage = self._fake_storage(use_case)
+
+        legacy_url = "https://fake-r2.dev/evidence/old/photo.jpg"
+        await use_case.upload_repo.save(
+            EvidencePhotoUpload(
+                session_id=session.id,
+                file_key="evidence/old/photo.jpg",
+                url=legacy_url,
+            )
+        )
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_url=legacy_url,
+            )
+        )
+
+        assert record.evidence_photo_url == legacy_url
+        assert storage.copied == []
+        assert storage.deleted_keys == []
+
+    async def test_confirm_attendance_copy_failure_keeps_upload_pending(self):
+        """Se a cópia falhar, a confirmação falha e o upload continua pending (retentável)."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+        storage = self._fake_storage(use_case)
+
+        pending_key = f"pending/{session.id}/photo.jpg"
+        upload = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key=pending_key,
+            url=storage.public_url(pending_key),
+        )
+        await use_case.upload_repo.save(upload)
+        storage.failing_copy_keys.add(pending_key)
+
+        with pytest.raises(RuntimeError, match="Falha simulada ao copiar"):
+            await use_case.execute(
+                ConfirmAttendanceInput(
+                    tenant_id=tenant.id,
+                    subject_class_id=subject_class.id,
+                    session_id=session.id,
+                    user_id=user_id,
+                    day_code="X3KP7Q",
+                    latitude=-8.047610,
+                    longitude=-34.877010,
+                    user_agent="okhttp/4.9.0",
+                    evidence_photo_url=storage.public_url(pending_key),
+                )
+            )
+
+        saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved is not None
+        assert saved.status == UploadStatus.PENDING
+        assert saved.file_key == pending_key
+        assert storage.deleted_keys == []
+
+    async def test_confirm_attendance_succeeds_when_deleting_original_fails(self):
+        """Falha ao apagar o original em pending/ não impede a confirmação."""
+        (
+            use_case,
+            tenant,
+            subject_class,
+            session,
+            user_id,
+            student_member,
+            room, _, _,
+        ) = await self._setup_fixtures()
+        storage = self._fake_storage(use_case)
+
+        pending_key = f"pending/{session.id}/photo.jpg"
+        upload = EvidencePhotoUpload(
+            session_id=session.id,
+            file_key=pending_key,
+            url=storage.public_url(pending_key),
+        )
+        await use_case.upload_repo.save(upload)
+        storage.failing_delete_keys.add(pending_key)
+
+        record = await use_case.execute(
+            ConfirmAttendanceInput(
+                tenant_id=tenant.id,
+                subject_class_id=subject_class.id,
+                session_id=session.id,
+                user_id=user_id,
+                day_code="X3KP7Q",
+                latitude=-8.047610,
+                longitude=-34.877010,
+                user_agent="okhttp/4.9.0",
+                evidence_photo_url=storage.public_url(pending_key),
+            )
+        )
+
+        assert record.id is not None
+        assert storage.copied == [(pending_key, f"confirmed/{session.id}/photo.jpg")]
+        saved = await use_case.upload_repo.find_by_id(upload.id)
+        assert saved is not None
+        assert saved.status == UploadStatus.CONFIRMED
