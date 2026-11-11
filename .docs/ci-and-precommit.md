@@ -1,9 +1,10 @@
 # 🛡️ CI/CD & Automações de Qualidade de Código — Classroom API
 
-Esta documentação descreve a infraestrutura de validação estática e testes automatizados configurada na **Classroom API**, dividida em **duas camadas**:
+Esta documentação descreve a infraestrutura de validação e publicação da **Classroom API**, em **três camadas**:
 
 1. **Pre-commit Hook (Local)**: Impede a criação de commits que contenham violações de lint, formatação incorreta ou erros de tipagem estática.
 2. **GitHub Actions CI (Remoto)**: Valida toda a base de código, formatação, tipos e executa os testes automatizados (com PostgreSQL e Redis reais) em cada `push` e `pull request`.
+3. **CD na `main`**: Depois do CI verde, publica a imagem no GHCR e faz o Railway puxar aquele digest.
 
 ---
 
@@ -27,6 +28,11 @@ Desenvolvedor (Local)
                                     │
                                     ├── [FALHA]  ──► Bloqueia merge no PR (❌)
                                     └── [SUCESSO] ──► Libera merge na branch dev/main (✅)
+       ↓
+  merge na main ────────► CD (.github/workflows/cd.yml), só se o CI passou
+                             ├── docker build + push para ghcr.io
+                             ├── anota tag sha-<commit> e digest sha256:...
+                             └── Railway aponta o serviço para imagem@digest e faz pull
 ```
 
 ---
@@ -88,6 +94,53 @@ Ele divide a execução em dois jobs paralelos:
   ```
 
   Isso executa todos os testes **Unitários**, de **Integração** e **E2E** (end-to-end com endpoints HTTP reais).
+
+---
+
+## 3. CD — GHCR + digest + Railway (`.github/workflows/cd.yml`)
+
+O job `publish-and-deploy` do CI chama esse workflow **somente** em `push` na `main`, e **somente** se `Lint & Type Check` e `Test Suite (Unit, Integration & E2E)` passaram. Pull request não publica imagem.
+
+O que o CD faz:
+
+1. Recusa seguir se os secrets `RAILWAY_TOKEN` e `RAILWAY_SERVICE` não existirem.
+2. Constrói a imagem `linux/amd64` com o `Dockerfile` e envia ao GHCR.
+3. Publica a tag imutável na prática `sha-<commit>` (o commit SHA não se repete).
+4. Escreve no log e no summary a referência fixa `ghcr.io/<owner>/classroom-api@sha256:...`.
+5. Troca a source de cada serviço Railway para **esse digest** (`railway service source connect --image`). Isso desconecta o deploy por Git: o Railway deixa de buildar o repositório.
+6. Dispara um deploy novo com `railway redeploy --from-source`. Sem `--from-source`, o CLI repetiria o container antigo e ignoraria o digest recém-gravado.
+
+`RAILWAY_EXTRA_SERVICES` é opcional: nomes separados por vírgula (worker, beat) que devem subir **a mesma imagem**. A migration fica só no serviço da API.
+
+### Por que a migration saiu do `CMD`
+
+O `CMD` da imagem só sobe o Uvicorn. A migration é o **Pre-deploy Command** do serviço da API no Railway:
+
+```text
+uv run alembic upgrade head
+```
+
+Esse comando roda num container efêmero, com as variáveis do serviço, **antes** do processo novo assumir o tráfego. Se o Alembic falha, o deploy para e a versão anterior continua no ar. Um worker que usa a mesma imagem não executa migration, porque o pre-deploy é configuração daquele serviço, não da imagem.
+
+### O que você configura uma vez (fora do Git)
+
+Branch protection, secrets e o painel do Railway não ficam no repositório.
+
+1. No serviço da API, em Settings → Deploy, Pre-deploy Command: `uv run alembic upgrade head`. Deixe o Custom Start Command vazio para valer o `CMD` da imagem. Se existir worker ou beat, o start command deles continua o comando do Celery, **sem** pre-deploy.
+2. Crie um project token do ambiente de produção e salve os secrets da tabela abaixo. Desconecte o repositório Git da source do serviço **antes** do merge deste fluxo, para o Railway parar de buildar o código. O container que já está no ar continua até o CD trocar a source.
+3. No GitHub, em Settings → Branches → rule da `main`: exija pull request e estes status checks: `Lint & Type Check` e `Test Suite (Unit, Integration & E2E)`.
+
+Não marque `Publish image and deploy` como obrigatório. Em pull request esse job é ignorado, e um check obrigatório ignorado impede o merge.
+
+Imagem privada no GHCR exige Railway Pro para o pull. No Hobby, a alternativa é tornar o pacote público em GitHub → Packages. Aí qualquer pessoa consegue baixar a imagem, mesmo com o repositório privado.
+
+### Secrets do repositório
+
+| Secret | Valor |
+| --- | --- |
+| `RAILWAY_TOKEN` | Project token do ambiente de produção |
+| `RAILWAY_SERVICE` | Nome do serviço da API no Railway |
+| `RAILWAY_EXTRA_SERVICES` | Opcional. Outros serviços da mesma imagem, separados por vírgula |
 
 ---
 
