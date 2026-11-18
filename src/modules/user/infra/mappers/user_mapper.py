@@ -10,7 +10,6 @@ class UserMapper:
             name=model.name,
             email=model.email,
             password_hash=model.password_hash,
-            fcm_token=model.fcm_token,
             created_at=model.created_at,
         )
 
@@ -21,5 +20,4 @@ class UserMapper:
             name=entity.name,
             email=entity.email,
             password_hash=entity.password_hash,
-            fcm_token=entity.fcm_token,
         )
