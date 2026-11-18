@@ -98,7 +98,10 @@ async def create_subject_class(
 async def list_subject_classes(
     tenant_id: UUID = Depends(get_current_tenant_id),
     pagination: PaginationParams = Depends(get_pagination_params),
-    professor_id: UUID | None = Query(None, description="Filtrar por ID do professor responsável"),
+    professor_id: UUID | None = Query(
+        None,
+        description="Filtrar por ID do professor responsável. Ignorado para PROFESSOR, que só vê as próprias turmas.",
+    ),
     room_id: UUID | None = Query(None, description="Filtrar por ID da sala vinculada"),
     search: str | None = Query(None, description="Busca por nome da turma ou disciplina"),
     active: bool | None = Query(None, description="Filtrar por status ativo/inativo"),
@@ -109,13 +112,17 @@ async def list_subject_classes(
         None, description="Campo de ordenação (name, student_count, created_at)"
     ),
     order: str | None = Query("asc", description="Direção da ordenação (asc ou desc)"),
+    auth: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> PageResponse[SubjectClassListItemResponse]:
-    """Lista turmas da Tenant com filtros, busca por turma/disciplina e ordenação."""
+    """Lista turmas da Tenant. Professor vê só as turmas das quais é responsável; admin e coordenador veem todas."""
     subject_class_repo = SubjectClassSQLAlchemyRepository(session=db)
     tenant_repo = TenantSQLAlchemyRepository(session=db)
+    member_repo = TenantMemberSQLAlchemyRepository(session=db)
     use_case = ListSubjectClassesUseCase(
-        subject_class_repo=subject_class_repo, tenant_repo=tenant_repo
+        subject_class_repo=subject_class_repo,
+        tenant_repo=tenant_repo,
+        member_repo=member_repo,
     )
 
     page = await use_case.execute(
@@ -129,6 +136,8 @@ async def list_subject_classes(
             has_active_session=has_active_session,
             sort_by=sort_by,
             order=order,
+            user_id=auth.user.id,
+            user_role=auth.role,
         )
     )
     items = [SubjectClassListItemResponse.model_validate(c) for c in page.items]
