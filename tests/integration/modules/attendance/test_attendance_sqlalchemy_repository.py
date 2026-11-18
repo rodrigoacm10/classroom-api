@@ -486,6 +486,7 @@ class TestAttendanceSQLAlchemyRepository:
                 distance_meters=4.2,
                 within_radius=True,
                 record_status=RecordStatus.REGULAR,
+                evidence_photo_url="https://fake-r2.dev/confirmed/photo.jpg",
             )
         )
 
@@ -501,6 +502,7 @@ class TestAttendanceSQLAlchemyRepository:
         assert ana.distance_meters == pytest.approx(4.2)
         assert ana.within_radius is True
         assert ana.record_status == RecordStatus.REGULAR
+        assert ana.evidence_photo_url == "https://fake-r2.dev/confirmed/photo.jpg"
 
         bruno = roster[1]
         assert bruno.tenant_member_id == absent_member.id
@@ -509,6 +511,7 @@ class TestAttendanceSQLAlchemyRepository:
         assert bruno.distance_meters is None
         assert bruno.within_radius is None
         assert bruno.record_status is None
+        assert bruno.evidence_photo_url is None
 
     async def test_find_by_class_paginated_with_period_and_status_filters(self, session) -> None:
         """Deve paginar sessões por offset e filtrar por status e período de abertura (opened_at)."""
