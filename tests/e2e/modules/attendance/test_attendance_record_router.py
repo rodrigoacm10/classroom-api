@@ -1,14 +1,15 @@
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
-from unittest.mock import AsyncMock, patch
 from security.jwt import create_access_token
 from shared.enums.record_status import RecordStatus
 from shared.enums.user_role import UserRole
 from tests.factories.tenant_factory import TenantFactory
 from tests.factories.user_factory import UserFactory
 from tests.unit.fakes.fake_storage_service import FakeStorageService
+
 
 @pytest.mark.asyncio
 class TestAttendanceRecordRouter:
@@ -241,7 +242,10 @@ class TestAttendanceRecordRouter:
             session_id,
             day_code,
             prof_headers,
-            student1_headers, _, _, _,
+            student1_headers,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         storage = FakeStorageService(url_from_key=True)
@@ -285,7 +289,10 @@ class TestAttendanceRecordRouter:
             session_id,
             day_code,
             prof_headers,
-            student1_headers, _, _, _,
+            student1_headers,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         res = await client.post(
@@ -305,7 +312,10 @@ class TestAttendanceRecordRouter:
             session_id,
             day_code,
             prof_headers,
-            student1_headers, _, _, _,
+            student1_headers,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         res = await client.post(
@@ -324,7 +334,10 @@ class TestAttendanceRecordRouter:
             session_id,
             day_code,
             prof_headers,
-            student1_headers, _, _, _,
+            student1_headers,
+            _,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         big_file = b"x" * (5 * 1024 * 1024 + 1)
@@ -417,6 +430,7 @@ class TestAttendanceRecordRouter:
         assert present["distance_meters"] == pytest.approx(confirmed["distance_meters"])
         assert present["within_radius"] is True
         assert present["record_status"] == RecordStatus.REGULAR.value
+        assert present["evidence_photo_url"] is None
 
         absent = by_member[str(student2_member.id)]
         assert absent["student_name"]
@@ -425,6 +439,7 @@ class TestAttendanceRecordRouter:
         assert absent["distance_meters"] is None
         assert absent["within_radius"] is None
         assert absent["record_status"] is None
+        assert absent["evidence_photo_url"] is None
 
         missing = await client.get(
             f"/subject-classes/{sc_id}/attendance-sessions/{uuid4()}/roster",
@@ -441,7 +456,9 @@ class TestAttendanceRecordRouter:
             day_code,
             prof_headers,
             student1_headers,
-            student2_headers, _, _,
+            student2_headers,
+            _,
+            _,
         ) = await self._setup_fixtures(session, client)
 
         storage = FakeStorageService(url_from_key=True)
