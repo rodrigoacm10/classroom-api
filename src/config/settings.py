@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "Classroom API"
+    app_name: str = "Locus"
     app_version: str = "0.2.0"
     database_url: str = "postgresql+psycopg://classroom:classroom@localhost:5432/classroom"
 
@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     resend_api_key: str = ""  # Chave de API do Resend (ex: re_123456789)
     mail_domain: str = "rodrigoacm.com"  # Domínio padrão para envio de e-mails
     mail_from_prefix: str = "noreply"  # Prefixo do e-mail (ex: noreply -> noreply@rodrigoacm.com)
-    mail_from_name: str = "Classroom"  # Nome de exibição do remetente nos clientes de e-mail
+    mail_from_name: str = "Locus"  # Nome de exibição do remetente nos clientes de e-mail
     email_from: str = (
         ""  # Sobrescreve a composição automática caso fornecido explicitamente no .env
     )
@@ -123,7 +123,7 @@ class Settings(BaseSettings):
     cloudflare_r2_access_key_id: str = ""
     cloudflare_r2_secret_access_key: str = ""
     cloudflare_r2_bucket_name: str = "classroom-evidence"
-    cloudflare_r2_public_url: str = ""          # Ex: https://pub-XXXX.r2.dev
+    cloudflare_r2_public_url: str = ""  # Ex: https://pub-XXXX.r2.dev
 
     # Limpeza de uploads de evidência: tempo máximo que uma foto pode ficar `pending`
     # (enviada, mas sem confirmação de presença) antes de ser apagada do storage.
