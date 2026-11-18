@@ -31,6 +31,7 @@ class ConfirmAttendanceRequest(BaseModel):
         description="URL da foto de evidência, obtida previamente via POST .../evidence-photo",
     )
 
+
 class ReviewAttendanceRecordRequest(BaseModel):
     decision: RecordStatus = Field(..., description="Decisão da revisão: 'approved' ou 'rejected'")
     note: str | None = Field(
@@ -71,5 +72,6 @@ class SessionRosterItemResponse(BaseModel):
     distance_meters: float | None = None
     within_radius: bool | None = None
     record_status: RecordStatus | None = None
+    evidence_photo_url: str | None = None
 
     model_config = {"from_attributes": True}
