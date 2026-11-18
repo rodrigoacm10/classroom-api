@@ -833,3 +833,27 @@ class TestEnrollmentRouterEndpoints:
             f"/members/{student_member.id}/metrics", headers=student_headers
         )
         assert aluno_forbidden.status_code == 403
+
+    async def test_enrollment_routes_require_auth_and_tenant(self, client, session):
+        """R01: sem token -> 401; usuário de outra instituição -> 404 (get, drop e delete)."""
+        tenant, _, _, headers, sc_id = await self._setup_tenant_class(session, client)
+        st_user = await UserFactory.create(session)
+        st_member = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=st_user.id, role=UserRole.ALUNO
+        )
+        enrollment_id = (
+            await client.post(
+                f"/subject-classes/{sc_id}/enrollments",
+                json={"tenant_member_id": str(st_member.id)},
+                headers=headers,
+            )
+        ).json()["id"]
+        url = f"/subject-classes/{sc_id}/enrollments/{enrollment_id}"
+
+        assert (await client.get(url)).status_code == 401
+
+        _, _, _, other_headers, _ = await self._setup_tenant_class(session, client)
+        assert (await client.get(url, headers=other_headers)).status_code == 404
+        assert (await client.patch(url, headers=other_headers)).status_code == 404
+        assert (await client.delete(url, headers=other_headers)).status_code == 404
+        assert (await client.get(url, headers=headers)).status_code == 200
