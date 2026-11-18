@@ -68,14 +68,14 @@ def test_approved_conta_como_presenca():
     assert report.frequency_rate == 0.2
 
 
-def test_rejected_nao_conta_como_presenca_nem_irregular():
-    """Deve tratar rejected como confirmação (reduz falta) sem somar em presente nem irregular."""
+def test_rejected_conta_como_falta_sem_somar_em_presente_nem_irregular():
+    """P03: rejected aparece como falta e não soma em presente nem irregular."""
     report = calculate_student_report(
         _data(confirmations=[RawConfirmation(ROOM_LAT, ROOM_LON, "rejected")])
     )
     assert report.total_present == 0
     assert report.total_irregular == 0
-    assert report.total_absent == 9
+    assert report.total_absent == 10
     assert report.frequency_rate == 0.0
     assert report.at_risk is True
 

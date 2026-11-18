@@ -17,3 +17,4 @@ class SessionRosterItem:
     distance_meters: float | None
     within_radius: bool | None
     record_status: RecordStatus | None
+    evidence_photo_url: str | None = None

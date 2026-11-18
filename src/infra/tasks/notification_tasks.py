@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 # FCM suporta no máximo 500 tokens por chamada de send_each_for_multicast
 FCM_MAX_TOKENS_PER_BATCH = 500
 
+# Mesmo id criado no app (expo-notifications, canal "chamadas", importância MAX).
+# No Android 8+ a importância do canal define se a notificação aparece em destaque.
+ANDROID_NOTIFICATION_CHANNEL_ID = "chamadas"
+
 
 def _chunk(lst: list, size: int) -> list[list]:
     """Divide uma lista em sublistas de tamanho máximo `size`."""
@@ -89,6 +93,11 @@ def send_push_notification(
                 ttl=int(data.get("duration_minutes", "0")) * 60
                 if "duration_minutes" in data
                 else 3600,
+                notification=messaging.AndroidNotification(
+                    channel_id=ANDROID_NOTIFICATION_CHANNEL_ID,
+                    sound="default",
+                    priority="max",
+                ),
             ),
             apns=messaging.APNSConfig(
                 headers={"apns-priority": "10"},

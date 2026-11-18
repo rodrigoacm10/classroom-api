@@ -330,6 +330,66 @@ class TestSubjectClassUseCases:
         assert result.items[0].name == "Do A"
         assert result.items[0].professor_id == professor_a
 
+    async def test_list_subject_classes_scopes_professor_to_own_classes(self):
+        """Professor autenticado só recebe as turmas das quais é responsável, mesmo pedindo outro professor."""
+        subject_class_repo = FakeSubjectClassRepository()
+        tenant_repo = FakeTenantRepository()
+        member_repo = FakeTenantMemberRepository()
+        tenant = Tenant(name="UPE", slug="upe")
+        await tenant_repo.save(tenant)
+
+        professor_a = TenantMember(
+            tenant_id=tenant.id,
+            user_id=uuid4(),
+            role=UserRole.PROFESSOR,
+            name="Prof A",
+        )
+        professor_b = TenantMember(
+            tenant_id=tenant.id,
+            user_id=uuid4(),
+            role=UserRole.PROFESSOR,
+            name="Prof B",
+        )
+        await member_repo.save(professor_a)
+        await member_repo.save(professor_b)
+
+        await subject_class_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=professor_a.id,
+                room_id=uuid4(),
+                name="Do A",
+                discipline_name="D1",
+            )
+        )
+        await subject_class_repo.save(
+            SubjectClass(
+                tenant_id=tenant.id,
+                professor_id=professor_b.id,
+                room_id=uuid4(),
+                name="Do B",
+                discipline_name="D2",
+            )
+        )
+
+        use_case = ListSubjectClassesUseCase(
+            subject_class_repo=subject_class_repo,
+            tenant_repo=tenant_repo,
+            member_repo=member_repo,
+        )
+        result = await use_case.execute(
+            ListSubjectClassesInput(
+                tenant_id=tenant.id,
+                professor_id=professor_b.id,
+                user_id=professor_a.user_id,
+                user_role=UserRole.PROFESSOR,
+            )
+        )
+
+        assert len(result.items) == 1
+        assert result.items[0].name == "Do A"
+        assert result.items[0].professor_id == professor_a.id
+
     async def test_list_subject_classes_filters_by_room_id(self):
         """Deve listar apenas as turmas vinculadas à sala informada."""
         subject_class_repo = FakeSubjectClassRepository()

@@ -59,7 +59,22 @@ from security.dependencies.current_user import (
 from security.dependencies.require_role import require_role
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.user_role import UserRole
+from shared.exceptions import ResourceNotFoundException
 from shared.pagination import PageResponse, PaginationParams, get_pagination_params
+
+
+async def require_class_in_tenant(
+    subject_class_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Exige autenticação e garante que a turma pertence à instituição ativa (404 caso contrário)."""
+    subject_class = await SubjectClassSQLAlchemyRepository(session=db).find_by_id_and_tenant(
+        subject_class_id=subject_class_id, tenant_id=tenant_id
+    )
+    if not subject_class:
+        raise ResourceNotFoundException("Turma não encontrada.")
+
 
 router = APIRouter(
     prefix="/subject-classes/{subject_class_id}/enrollments",
@@ -152,7 +167,11 @@ async def list_enrollments(
     return PageResponse.of(page, items)
 
 
-@router.get("/{enrollment_id}", response_model=EnrollmentResponse)
+@router.get(
+    "/{enrollment_id}",
+    response_model=EnrollmentResponse,
+    dependencies=[Depends(require_class_in_tenant)],
+)
 async def get_enrollment(
     subject_class_id: UUID,
     enrollment_id: UUID,
@@ -309,7 +328,10 @@ async def get_my_student_metrics(
 @router.patch(
     "/{enrollment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR))],
+    dependencies=[
+        Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR)),
+        Depends(require_class_in_tenant),
+    ],
 )
 async def drop_enrollment(
     subject_class_id: UUID,
@@ -330,7 +352,10 @@ async def drop_enrollment(
 @router.delete(
     "/{enrollment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR))],
+    dependencies=[
+        Depends(require_role(UserRole.ADMIN, UserRole.COORDENADOR)),
+        Depends(require_class_in_tenant),
+    ],
 )
 async def delete_enrollment(
     subject_class_id: UUID,

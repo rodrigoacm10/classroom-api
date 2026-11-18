@@ -58,6 +58,9 @@ class TestNotificationTasks:
             assert message.tokens == ["token_android", "token_ios"]
             assert message.android.priority == "high"
             assert message.android.ttl == 15 * 60  # 15 min em segundos
+            assert message.android.notification.channel_id == "chamadas"
+            assert message.android.notification.priority == "max"
+            assert message.android.notification.sound == "default"
 
     def test_send_push_notification_batch_chunks(self):
         """Deve fracionar o envio em lotes de no máximo 500 tokens por requisição para respeitar os limites do FCM."""

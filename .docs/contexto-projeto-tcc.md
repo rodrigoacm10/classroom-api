@@ -131,7 +131,7 @@ Validar com o professor de Tópicos Avançados se "otimização de processamento
 | Versionamento | Git + GitHub | Obrigatório — repositório deve estar sempre atualizado, é avaliado no processo |
 
 ### 4.1 Notas técnicas importantes
-- **PostGIS**: usado para cálculo de distância geodésica com precisão (`ST_DWithin`, `ST_Distance`) e índice espacial (GiST), permitindo consultas em lote otimizadas (ex: "quais alunos confirmaram dentro do raio" para uma turma inteira). Não é estritamente obrigatório para o caso de uso simples (1 aluno x 1 sala — daria para fazer com Haversine em Python puro), mas é um diferencial técnico defensável para a parte de otimização.
+- **Distância**: a confirmação de presença e o relatório de frequência calculam a distância com Haversine em Python. O PostGIS entra no índice espacial GiST da sala, que acelera a consulta geográfica. `ST_Distance` não faz parte do caminho de validação.
 - **Neon**: scale-to-zero no free tier pode gerar pequena latência na primeira consulta após período de inatividade (compute "acorda") — não é um problema para o TCC, mas vale saber explicar se perguntado.
 - **Celery vs Redis**: não são a mesma coisa. Celery é a biblioteca que processa tarefas em paralelo/background; Redis é o banco em memória usado como broker (fila) que armazena as tarefas pendentes até serem processadas pelos workers.
 - **FCM**: API antiga ("legacy") foi descontinuada, hoje se usa a API HTTP V1 (OAuth 2.0) — mas isso é tratado automaticamente pelo Firebase Admin SDK no backend, não exige atenção manual da equipe.

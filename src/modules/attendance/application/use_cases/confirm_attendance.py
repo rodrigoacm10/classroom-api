@@ -1,16 +1,23 @@
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
+from infra.storage.evidence_photo_service import confirmed_key_for
+from infra.storage.storage_service import StorageService
 from modules.attendance.domain.entities.attendance_confirmation_context import (
     AttendanceConfirmationContext,
 )
 from modules.attendance.domain.entities.attendance_record import AttendanceRecord
+from modules.attendance.domain.entities.evidence_photo_upload import EvidencePhotoUpload
 from modules.attendance.domain.repositories.attendance_record_repository import (
     AttendanceRecordRepository,
 )
 from modules.attendance.domain.repositories.attendance_session_repository import (
     AttendanceSessionRepository,
+)
+from modules.attendance.domain.repositories.evidence_photo_upload_repository import (
+    EvidencePhotoUploadRepository,
 )
 from modules.enrollment.domain.repositories.enrollment_repository import EnrollmentRepository
 from modules.room.domain.repositories.room_repository import RoomRepository
@@ -23,6 +30,7 @@ from modules.tenant.domain.repositories.tenant_repository import (
 )
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.session_status import SessionStatus
+from shared.enums.upload_status import UploadStatus
 from shared.exceptions import (
     BusinessRuleException,
     ForbiddenException,
@@ -55,7 +63,7 @@ class ConfirmAttendanceInput:
     ip_address: str | None = None
     user_agent: str | None = None
     device_info: dict | None = None
-
+    evidence_photo_url: str | None = None
 
 class ConfirmAttendanceUseCase:
     def __init__(
@@ -67,6 +75,8 @@ class ConfirmAttendanceUseCase:
         member_repo: TenantMemberRepository,
         enrollment_repo: EnrollmentRepository,
         room_repo: RoomRepository,
+        upload_repo: EvidencePhotoUploadRepository,
+        storage_service: StorageService,
     ) -> None:
         self.session_repo = session_repo
         self.record_repo = record_repo
@@ -75,6 +85,8 @@ class ConfirmAttendanceUseCase:
         self.member_repo = member_repo
         self.enrollment_repo = enrollment_repo
         self.room_repo = room_repo
+        self.upload_repo = upload_repo
+        self.storage_service = storage_service
 
     async def execute(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
         # Caminho otimizado: 1 única query consolidada de validação
@@ -91,6 +103,64 @@ class ConfirmAttendanceUseCase:
 
         # Fallback para fakes sem o método ou resolução precisa de 404
         return await self._execute_legacy(data)
+
+    async def _validate_evidence_upload(
+        self, data: ConfirmAttendanceInput
+    ) -> EvidencePhotoUpload | None:
+        """
+        Valida a foto de evidência informada (se houver): precisa ter vindo do endpoint
+        de upload, pertencer a esta sessão e ainda estar pending. Deve rodar ANTES de
+        criar a presença, para não registrar presença com foto inválida.
+        """
+        if not data.evidence_photo_url:
+            return None
+
+        upload = await self.upload_repo.find_by_url(data.evidence_photo_url)
+        if not upload or upload.session_id != data.session_id:
+            raise BusinessRuleException("Foto de evidência inválida para esta chamada.")
+        if upload.status != UploadStatus.PENDING:
+            raise BusinessRuleException(
+                "Foto de evidência expirada ou já utilizada. Envie a foto novamente."
+            )
+        return upload
+
+    def _evidence_destination(self, upload: EvidencePhotoUpload | None) -> tuple[str, str] | None:
+        """
+        Chave e URL definitivas da foto. Uploads novos (pending/) serão promovidos para
+        confirmed/. Uploads antigos (evidence/) já são definitivos e mantêm chave e URL.
+        Só monta texto, sem acesso à rede, então roda antes de criar a presença.
+        """
+        if upload is None:
+            return None
+        key = confirmed_key_for(upload.file_key)
+        if key == upload.file_key:
+            return key, upload.url
+        return key, self.storage_service.public_url(key)
+
+    async def _confirm_evidence_upload(
+        self,
+        upload: EvidencePhotoUpload | None,
+        destination: tuple[str, str] | None,
+        record: AttendanceRecord,
+    ) -> None:
+        """Promove a foto para confirmed/ e vincula o upload à presença criada."""
+        if upload is None or destination is None:
+            return
+
+        new_key, new_url = destination
+        old_key = upload.file_key
+
+        if new_key != old_key:
+            # Se a cópia falhar, a exceção sobe e a transação inteira sofre rollback:
+            # a presença não é registrada e o upload continua pending.
+            await self.storage_service.copy(old_key, new_key)
+            # Best effort: se não apagar, sobra um objeto em pending/ (já com o erro logado
+            # na camada de infra), que a lifecycle policy do bucket remove depois.
+            with contextlib.suppress(Exception):
+                await self.storage_service.delete(old_key)
+
+        upload.confirm(record.id, file_key=new_key, url=new_url)
+        await self.upload_repo.save(upload)
 
     async def _execute_from_context(
         self, context: AttendanceConfirmationContext, data: ConfirmAttendanceInput
@@ -152,7 +222,10 @@ class ConfirmAttendanceUseCase:
         if context.shared_device_conflict:
             flags.append("shared_device")
 
-        return await self.record_repo.create_record(
+        evidence_upload = await self._validate_evidence_upload(data)
+        evidence_destination = self._evidence_destination(evidence_upload)
+
+        record = await self.record_repo.create_record(
             session_id=data.session_id,
             tenant_member_id=context.member_id,
             latitude=data.latitude,
@@ -166,7 +239,11 @@ class ConfirmAttendanceUseCase:
             user_agent=data.user_agent,
             device_info=data.device_info,
             room_location=context.room_location,
+            evidence_photo_url=evidence_destination[1] if evidence_destination else None,
         )
+
+        await self._confirm_evidence_upload(evidence_upload, evidence_destination, record)
+        return record
 
     async def _execute_legacy(self, data: ConfirmAttendanceInput) -> AttendanceRecord:
         # 1. Tenant
@@ -257,6 +334,10 @@ class ConfirmAttendanceUseCase:
         # 11. Calcular flags de irregularidade pré-inserção
         flags: list[str] = []
 
+        # 12. Validar foto de evidência (se informada)
+        evidence_upload = await self._validate_evidence_upload(data)
+        evidence_destination = self._evidence_destination(evidence_upload)
+
         # GPS accuracy imprecisa
         if data.gps_accuracy_meters is not None and data.gps_accuracy_meters > tolerance_radius:
             flags.append("low_gps_accuracy")
@@ -278,7 +359,7 @@ class ConfirmAttendanceUseCase:
             if shared_rec and shared_rec.tenant_member_id != member.id:
                 flags.append("shared_device")
 
-        return await self.record_repo.create_record(
+        record = await self.record_repo.create_record(
             session_id=data.session_id,
             tenant_member_id=member.id,
             latitude=data.latitude,
@@ -292,4 +373,9 @@ class ConfirmAttendanceUseCase:
             user_agent=data.user_agent,
             device_info=data.device_info,
             distance_meters=distance_meters,
+            evidence_photo_url=evidence_destination[1] if evidence_destination else None,
         )
+
+        # 13. Vincular o upload ao registro de presença criado
+        await self._confirm_evidence_upload(evidence_upload, evidence_destination, record)
+        return record

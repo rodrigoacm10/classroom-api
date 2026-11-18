@@ -26,6 +26,10 @@ class ConfirmAttendanceRequest(BaseModel):
     device_info: dict | None = Field(
         default=None, description="Metadados do dispositivo (sistema operacional, modelo, etc.)"
     )
+    evidence_photo_url: str | None = Field(
+        default=None,
+        description="URL da foto de evidência, obtida previamente via POST .../evidence-photo",
+    )
 
 
 class ReviewAttendanceRecordRequest(BaseModel):
@@ -68,5 +72,6 @@ class SessionRosterItemResponse(BaseModel):
     distance_meters: float | None = None
     within_radius: bool | None = None
     record_status: RecordStatus | None = None
+    evidence_photo_url: str | None = None
 
     model_config = {"from_attributes": True}

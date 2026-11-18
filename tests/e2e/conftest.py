@@ -38,19 +38,36 @@ def engine():
 
 @pytest.fixture(scope="session")
 async def create_tables(engine) -> AsyncGenerator[None, None]:
-    """Cria as tabelas no banco de testes antes dos testes E2E e dropa ao final."""
+    """
+    Cria todas as tabelas no banco de testes antes de qualquer teste rodar.
+    Dropa todas as tabelas ao final da sessão.
+
+    Importar os models aqui é necessário para que o SQLAlchemy saiba quais
+    tabelas fazem parte do metadata de Base.
+    """
+    # Importação garante que os models sejam registrados no Base.metadata
     import infra.database.models  # noqa: F401 — side-effect import
     from infra.database.base import Base
 
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
         await conn.run_sync(Base.metadata.drop_all)
+
+        # Tipos ENUM marcados com create_type=False nos models não são criados
+        # automaticamente pelo create_all (pressupõem que já existem via Alembic
+        # em produção). No banco de testes, criamos manualmente antes das tabelas.
+        await conn.execute(text("DROP TYPE IF EXISTS user_role CASCADE;"))
+        await conn.execute(text(
+            "CREATE TYPE user_role AS ENUM ('ADMIN', 'PROFESSOR', 'ALUNO', 'COORDENADOR');"
+        ))
+
         await conn.run_sync(Base.metadata.create_all)
 
-    yield
+    yield  # Testes de integração rodam aqui
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(text("DROP TYPE IF EXISTS user_role;"))
 
 
 @pytest.fixture

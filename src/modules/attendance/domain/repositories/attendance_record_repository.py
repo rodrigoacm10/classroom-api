@@ -24,6 +24,7 @@ class AttendanceRecordRepository(Protocol):
         device_info: dict | None = None,
         room_location: Any | None = None,
         distance_meters: float | None = None,
+        evidence_photo_url: str | None = None,
     ) -> AttendanceRecord: ...
 
     async def save(self, record: AttendanceRecord) -> AttendanceRecord: ...

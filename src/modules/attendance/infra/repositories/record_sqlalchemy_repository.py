@@ -55,6 +55,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
         device_info: dict | None = None,
         room_location: Any | None = None,
         distance_meters: float | None = None,
+        evidence_photo_url: str | None = None,
     ) -> AttendanceRecord:
         if distance_meters is None:
             if room_location is not None:
@@ -100,6 +101,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
             ip_address=ip_address,
             user_agent=user_agent,
             device_info=device_info,
+            evidence_photo_url=evidence_photo_url,
         )
 
         model = AttendanceRecordMapper.to_model(record_entity)
@@ -182,6 +184,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
                 AttendanceRecordModel.distance_meters,
                 AttendanceRecordModel.within_radius,
                 AttendanceRecordModel.record_status,
+                AttendanceRecordModel.evidence_photo_url,
             )
             .join(
                 TenantMemberModel,
@@ -213,6 +216,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
             distance_meters,
             within_radius,
             record_status,
+            evidence_photo_url,
         ) in result.all():
             items.append(
                 SessionRosterItem(
@@ -224,6 +228,7 @@ class RecordSQLAlchemyRepository(AttendanceRecordRepository):
                     distance_meters=float(distance_meters) if distance_meters is not None else None,
                     within_radius=within_radius,
                     record_status=record_status,
+                    evidence_photo_url=evidence_photo_url,
                 )
             )
         return items

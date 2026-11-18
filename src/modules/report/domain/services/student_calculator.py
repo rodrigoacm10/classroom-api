@@ -19,7 +19,8 @@ def _build_student_report(data: StudentAttendanceData, distances: list[float]) -
     irregular = [c for c in data.confirmations if c.record_status == _IRREGULAR_STATUS]
 
     present = len(valid)
-    absent = data.total_sessions - len(data.confirmations)
+    # Rejeitada vira falta; irregular (aguardando revisão) tem coluna própria e não entra aqui.
+    absent = max(data.total_sessions - present - len(irregular), 0)
     rate = present / data.total_sessions if data.total_sessions > 0 else 0.0
 
     geo = compute_student_geo_metrics(distances, data.tolerance_radius_meters)
