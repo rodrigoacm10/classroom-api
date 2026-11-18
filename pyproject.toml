@@ -1,7 +1,7 @@
 [project]
 name = "classroom-api"
-version = "0.2.0"
-description = "Add your description here"
+version = "1.0.0"
+description = "API do Locus: chamada acadêmica com validação por geolocalização."
 readme = "README.md"
 authors = [
     { name = "Rodrigo Andrade", email = "rodrigoacm10@gmail.com" }
