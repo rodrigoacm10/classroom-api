@@ -382,6 +382,72 @@ class TestSubjectClassRouterEndpoints:
         assert items[0]["professor_name"] == "Prof A"
         assert items[0]["name"] == "Turma do A"
 
+    async def test_list_subject_classes_professor_sees_only_own_classes(self, client, session):
+        """GET /subject-classes como PROFESSOR ignora turmas de outros docentes, mesmo com professor_id alheio."""
+        admin_user = await UserFactory.create(session)
+        tenant = await TenantFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=admin_user.id, role=UserRole.ADMIN
+        )
+        admin_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=admin_user.id, tenant_id=tenant.id, role=UserRole.ADMIN.value)}"
+        }
+
+        prof_a = await UserFactory.create(session, name="Prof A")
+        member_a = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=prof_a.id, role=UserRole.PROFESSOR
+        )
+        prof_a_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=prof_a.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)}"
+        }
+
+        prof_b = await UserFactory.create(session, name="Prof B")
+        member_b = await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=prof_b.id, role=UserRole.PROFESSOR
+        )
+        prof_b_headers = {
+            "Authorization": f"Bearer {create_access_token(user_id=prof_b.id, tenant_id=tenant.id, role=UserRole.PROFESSOR.value)}"
+        }
+
+        room_res = await client.post(
+            "/rooms",
+            json={"name": "Lab Escopo", "latitude": -8.0, "longitude": -34.0},
+            headers=admin_headers,
+        )
+        room_id = room_res.json()["id"]
+
+        class_a = await client.post(
+            "/subject-classes",
+            json={"room_id": room_id, "name": "Turma do A", "discipline_name": "POO"},
+            headers=prof_a_headers,
+        )
+        class_b = await client.post(
+            "/subject-classes",
+            json={"room_id": room_id, "name": "Turma do B", "discipline_name": "Cálculo"},
+            headers=prof_b_headers,
+        )
+        assert class_a.status_code == 201
+        assert class_b.status_code == 201
+
+        own = await client.get("/subject-classes", headers=prof_a_headers)
+        assert own.status_code == 200
+        own_items = own.json()["items"]
+        assert [item["name"] for item in own_items] == ["Turma do A"]
+        assert own.json()["total"] == 1
+
+        forced = await client.get(
+            "/subject-classes",
+            params={"professor_id": str(member_b.id)},
+            headers=prof_a_headers,
+        )
+        assert forced.status_code == 200
+        assert [item["id"] for item in forced.json()["items"]] == [class_a.json()["id"]]
+        assert forced.json()["items"][0]["professor_id"] == str(member_a.id)
+
+        admin_list = await client.get("/subject-classes", headers=admin_headers)
+        assert admin_list.status_code == 200
+        assert admin_list.json()["total"] == 2
+
     async def test_list_subject_classes_filters_by_room_id(self, client, session):
         """GET /subject-classes?room_id= filtra turmas pela sala vinculada."""
         admin_user = await UserFactory.create(session)
