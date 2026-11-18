@@ -55,7 +55,6 @@ class UserFactory:
             "name": "John Doe",
             "email": f"john_{uuid.uuid4().hex[:8]}@example.com",
             "password_hash": "hashed_placeholder",
-            "fcm_token": None,
         }
         data = {**defaults, **overrides}
         if isinstance(data["id"], str):
