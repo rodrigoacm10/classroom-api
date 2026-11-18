@@ -163,6 +163,7 @@ class FakeAttendanceRecordRepository(AttendanceRecordRepository):
                     distance_meters=record.distance_meters if record else None,
                     within_radius=record.within_radius if record else None,
                     record_status=record.record_status if record else None,
+                    evidence_photo_url=record.evidence_photo_url if record else None,
                 )
             )
         items.sort(key=lambda item: item.student_name)
