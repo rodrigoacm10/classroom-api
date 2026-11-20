@@ -6,6 +6,16 @@ dist/
 wheels/
 *.egg-info
 
+# Nuitka, se a compilação for interrompida fora de dist/
+*.build/
+*.dist/
+*.onefile-build/
+.tools/
+
+# Estado local do agendador do Celery (worker com -B)
+celerybeat-schedule
+celerybeat-schedule.*
+
 # Virtual environments
 .venv
 
