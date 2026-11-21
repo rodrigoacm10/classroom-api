@@ -53,10 +53,10 @@ class TestAttendancePushNotificationHandler:
 
             mock_delay.assert_called_once_with(
                 title="📋 Chamada Aberta — Cálculo I",
-                body="O professor iniciou a chamada! Você tem 20 minutos. Código: CALC123",
+                body="O professor iniciou a chamada! Você tem 20 minutos para confirmar sua presença.",
                 data={
                     "type": "ATTENDANCE_OPENED",
-                    "day_code": "CALC123",
+                    "session_id": str(session_id),
                     "subject_class_name": "Cálculo I",
                     "duration_minutes": "20",
                 },
