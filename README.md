@@ -91,6 +91,34 @@ A API fica em http://localhost:8000. A documentação interativa fica em http://
 
 O worker com `-B` também liga o agendador: fecha chamadas vencidas e limpa fotos de evidência que ficaram pendentes. Sem esse processo, o aviso não sai e a chamada não fecha sozinha.
 
+### Executáveis
+
+O `uv run` continua sendo o jeito de desenvolver. Além dele, a API e o worker podem ser compilados em dois executáveis Linux, com o Nuitka. PostgreSQL, Redis e o `.env` ficam de fora: os binários leem o `.env` da pasta em que são executados e se conectam ao banco e ao Redis que já estiverem no ar.
+
+A compilação pede gcc, os cabeçalhos do Python 3.12 e o patchelf. Se o patchelf não estiver instalado, o script baixa uma cópia local em `.tools/`. Ela usa um job por vez, para caber numa máquina com pouca memória, e demora.
+
+```bash
+uv run python scripts/build_executables.py
+```
+
+Para gerar só um dos dois:
+
+```bash
+uv run python scripts/build_executables.py api
+uv run python scripts/build_executables.py worker
+```
+
+Os arquivos saem em `dist/locus-api` e `dist/locus-worker`. Rode os dois a partir da pasta `classroom-api`, com o Compose no ar e as migrações já aplicadas:
+
+```bash
+./dist/locus-api
+./dist/locus-worker
+```
+
+O worker já sobe com o agendador. Na primeira execução ele grava `celerybeat-schedule.db` na pasta atual, para lembrar a última vez que cada tarefa periódica rodou. Esse arquivo não entra no Git.
+
+Durante a compilação, avisos de `Duplicate data file` significam que um arquivo de dados já tinha sido incluído. O Nuitka ignora a cópia repetida e segue. O executável gerado neste Linux pede glibc 2.38 ou mais recente. Um `.exe` de Windows tem de ser compilado no Windows, com o mesmo script.
+
 Testes e benchmark do relatório:
 
 ```bash

@@ -110,7 +110,7 @@ class OpenAttendanceSessionUseCase:
                 if data.tolerance_radius_meters and data.tolerance_radius_meters >= 10
                 else 50
             )
-            target_room_id = data.room_id or subject_class.room_id
+            target_room_id = None
         else:
             target_room_id = data.room_id or subject_class.room_id
             if not target_room_id:

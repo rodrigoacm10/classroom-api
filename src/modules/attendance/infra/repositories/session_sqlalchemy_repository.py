@@ -250,8 +250,17 @@ class SessionSQLAlchemyRepository:
                 AttendanceSessionModel.subject_class_id.label("subject_class_id"),
                 SubjectClassModel.name.label("subject_class_name"),
                 SubjectClassModel.discipline_name.label("discipline_name"),
-                target_room_id.label("room_id"),
-                RoomModel.name.label("room_name"),
+                case(
+                    (AttendanceSessionModel.custom_latitude.is_not(None), literal(None)),
+                    else_=target_room_id,
+                ).label("room_id"),
+                case(
+                    (
+                        AttendanceSessionModel.custom_latitude.is_not(None),
+                        literal("Localização do professor"),
+                    ),
+                    else_=RoomModel.name,
+                ).label("room_name"),
                 AttendanceSessionModel.opened_at.label("opened_at"),
                 AttendanceSessionModel.expires_at.label("expires_at"),
                 AttendanceRecordModel.id.label("record_id"),
@@ -371,8 +380,17 @@ class SessionSQLAlchemyRepository:
                 AttendanceSessionModel.subject_class_id.label("subject_class_id"),
                 SubjectClassModel.name.label("subject_class_name"),
                 SubjectClassModel.discipline_name.label("discipline_name"),
-                target_room_id.label("room_id"),
-                RoomModel.name.label("room_name"),
+                case(
+                    (AttendanceSessionModel.custom_latitude.is_not(None), literal(None)),
+                    else_=target_room_id,
+                ).label("room_id"),
+                case(
+                    (
+                        AttendanceSessionModel.custom_latitude.is_not(None),
+                        literal("Localização do professor"),
+                    ),
+                    else_=RoomModel.name,
+                ).label("room_name"),
                 AttendanceSessionModel.opened_at.label("opened_at"),
                 AttendanceSessionModel.status.label("session_status"),
                 AttendanceRecordModel.id.label("record_id"),
@@ -762,7 +780,12 @@ class SessionSQLAlchemyRepository:
                 EnrollmentModel.id.label("enrollment_id"),
                 EnrollmentModel.status.label("enrollment_status"),
                 EnrollmentModel.deleted.label("enrollment_deleted"),
-                room_id_expr.label("room_id"),
+                case(
+                    (AttendanceSessionModel.custom_latitude.is_not(None), literal(None)),
+                    else_=room_id_expr,
+                ).label("room_id"),
+                AttendanceSessionModel.custom_latitude.label("custom_latitude"),
+                AttendanceSessionModel.custom_longitude.label("custom_longitude"),
                 func.coalesce(
                     AttendanceSessionModel.custom_tolerance_radius_meters,
                     RoomModel.tolerance_radius_meters,
@@ -836,4 +859,6 @@ class SessionSQLAlchemyRepository:
             room_location=row.room_location,
             already_confirmed=row.existing_record_id is not None,
             shared_device_conflict=row.shared_device_id is not None,
+            custom_latitude=row.custom_latitude,
+            custom_longitude=row.custom_longitude,
         )

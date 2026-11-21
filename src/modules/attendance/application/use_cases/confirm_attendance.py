@@ -65,6 +65,7 @@ class ConfirmAttendanceInput:
     device_info: dict | None = None
     evidence_photo_url: str | None = None
 
+
 class ConfirmAttendanceUseCase:
     def __init__(
         self,
@@ -201,8 +202,25 @@ class ConfirmAttendanceUseCase:
         if context.already_confirmed:
             raise ResourceAlreadyExistsException("Presença já confirmada nesta sessão.")
 
-        if not context.room_id and context.room_location is None:
+        has_custom_location = (
+            context.custom_latitude is not None and context.custom_longitude is not None
+        )
+        if not context.room_id and context.room_location is None and not has_custom_location:
             raise BusinessRuleException("Nenhuma sala cadastrada para a chamada ou para a turma.")
+
+        distance_meters: float | None = None
+        if has_custom_location:
+            from modules.attendance.infra.repositories.record_sqlalchemy_repository import (
+                haversine_distance,
+            )
+
+            assert context.custom_latitude is not None and context.custom_longitude is not None
+            distance_meters = haversine_distance(
+                data.latitude,
+                data.longitude,
+                context.custom_latitude,
+                context.custom_longitude,
+            )
 
         flags: list[str] = []
 
@@ -230,7 +248,7 @@ class ConfirmAttendanceUseCase:
             tenant_member_id=context.member_id,
             latitude=data.latitude,
             longitude=data.longitude,
-            room_id=context.room_id,
+            room_id=None if has_custom_location else context.room_id,
             tolerance_radius_meters=context.room_tolerance_radius,
             gps_accuracy_meters=data.gps_accuracy_meters,
             irregularity_flags=flags,
@@ -238,7 +256,8 @@ class ConfirmAttendanceUseCase:
             ip_address=data.ip_address,
             user_agent=data.user_agent,
             device_info=data.device_info,
-            room_location=context.room_location,
+            room_location=None if has_custom_location else context.room_location,
+            distance_meters=distance_meters,
             evidence_photo_url=evidence_destination[1] if evidence_destination else None,
         )
 

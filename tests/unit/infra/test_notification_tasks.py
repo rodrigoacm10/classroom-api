@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from infra.tasks.notification_tasks import _chunk, send_push_notification
 
 
@@ -8,6 +10,12 @@ class TestNotificationTasks:
     Suíte de Testes: Celery Notification Tasks (infra/tasks/notification_tasks.py)
     Valida a execução assíncrona da task Celery e integração com Firebase Cloud Messaging (FCM).
     """
+
+    @pytest.fixture(autouse=True)
+    def mock_firebase_init(self):
+        """Em testes unitários, intercepta a inicialização real do Firebase para evitar dependência de credenciais em disco/env."""
+        with patch("infra.firebase.client.init_firebase"):
+            yield
 
     def test_chunk_utility(self):
         """Deve dividir uma lista em sublistas menores respeitando o tamanho máximo especificado."""
@@ -118,3 +126,16 @@ class TestNotificationTasks:
                 assert res["success_count"] == 1
                 assert res["failure_count"] == 1
                 mock_remove.assert_called_once_with(["token_stale"])
+
+    def test_send_push_notification_propagates_firebase_init_failure(self):
+        """Deve propagar exceção quando a inicialização do Firebase falha no worker."""
+        with patch(
+            "infra.firebase.client.init_firebase", side_effect=RuntimeError("Firebase init failed")
+        ):
+            with pytest.raises(RuntimeError, match="Firebase init failed"):
+                send_push_notification(
+                    title="Aviso",
+                    body="Mensagem",
+                    data={},
+                    fcm_tokens=["token_1"],
+                )

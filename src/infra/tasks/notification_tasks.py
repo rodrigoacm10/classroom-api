@@ -81,6 +81,14 @@ def send_push_notification(
         logger.info("send_push_notification: no tokens, skipping.")
         return {"success_count": 0, "failure_count": 0}
 
+    from infra.firebase.client import init_firebase
+
+    try:
+        init_firebase()
+    except Exception as err:
+        logger.error("Falha ao inicializar Firebase para envio de push: %s", err, exc_info=True)
+        raise
+
     total_success = 0
     total_failure = 0
 

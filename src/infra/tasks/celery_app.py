@@ -52,6 +52,11 @@ def init_worker(**kwargs: object) -> None:
     Executado uma única vez quando cada processo worker é iniciado.
     Garante que o Firebase SDK esteja inicializado ANTES de qualquer task rodar.
     """
+    import logging
+
     from infra.firebase.client import init_firebase
 
-    init_firebase()
+    try:
+        init_firebase()
+    except Exception as err:
+        logging.getLogger(__name__).warning("Erro na inicialização do Firebase no worker: %s", err)

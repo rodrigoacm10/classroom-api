@@ -41,11 +41,11 @@ class AttendancePushNotificationHandler:
             title=f"📋 Chamada Aberta — {event.subject_class_name}",
             body=(
                 f"O professor iniciou a chamada! Você tem {event.duration_minutes} "
-                f"minutos. Código: {event.day_code}"
+                f"minutos para confirmar sua presença."
             ),
             data={
                 "type": "ATTENDANCE_OPENED",
-                "day_code": event.day_code,
+                "session_id": str(event.session_id),
                 "subject_class_name": event.subject_class_name,
                 "duration_minutes": str(event.duration_minutes),
             },
