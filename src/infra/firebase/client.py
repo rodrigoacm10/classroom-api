@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 
 import firebase_admin
 from firebase_admin import credentials
 
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _build_credentials() -> credentials.Base:
@@ -16,7 +19,22 @@ def _build_credentials() -> credentials.Base:
       2. FIREBASE_CREDENTIALS_PATH — caminho para arquivo .json (desenvolvimento local)
     """
     if settings.firebase_credentials_json:
-        cred_dict = json.loads(settings.firebase_credentials_json)
+        raw_json = settings.firebase_credentials_json.strip()
+
+        # Remove aspas externas acidentais caso a env tenha sido gravada como '{"..."}' ou "{\"...\":...}"
+        if (raw_json.startswith("'") and raw_json.endswith("'")) or (
+            raw_json.startswith('"') and raw_json.endswith('"') and not raw_json.endswith('}"')
+        ):
+            raw_json = raw_json[1:-1].strip()
+
+        cred_dict = json.loads(raw_json)
+
+        # Trata private_key com \n escapado (\\n), muito comum em variáveis de ambiente
+        if isinstance(cred_dict, dict) and "private_key" in cred_dict:
+            pk = cred_dict["private_key"]
+            if isinstance(pk, str) and "\\n" in pk:
+                cred_dict["private_key"] = pk.replace("\\n", "\n")
+
         return credentials.Certificate(cred_dict)
 
     cred_path = settings.firebase_credentials_path
@@ -36,5 +54,10 @@ def init_firebase() -> None:
     (guarda protegido por firebase_admin._apps).
     """
     if not firebase_admin._apps:
-        cred = _build_credentials()
-        firebase_admin.initialize_app(cred)
+        try:
+            cred = _build_credentials()
+            firebase_admin.initialize_app(cred)
+            logger.info("Firebase Admin SDK inicializado com sucesso.")
+        except Exception as err:
+            logger.error("Falha ao inicializar o Firebase Admin SDK: %s", err, exc_info=True)
+            raise
