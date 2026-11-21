@@ -23,11 +23,13 @@ def _build_credentials() -> credentials.Base:
 
         # Remove aspas externas acidentais caso a env tenha sido gravada como '{"..."}' ou "{\"...\":...}"
         if (raw_json.startswith("'") and raw_json.endswith("'")) or (
-            raw_json.startswith('"') and raw_json.endswith('"') and not raw_json.endswith('}"')
+            raw_json.startswith('"') and raw_json.endswith('"')
         ):
             raw_json = raw_json[1:-1].strip()
 
         cred_dict = json.loads(raw_json)
+        if isinstance(cred_dict, str):
+            cred_dict = json.loads(cred_dict)
 
         # Trata private_key com \n escapado (\\n), muito comum em variáveis de ambiente
         if isinstance(cred_dict, dict) and "private_key" in cred_dict:
