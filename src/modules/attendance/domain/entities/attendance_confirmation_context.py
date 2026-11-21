@@ -27,3 +27,5 @@ class AttendanceConfirmationContext:
     room_location: Any | None
     already_confirmed: bool
     shared_device_conflict: bool
+    custom_latitude: float | None = None
+    custom_longitude: float | None = None
