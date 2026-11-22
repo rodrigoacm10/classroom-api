@@ -2,7 +2,8 @@ name: classroom-api
 
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    build: ./docker/postgres
+    image: classroom-postgres-postgis-pgvector:16-3.4
     container_name: classroom-postgres
     restart: "no"
     ports:
