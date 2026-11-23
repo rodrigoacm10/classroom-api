@@ -3,6 +3,8 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
+FeedbackRating = Literal["up", "down"]
+
 
 @dataclass
 class ChatMessage:
@@ -18,4 +20,7 @@ class ChatMessage:
     tokens_in: int | None = None
     tokens_out: int | None = None
     latency_ms: int | None = None
+    feedback_rating: FeedbackRating | None = None
+    feedback_comment: str | None = None
+    feedback_updated_at: datetime | None = None
     created_at: datetime | None = None
