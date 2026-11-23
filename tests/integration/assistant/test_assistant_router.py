@@ -332,3 +332,53 @@ class TestAssistantRouter:
         assert detail["messages"][1]["tokens_in"] == 290
         assert detail["messages"][1]["tokens_out"] == 35
         assert detail["messages"][1]["sources"][0]["doc_slug"] == "04-chamadas-ao-vivo"
+
+        # Verifica PUT /assistant/conversations/{id}/messages/{msg_id}/feedback
+        user_msg_id = detail["messages"][0]["id"]
+        assistant_msg_id = detail["messages"][1]["id"]
+
+        fb_up = await client.put(
+            f"/assistant/conversations/{conv_id}/messages/{assistant_msg_id}/feedback",
+            json={"rating": "up"},
+            headers=headers,
+        )
+        assert fb_up.status_code == 200
+        assert fb_up.json()["feedback_rating"] == "up"
+
+        # GET conversa agora traz feedback_rating persistido
+        detail_after = await client.get(f"/assistant/conversations/{conv_id}", headers=headers)
+        assert detail_after.json()["messages"][1]["feedback_rating"] == "up"
+
+        # Toggle off (rating: null)
+        fb_clear = await client.put(
+            f"/assistant/conversations/{conv_id}/messages/{assistant_msg_id}/feedback",
+            json={"rating": None},
+            headers=headers,
+        )
+        assert fb_clear.status_code == 200
+        assert fb_clear.json()["feedback_rating"] is None
+
+        # Avaliar mensagem do usuário retorna 400
+        fb_user_msg = await client.put(
+            f"/assistant/conversations/{conv_id}/messages/{user_msg_id}/feedback",
+            json={"rating": "down"},
+            headers=headers,
+        )
+        assert fb_user_msg.status_code == 400
+
+        # Outro usuário na mesma tenant recebe 404
+        other_user = await UserFactory.create(session)
+        await TenantFactory.create_member(
+            session, tenant_id=tenant.id, user_id=other_user.id, role=UserRole.PROFESSOR
+        )
+        other_token = create_access_token(
+            user_id=other_user.id,
+            tenant_id=tenant.id,
+            role=UserRole.PROFESSOR.value,
+        )
+        fb_foreign = await client.put(
+            f"/assistant/conversations/{conv_id}/messages/{assistant_msg_id}/feedback",
+            json={"rating": "up"},
+            headers={"Authorization": f"Bearer {other_token}"},
+        )
+        assert fb_foreign.status_code == 404
