@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -10,11 +11,14 @@ from modules.assistant.application.use_cases.conversation.send_message import (
     SendMessageInput,
     SendMessageUseCase,
 )
+from modules.assistant.application.use_cases.conversation.summarize_conversation import (
+    SummarizeConversationUseCase,
+)
 from modules.assistant.application.use_cases.knowledge.retrieve_knowledge import (
     RetrieveKnowledgeUseCase,
 )
 from modules.assistant.domain.entities.chat_conversation import ChatConversation
-from modules.assistant.domain.entities.chat_message import ChatMessage
+from modules.assistant.domain.entities.chat_message import ChatMessage, FeedbackRating
 from modules.assistant.domain.entities.knowledge_chunk import KnowledgeChunk, RetrievedChunk
 from modules.assistant.domain.entities.llm_events import LLMStreamEvent, ToolCallRequest
 from modules.assistant.infra.gemini.gemini_llm_provider import GeminiLLMProvider
@@ -133,6 +137,80 @@ class FakeConversationRepository:
         conv_msgs = [m for m in self.messages if m.conversation_id == conversation_id]
         return conv_msgs[-limit:]
 
+    async def count_messages(self, *, conversation_id: UUID) -> int:
+        return sum(1 for m in self.messages if m.conversation_id == conversation_id)
+
+    async def get_messages_slice(
+        self,
+        *,
+        conversation_id: UUID,
+        offset: int,
+        limit: int,
+    ) -> list[ChatMessage]:
+        if limit <= 0:
+            return []
+        conv_msgs = [m for m in self.messages if m.conversation_id == conversation_id]
+        return conv_msgs[offset : offset + limit]
+
+    async def update_summary(
+        self,
+        *,
+        conversation_id: UUID,
+        summary: str,
+        summary_message_count: int,
+    ) -> None:
+        if conversation_id in self.conversations:
+            self.conversations[conversation_id].summary = summary
+            self.conversations[conversation_id].summary_message_count = summary_message_count
+
+    async def get_message_by_id(
+        self,
+        *,
+        conversation_id: UUID,
+        message_id: UUID,
+        tenant_id: UUID,
+        user_id: UUID,
+    ) -> ChatMessage | None:
+        conv = self.conversations.get(conversation_id)
+        if conv is None or conv.tenant_id != tenant_id or conv.user_id != user_id:
+            return None
+        return next(
+            (
+                m
+                for m in self.messages
+                if m.conversation_id == conversation_id and m.id == message_id
+            ),
+            None,
+        )
+
+    async def set_message_feedback(
+        self,
+        *,
+        conversation_id: UUID,
+        message_id: UUID,
+        tenant_id: UUID,
+        user_id: UUID,
+        rating: FeedbackRating | None,
+        comment: str | None = None,
+    ) -> ChatMessage | None:
+        msg = await self.get_message_by_id(
+            conversation_id=conversation_id,
+            message_id=message_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+        )
+        if msg is None:
+            return None
+        if rating is None:
+            msg.feedback_rating = None
+            msg.feedback_comment = None
+            msg.feedback_updated_at = None
+        else:
+            msg.feedback_rating = rating
+            msg.feedback_comment = comment
+            msg.feedback_updated_at = datetime.now(UTC)
+        return msg
+
 
 class FakeLLMProvider:
     """Fake determinístico que reproduz uma sequência configurada de turnos de streaming."""
@@ -215,10 +293,15 @@ class TestSendMessageUseCase:
             ]
         )
 
+        summarize_uc = SummarizeConversationUseCase(
+            conversation_repo=conv_repo,
+            llm_provider=llm,
+        )
         use_case = SendMessageUseCase(
             conversation_repo=conv_repo,
             retrieve_knowledge_use_case=retrieve_uc,
             llm_provider=llm,
+            summarize_conversation_use_case=summarize_uc,
         )
 
         stream = await use_case.execute(
@@ -309,10 +392,15 @@ class TestSendMessageUseCase:
             ]
         )
 
+        summarize_uc = SummarizeConversationUseCase(
+            conversation_repo=conv_repo,
+            llm_provider=llm,
+        )
         use_case = SendMessageUseCase(
             conversation_repo=conv_repo,
             retrieve_knowledge_use_case=retrieve_uc,
             llm_provider=llm,
+            summarize_conversation_use_case=summarize_uc,
         )
 
         stream = await use_case.execute(
@@ -393,10 +481,15 @@ class TestSendMessageUseCase:
         ]
         llm = FakeLLMProvider(turns=[endless_tool_turn for _ in range(10)])
 
+        summarize_uc = SummarizeConversationUseCase(
+            conversation_repo=conv_repo,
+            llm_provider=llm,
+        )
         use_case = SendMessageUseCase(
             conversation_repo=conv_repo,
             retrieve_knowledge_use_case=retrieve_uc,
             llm_provider=llm,
+            summarize_conversation_use_case=summarize_uc,
             max_tool_iterations=3,
         )
 
@@ -438,10 +531,15 @@ class TestSendMessageUseCase:
         )
         llm = FakeLLMProvider(turns=[], fail_with=RuntimeError("Gemini timeout"))
 
+        summarize_uc = SummarizeConversationUseCase(
+            conversation_repo=conv_repo,
+            llm_provider=llm,
+        )
         use_case = SendMessageUseCase(
             conversation_repo=conv_repo,
             retrieve_knowledge_use_case=retrieve_uc,
             llm_provider=llm,
+            summarize_conversation_use_case=summarize_uc,
         )
 
         stream = await use_case.execute(
@@ -469,10 +567,16 @@ class TestSendMessageUseCase:
             knowledge_repo=FakeKnowledgeRepository(),
             embedding_provider=FakeEmbeddingProvider(),
         )
+        fake_llm = FakeLLMProvider(turns=[])
+        summarize_uc = SummarizeConversationUseCase(
+            conversation_repo=conv_repo,
+            llm_provider=fake_llm,
+        )
         use_case = SendMessageUseCase(
             conversation_repo=conv_repo,
             retrieve_knowledge_use_case=retrieve_uc,
-            llm_provider=FakeLLMProvider(turns=[]),
+            llm_provider=fake_llm,
+            summarize_conversation_use_case=summarize_uc,
         )
 
         with pytest.raises(BusinessRuleException):
@@ -496,6 +600,124 @@ class TestSendMessageUseCase:
                     content="Pergunta em conversa inexistente",
                 )
             )
+
+    async def test_live_data_tools_multi_step_chain_emits_querying_data_and_scopes_role_tools(
+        self,
+    ) -> None:
+        from unittest.mock import AsyncMock
+
+        tenant_id = uuid4()
+        user_id = uuid4()
+        conv_id = uuid4()
+        class_id = uuid4()
+        session_id = uuid4()
+
+        conv_repo = FakeConversationRepository()
+        await conv_repo.create(
+            ChatConversation(
+                id=conv_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                title="Nova conversa",
+            )
+        )
+        retrieve_uc = RetrieveKnowledgeUseCase(
+            knowledge_repo=FakeKnowledgeRepository(),
+            embedding_provider=FakeEmbeddingProvider(),
+        )
+
+        fake_executor = AsyncMock()
+        fake_executor.execute.side_effect = [
+            f"Turmas encontradas: Física I | ID: {class_id}",
+            f"Sessão {session_id} | Turma: Física I | Status: closed",
+            "Auditoria: PRESENTE: 20 | IRREGULAR: 2 | AUSENTE: 3",
+        ]
+
+        llm = FakeLLMProvider(
+            turns=[
+                [
+                    LLMStreamEvent(
+                        kind="tool_call",
+                        tool_call=ToolCallRequest(
+                            name="list_classes",
+                            arguments={"search": "Física"},
+                        ),
+                    )
+                ],
+                [
+                    LLMStreamEvent(
+                        kind="tool_call",
+                        tool_call=ToolCallRequest(
+                            name="list_attendance_sessions",
+                            arguments={"subject_class_id": str(class_id)},
+                        ),
+                    )
+                ],
+                [
+                    LLMStreamEvent(
+                        kind="tool_call",
+                        tool_call=ToolCallRequest(
+                            name="get_session_audit_summary",
+                            arguments={
+                                "subject_class_id": str(class_id),
+                                "session_id": str(session_id),
+                            },
+                        ),
+                    )
+                ],
+                [
+                    LLMStreamEvent(
+                        kind="delta",
+                        text="Na última chamada de Física I houve 2 presenças irregulares e 3 faltas.",
+                    ),
+                    LLMStreamEvent(kind="usage", tokens_in=500, tokens_out=30),
+                ],
+            ]
+        )
+
+        summarize_uc = SummarizeConversationUseCase(
+            conversation_repo=conv_repo,
+            llm_provider=llm,
+        )
+        use_case = SendMessageUseCase(
+            conversation_repo=conv_repo,
+            retrieve_knowledge_use_case=retrieve_uc,
+            llm_provider=llm,
+            summarize_conversation_use_case=summarize_uc,
+            tool_executor=fake_executor,
+        )
+
+        stream = await use_case.execute(
+            SendMessageInput(
+                conversation_id=conv_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                user_role=UserRole.PROFESSOR,
+                content="Há irregulares na última aula de Física?",
+            )
+        )
+        events = [ev async for ev in stream]
+
+        status_events = [ev for ev in events if ev.event == "status"]
+        assert [ev.data for ev in status_events] == [
+            {"stage": "querying_data", "tool": "list_classes"},
+            {"stage": "querying_data", "tool": "list_attendance_sessions"},
+            {"stage": "querying_data", "tool": "get_session_audit_summary"},
+        ]
+        assert events[-1].event == "done"
+        assert len(events[-1].data["tool_calls_used"]) == 3
+
+        # Verify role-filtered tools were passed to LLMProvider (8 for PROFESSOR, no admin-only tool)
+        first_call_tools = llm.recorded_calls[0]["tools"]
+        tool_names = {t["name"] for t in first_call_tools}
+        assert len(tool_names) == 8
+        assert "get_institution_members_summary" not in tool_names
+
+        # Verify ToolExecutionContext was injected server-side
+        first_exec_kwargs = fake_executor.execute.call_args_list[0].kwargs
+        assert first_exec_kwargs["ctx"].tenant_id == tenant_id
+        assert first_exec_kwargs["ctx"].user_id == user_id
+        assert first_exec_kwargs["ctx"].user_role == UserRole.PROFESSOR
 
 
 class TestGeminiLLMProviderValidation:
