@@ -32,6 +32,9 @@ class ChatMessageResponse(BaseModel):
     tokens_in: int | None = None
     tokens_out: int | None = None
     latency_ms: int | None = None
+    feedback_rating: Literal["up", "down"] | None = None
+    feedback_comment: str | None = None
+    feedback_updated_at: datetime | None = None
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -64,3 +67,22 @@ class SendMessageRequest(BaseModel):
         max_length=255,
         description="Rota atual do painel web (ex.: '/dashboard/salas').",
     )
+
+
+class MessageFeedbackRequest(BaseModel):
+    rating: Literal["up", "down"] | None = Field(
+        default=None,
+        description="Avaliação da resposta ('up', 'down' ou null para remover).",
+    )
+    comment: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Comentário opcional sobre a resposta do assistente.",
+    )
+
+
+class MessageFeedbackResponse(BaseModel):
+    message_id: UUID
+    feedback_rating: Literal["up", "down"] | None = None
+    feedback_comment: str | None = None
+    feedback_updated_at: datetime | None = None
