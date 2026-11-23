@@ -1,6 +1,9 @@
 from infra.database.models.attendance_record import AttendanceRecordModel
 from infra.database.models.attendance_session import AttendanceSessionModel
+from infra.database.models.chat_conversation import ChatConversationModel
+from infra.database.models.chat_message import ChatMessageModel
 from infra.database.models.enrollment import EnrollmentModel
+from infra.database.models.knowledge_chunk import KnowledgeChunkModel
 from infra.database.models.report_generation_log import ReportGenerationLogModel
 from infra.database.models.room import RoomModel
 from infra.database.models.subject_class import SubjectClassModel
@@ -21,4 +24,7 @@ __all__ = [
     "AttendanceRecordModel",
     "UserFCMTokenModel",
     "ReportGenerationLogModel",
+    "KnowledgeChunkModel",
+    "ChatConversationModel",
+    "ChatMessageModel",
 ]
