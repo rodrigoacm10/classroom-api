@@ -2,7 +2,7 @@ from typing import Protocol
 from uuid import UUID
 
 from modules.assistant.domain.entities.chat_conversation import ChatConversation
-from modules.assistant.domain.entities.chat_message import ChatMessage
+from modules.assistant.domain.entities.chat_message import ChatMessage, FeedbackRating
 
 
 class ConversationRepository(Protocol):
@@ -46,3 +46,41 @@ class ConversationRepository(Protocol):
         conversation_id: UUID,
         limit: int = 8,
     ) -> list[ChatMessage]: ...
+
+    async def count_messages(self, *, conversation_id: UUID) -> int: ...
+
+    async def get_messages_slice(
+        self,
+        *,
+        conversation_id: UUID,
+        offset: int,
+        limit: int,
+    ) -> list[ChatMessage]: ...
+
+    async def update_summary(
+        self,
+        *,
+        conversation_id: UUID,
+        summary: str,
+        summary_message_count: int,
+    ) -> None: ...
+
+    async def get_message_by_id(
+        self,
+        *,
+        conversation_id: UUID,
+        message_id: UUID,
+        tenant_id: UUID,
+        user_id: UUID,
+    ) -> ChatMessage | None: ...
+
+    async def set_message_feedback(
+        self,
+        *,
+        conversation_id: UUID,
+        message_id: UUID,
+        tenant_id: UUID,
+        user_id: UUID,
+        rating: FeedbackRating | None,
+        comment: str | None = None,
+    ) -> ChatMessage | None: ...
