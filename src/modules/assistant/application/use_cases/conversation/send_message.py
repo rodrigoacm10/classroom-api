@@ -6,9 +6,17 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from modules.assistant.application.prompts import build_system_prompt
+from modules.assistant.application.tool_executor import (
+    AssistantToolExecutor,
+    ToolExecutionContext,
+)
 from modules.assistant.application.use_cases.conversation.create_conversation import (
     DEFAULT_CONVERSATION_TITLE,
     derive_conversation_title,
+)
+from modules.assistant.application.use_cases.conversation.summarize_conversation import (
+    SummarizeConversationInput,
+    SummarizeConversationUseCase,
 )
 from modules.assistant.application.use_cases.knowledge.retrieve_knowledge import (
     RetrieveKnowledgeInput,
@@ -20,6 +28,7 @@ from modules.assistant.domain.entities.llm_events import ToolCallRequest
 from modules.assistant.domain.repositories.conversation_repository import ConversationRepository
 from modules.assistant.domain.services.llm_provider import LLMProvider
 from modules.assistant.domain.tools import (
+    LIVE_DATA_TOOL_NAMES,
     SEARCH_LOCUS_DOCS_TOOL_NAME,
     format_retrieved_chunks_for_tool,
     get_assistant_tools,
@@ -29,7 +38,7 @@ from shared.exceptions import BusinessRuleException, ResourceNotFoundException
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ITERATIONS = 3
+MAX_TOOL_ITERATIONS = 4
 DEFAULT_HISTORY_WINDOW = 8
 FALLBACK_MAX_ITERATIONS_TEXT = (
     "Não foi possível concluir a consulta à documentação neste momento. "
@@ -64,12 +73,16 @@ class SendMessageUseCase:
         conversation_repo: ConversationRepository,
         retrieve_knowledge_use_case: RetrieveKnowledgeUseCase,
         llm_provider: LLMProvider,
+        summarize_conversation_use_case: SummarizeConversationUseCase,
+        tool_executor: AssistantToolExecutor | None = None,
         history_window: int = DEFAULT_HISTORY_WINDOW,
         max_tool_iterations: int = MAX_TOOL_ITERATIONS,
     ) -> None:
         self._conversation_repo = conversation_repo
         self._retrieve_knowledge = retrieve_knowledge_use_case
         self._llm_provider = llm_provider
+        self._tool_executor = tool_executor
+        self._summarize_conversation = summarize_conversation_use_case
         self._history_window = history_window
         self._max_tool_iterations = max_tool_iterations
 
@@ -111,6 +124,8 @@ class SendMessageUseCase:
             data=data,
             cleaned_content=cleaned_content,
             recent_messages=recent_messages,
+            conversation_summary=conversation.summary,
+            summary_message_count=conversation.summary_message_count,
         )
 
     async def _stream_agentic_loop(
@@ -119,13 +134,16 @@ class SendMessageUseCase:
         data: SendMessageInput,
         cleaned_content: str,
         recent_messages: list[ChatMessage],
+        conversation_summary: str | None = None,
+        summary_message_count: int = 0,
     ) -> AsyncIterator[AssistantSSEEvent]:
         start_perf = time.perf_counter()
         system_prompt = build_system_prompt(
             user_role=data.user_role,
             current_route=data.current_route,
+            conversation_summary=conversation_summary,
         )
-        tools = get_assistant_tools()
+        tools = get_assistant_tools(data.user_role)
 
         llm_messages: list[dict[str, Any]] = [
             {"role": msg.role, "content": msg.content} for msg in recent_messages
@@ -220,6 +238,23 @@ class SendMessageUseCase:
                                     routes=list(chunk.routes),
                                 )
                         tool_output = format_retrieved_chunks_for_tool(retrieved)
+                    elif tc.name in LIVE_DATA_TOOL_NAMES and self._tool_executor is not None:
+                        yield AssistantSSEEvent(
+                            event="status",
+                            data={
+                                "stage": "querying_data",
+                                "tool": tc.name,
+                            },
+                        )
+                        tool_output = await self._tool_executor.execute(
+                            ctx=ToolExecutionContext(
+                                tenant_id=data.tenant_id,
+                                user_id=data.user_id,
+                                user_role=data.user_role,
+                            ),
+                            tool_name=tc.name,
+                            arguments=dict(tc.arguments),
+                        )
                     else:
                         tool_output = f"Ferramenta '{tc.name}' não suportada."
 
@@ -289,3 +324,18 @@ class SendMessageUseCase:
                 "tool_calls_used": tool_calls_used,
             },
         )
+
+        try:
+            await self._summarize_conversation.execute(
+                SummarizeConversationInput(
+                    conversation_id=data.conversation_id,
+                    existing_summary=conversation_summary,
+                    summary_message_count=summary_message_count,
+                )
+            )
+        except Exception:
+            logger.warning(
+                "Falha ao atualizar resumo da conversa %s; resposta do usuário preservada.",
+                data.conversation_id,
+                exc_info=True,
+            )
