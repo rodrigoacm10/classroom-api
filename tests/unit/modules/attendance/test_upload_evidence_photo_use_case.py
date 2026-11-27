@@ -12,13 +12,12 @@ from shared.enums.session_status import SessionStatus
 from shared.enums.upload_status import UploadStatus
 from shared.exceptions import BusinessRuleException, ResourceNotFoundException
 from tests.unit.fakes.fake_attendance_session_repository import FakeAttendanceSessionRepository
-from tests.unit.fakes.fake_storage_service import FakeStorageService
 from tests.unit.fakes.fake_evidence_photo_upload_repository import FakeEvidencePhotoUploadRepository
+from tests.unit.fakes.fake_storage_service import FakeStorageService
 
 
 @pytest.mark.asyncio
 class TestUploadEvidencePhotoUseCase:
-
     async def _setup_fixtures(self, status: SessionStatus = SessionStatus.OPEN):
         session_repo = FakeAttendanceSessionRepository()
         upload_repo = FakeEvidencePhotoUploadRepository()

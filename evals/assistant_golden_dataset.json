@@ -1,0 +1,209 @@
+[
+  {
+    "id": "eval-01",
+    "category": "visao_geral",
+    "role": "professor",
+    "query": "O que é o Locus e como funciona a confirmação de presença por geolocalização?",
+    "expected_doc_slugs": ["01-visao-geral-e-papeis"],
+    "expected_keywords": ["geofencing", "6 caracteres", "GPS"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-02",
+    "category": "visao_geral",
+    "role": "professor",
+    "query": "Como faço para trocar de instituição ou faculdade sem precisar sair da minha conta?",
+    "expected_doc_slugs": ["01-visao-geral-e-papeis"],
+    "expected_keywords": ["/tenants", "Alternar Instituição"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-03",
+    "category": "visao_geral",
+    "role": "coordenador",
+    "query": "Onde acesso meus dados cadastrais e configurações de segurança do meu perfil?",
+    "expected_doc_slugs": ["01-visao-geral-e-papeis"],
+    "expected_keywords": ["/dashboard/perfil", "Meu Perfil"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-04",
+    "category": "salas_geofence",
+    "role": "admin",
+    "query": "Como cadastrar uma nova sala física com coordenadas GPS e raio de tolerância?",
+    "expected_doc_slugs": ["02-salas-e-geofence"],
+    "expected_keywords": ["/dashboard/salas", "raio", "metros"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-05",
+    "category": "salas_geofence",
+    "role": "professor",
+    "query": "Qual é o raio de tolerância recomendado em metros para configurar o geofence de uma sala ou auditório?",
+    "expected_doc_slugs": ["02-salas-e-geofence"],
+    "expected_keywords": ["/dashboard/salas", "metros", "raio"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-06",
+    "category": "salas_geofence",
+    "role": "professor",
+    "query": "Posso excluir uma sala cadastrada no sistema sendo professor?",
+    "expected_doc_slugs": ["02-salas-e-geofence"],
+    "expected_keywords": ["administrador", "/dashboard/salas"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-07",
+    "category": "turmas_matriculas",
+    "role": "professor",
+    "query": "Como criar uma nova turma e vincular uma sala física padrão a ela?",
+    "expected_doc_slugs": ["03-turmas-e-matriculas"],
+    "expected_keywords": ["/dashboard/turmas", "sala"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-08",
+    "category": "turmas_matriculas",
+    "role": "admin",
+    "query": "Como matricular alunos em uma turma existente ou trancar a matrícula de um estudante?",
+    "expected_doc_slugs": ["03-turmas-e-matriculas"],
+    "expected_keywords": ["/dashboard/turmas", "matrícula"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-09",
+    "category": "turmas_matriculas",
+    "role": "coordenador",
+    "query": "Como consultar a ficha individual de um aluno e ver em quais turmas ele está matriculado?",
+    "expected_doc_slugs": ["03-turmas-e-matriculas", "06-relatorios-de-frequencia"],
+    "expected_keywords": ["/dashboard/alunos"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-10",
+    "category": "chamadas_ao_vivo",
+    "role": "professor",
+    "query": "Como abrir uma chamada ao vivo para minha turma no painel web?",
+    "expected_doc_slugs": ["04-chamadas-ao-vivo"],
+    "expected_keywords": ["/dashboard/chamadas/nova", "6 caracteres"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-11",
+    "category": "chamadas_ao_vivo",
+    "role": "professor",
+    "query": "Para que serve o código de 6 caracteres gerado quando inicio uma chamada?",
+    "expected_doc_slugs": ["04-chamadas-ao-vivo", "01-visao-geral-e-papeis"],
+    "expected_keywords": ["6 caracteres", "aplicativo"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-12",
+    "category": "chamadas_ao_vivo",
+    "role": "professor",
+    "query": "Posso usar a minha localização GPS atual do navegador ao abrir uma chamada em vez da sala padrão?",
+    "expected_doc_slugs": ["04-chamadas-ao-vivo"],
+    "expected_keywords": ["/dashboard/chamadas/nova", "localização"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-13",
+    "category": "chamadas_ao_vivo",
+    "role": "admin",
+    "query": "Qual a diferença entre encerrar manualmente uma chamada aberta e cancelar a chamada?",
+    "expected_doc_slugs": ["04-chamadas-ao-vivo"],
+    "expected_keywords": ["encerrar", "cancelar"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-14",
+    "category": "auditoria_presenca",
+    "role": "professor",
+    "query": "Qual a diferença entre uma presença confirmada, irregular e rejeitada?",
+    "expected_doc_slugs": ["05-auditoria-de-presenca"],
+    "expected_keywords": ["Confirmada", "Irregular", "Rejeitada"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-15",
+    "category": "auditoria_presenca",
+    "role": "professor",
+    "query": "Por que a presença de um aluno cai como irregular para auditoria?",
+    "expected_doc_slugs": ["05-auditoria-de-presenca"],
+    "expected_keywords": ["raio", "GPS"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-16",
+    "category": "auditoria_presenca",
+    "role": "admin",
+    "query": "Como aprovar ou rejeitar uma presença irregular e ver a foto de evidência e o mapa de auditoria?",
+    "expected_doc_slugs": ["05-auditoria-de-presenca"],
+    "expected_keywords": ["/dashboard/chamadas", "evidência"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-17",
+    "category": "relatorios_frequencia",
+    "role": "professor",
+    "query": "Como gerar o relatório de frequência de uma turma e exportar ou imprimir?",
+    "expected_doc_slugs": ["06-relatorios-de-frequencia"],
+    "expected_keywords": ["/dashboard/relatorios", "75%"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-18",
+    "category": "relatorios_frequencia",
+    "role": "coordenador",
+    "query": "Como funciona o limite de 75% de presença e quando um aluno entra em situação de risco por faltas?",
+    "expected_doc_slugs": ["06-relatorios-de-frequencia"],
+    "expected_keywords": ["75%", "/dashboard/relatorios"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-19",
+    "category": "relatorios_frequencia",
+    "role": "professor",
+    "query": "Quando eu rejeito uma presença irregular na auditoria, ela conta como falta no relatório de 75%?",
+    "expected_doc_slugs": ["06-relatorios-de-frequencia", "05-auditoria-de-presenca"],
+    "expected_keywords": ["falta", "75%"],
+    "forbidden_routes": ["/dashboard/convites"]
+  },
+  {
+    "id": "eval-20",
+    "category": "membros_convites",
+    "role": "admin",
+    "query": "Como enviar um convite por e-mail para cadastrar um novo professor ou aluno na instituição?",
+    "expected_doc_slugs": ["07-membros-convites-e-instituicao"],
+    "expected_keywords": ["/dashboard/convites", "72 horas"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-21",
+    "category": "membros_convites",
+    "role": "coordenador",
+    "query": "Qual é o prazo de validade do link de convite enviado por e-mail e como revogar um convite pendente?",
+    "expected_doc_slugs": ["07-membros-convites-e-instituicao"],
+    "expected_keywords": ["72 horas", "/dashboard/convites"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-22",
+    "category": "membros_convites",
+    "role": "admin",
+    "query": "Onde consigo visualizar a lista de membros da instituição e acessar as configurações gerais?",
+    "expected_doc_slugs": ["07-membros-convites-e-instituicao"],
+    "expected_keywords": ["/dashboard/membros", "/dashboard/configuracoes"],
+    "forbidden_routes": []
+  },
+  {
+    "id": "eval-23",
+    "category": "role_boundary",
+    "role": "professor",
+    "query": "Quero enviar um convite para um novo professor entrar na instituição, quais papéis podem acessar a tela de convites?",
+    "expected_doc_slugs": ["01-visao-geral-e-papeis"],
+    "expected_keywords": ["Administrador", "convites"],
+    "forbidden_routes": ["/dashboard/convites"]
+  }
+]

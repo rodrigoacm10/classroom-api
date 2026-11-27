@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from sqlalchemy import text
@@ -42,9 +42,7 @@ async def _create_attendance_session(session):
         Room(tenant_id=tenant.id, name="Sala 1", latitude=-8.0476, longitude=-34.8770)
     )
     subject_class = await SubjectClassSQLAlchemyRepository(session).save(
-        SubjectClass(
-            tenant_id=tenant.id, name="Turma A", discipline_name="Math", room_id=room.id
-        )
+        SubjectClass(tenant_id=tenant.id, name="Turma A", discipline_name="Math", room_id=room.id)
     )
     att_session = await SessionSQLAlchemyRepository(session).save(
         AttendanceSession(
@@ -68,7 +66,6 @@ def _make_upload(session_id: UUID, key: str, age_minutes: int = 0) -> EvidencePh
 
 @pytest.mark.asyncio
 class TestEvidencePhotoUploadSQLAlchemyRepository:
-
     async def test_save_and_find_by_id_and_url(self, session):
         """Deve persistir o upload como pending e encontrá-lo por id e por url."""
         _, _, att_session = await _create_attendance_session(session)
@@ -101,7 +98,9 @@ class TestEvidencePhotoUploadSQLAlchemyRepository:
 
         # Confirmed sem attendance_record_id: a coluna é nullable, e assim evitamos
         # criar um registro de presença só para satisfazer a FK neste teste.
-        old_confirmed = _make_upload(att_session.id, "evidence/s1/old-confirmed.jpg", TTL_MINUTES * 5)
+        old_confirmed = _make_upload(
+            att_session.id, "evidence/s1/old-confirmed.jpg", TTL_MINUTES * 5
+        )
         old_confirmed.status = UploadStatus.CONFIRMED
 
         old_expired = _make_upload(att_session.id, "evidence/s1/old-expired.jpg", TTL_MINUTES * 5)
@@ -191,7 +190,9 @@ class TestEvidencePhotoUploadSQLAlchemyRepository:
         """Depois de expire() + save, o upload sai da consulta de pendentes."""
         _, _, att_session = await _create_attendance_session(session)
         repo = EvidencePhotoUploadSQLAlchemyRepository(session)
-        upload = await repo.save(_make_upload(att_session.id, "evidence/s1/c.jpg", TTL_MINUTES + 30))
+        upload = await repo.save(
+            _make_upload(att_session.id, "evidence/s1/c.jpg", TTL_MINUTES + 30)
+        )
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=TTL_MINUTES)
 
         assert len(await repo.list_by_status_before(UploadStatus.PENDING, cutoff)) == 1
@@ -226,7 +227,9 @@ class TestEvidencePhotoUploadSQLAlchemyRepository:
 
     async def test_upload_status_pg_enum_rejects_member_name_pending(self, session):
         """O Postgres deve rejeitar o name 'PENDING': só o value 'pending' é válido."""
-        with pytest.raises(DBAPIError, match='invalid input value for enum upload_status: "PENDING"'):
+        with pytest.raises(
+            DBAPIError, match='invalid input value for enum upload_status: "PENDING"'
+        ):
             await session.execute(text("SELECT 'PENDING'::upload_status"))
 
     async def test_cleanup_use_case_with_real_repository(self, session):

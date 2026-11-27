@@ -9,7 +9,6 @@ from shared.enums.upload_status import UploadStatus
 
 
 class FakeEvidencePhotoUploadRepository(EvidencePhotoUploadRepository):
-
     def __init__(self) -> None:
         self.uploads: dict[UUID, EvidencePhotoUpload] = {}
 
@@ -29,7 +28,4 @@ class FakeEvidencePhotoUploadRepository(EvidencePhotoUploadRepository):
     async def list_by_status_before(
         self, status: UploadStatus, before: datetime
     ) -> list[EvidencePhotoUpload]:
-        return [
-            u for u in self.uploads.values()
-            if u.status == status and u.uploaded_at < before
-        ]
+        return [u for u in self.uploads.values() if u.status == status and u.uploaded_at < before]

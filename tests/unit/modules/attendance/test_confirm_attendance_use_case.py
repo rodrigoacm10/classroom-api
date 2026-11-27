@@ -16,8 +16,8 @@ from modules.tenant.domain.entities.tenant_member import TenantMember
 from shared.enums.enrollment_status import EnrollmentStatus
 from shared.enums.record_status import RecordStatus
 from shared.enums.session_status import SessionStatus
-from shared.enums.user_role import UserRole
 from shared.enums.upload_status import UploadStatus
+from shared.enums.user_role import UserRole
 from shared.exceptions import (
     BusinessRuleException,
     ForbiddenException,
@@ -27,12 +27,12 @@ from tests.factories.tenant_factory import TenantFactory
 from tests.unit.fakes.fake_attendance_record_repository import FakeAttendanceRecordRepository
 from tests.unit.fakes.fake_attendance_session_repository import FakeAttendanceSessionRepository
 from tests.unit.fakes.fake_enrollment_repository import FakeEnrollmentRepository
+from tests.unit.fakes.fake_evidence_photo_upload_repository import FakeEvidencePhotoUploadRepository
 from tests.unit.fakes.fake_room_repository import FakeRoomRepository
+from tests.unit.fakes.fake_storage_service import FakeStorageService
 from tests.unit.fakes.fake_subject_class_repository import FakeSubjectClassRepository
 from tests.unit.fakes.fake_tenant_member_repository import FakeTenantMemberRepository
 from tests.unit.fakes.fake_tenant_repository import FakeTenantRepository
-from tests.unit.fakes.fake_evidence_photo_upload_repository import FakeEvidencePhotoUploadRepository
-from tests.unit.fakes.fake_storage_service import FakeStorageService
 
 
 @pytest.mark.asyncio
@@ -698,7 +698,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         photo_url = "https://fake-r2.dev/evidence/session-id/uuid.jpg"
@@ -740,7 +742,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         record = await use_case.execute(
@@ -767,7 +771,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         with pytest.raises(BusinessRuleException, match="Foto de evidência inválida"):
@@ -800,7 +806,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         photo_url = "https://fake-r2.dev/evidence/other-session/uuid.jpg"
@@ -836,7 +844,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
 
         photo_url = "https://fake-r2.dev/evidence/session-id/used.jpg"
@@ -872,7 +882,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
         storage = self._fake_storage(use_case)
 
@@ -919,7 +931,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
         storage = self._fake_storage(use_case)
 
@@ -959,7 +973,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
         storage = self._fake_storage(use_case)
 
@@ -1002,7 +1018,9 @@ class TestConfirmAttendanceUseCase:
             session,
             user_id,
             student_member,
-            room, _, _,
+            room,
+            _,
+            _,
         ) = await self._setup_fixtures()
         storage = self._fake_storage(use_case)
 
