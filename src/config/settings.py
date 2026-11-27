@@ -133,6 +133,12 @@ class Settings(BaseSettings):
     report_strategy: str = "process_pool"  # "sequential" | "process_pool" | "thread_pool_numpy"
     report_max_workers: int = 0  # 0 = usar cpu_budget() automaticamente
 
+    # Assistente IA (Locus Help Assistant — Gemini + RAG)
+    gemini_api_key: str = ""
+    gemini_chat_model: str = "gemini-3.5-flash-lite"
+    gemini_embedding_model: str = "gemini-embedding-001"
+    assistant_rate_limit: str = "20/minute"
+
     @property
     def effective_celery_broker(self) -> str:
         return self.celery_broker_url or self.redis_url

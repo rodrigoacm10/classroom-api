@@ -14,6 +14,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from config.settings import settings
+from modules.assistant.interface.router import router as assistant_router
 from modules.attendance.application.handlers.attendance_notification_handler import (
     register_attendance_event_handlers,
 )
@@ -118,6 +119,7 @@ app.include_router(student_attendance_history_router)
 app.include_router(notification_router)
 app.include_router(report_router)
 app.include_router(dashboard_router)
+app.include_router(assistant_router)
 
 
 @app.get("/")

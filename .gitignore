@@ -25,6 +25,8 @@ celerybeat-schedule.*
 # Credentials & secrets
 credentials/
 *.json
+!evals/*.json
+
 
 # Artefato gerado pelo script de benchmark do módulo de relatórios
 benchmark_report_results.csv
