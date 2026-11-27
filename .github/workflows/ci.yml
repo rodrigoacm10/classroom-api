@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgis/postgis:16-3.4
+        image: ghcr.io/rodrigoacm10/classroom-postgres:16
         env:
           POSTGRES_USER: classroom
           POSTGRES_PASSWORD: classroom
